@@ -1,0 +1,27 @@
+{
+  "name": "edubeam-lms",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Edubeam LMS — multi-tenant Learning Management System for government schools.",
+  "workspaces": [
+    "packages/shared",
+    "packages/db",
+    "apps/api",
+    "apps/web"
+  ],
+  "scripts": {
+    "db:generate": "npm --workspace packages/db run generate",
+    "db:push": "npm --workspace packages/db run push",
+    "db:seed": "npm --workspace packages/db run seed:force",
+    "db:reset": "npm --workspace packages/db run reset",
+    "dev:api": "npm --workspace apps/api run dev",
+    "dev:web": "npm --workspace apps/web run dev",
+    "build": "npm --workspace apps/web run build",
+    "start:prod": "npm --workspace packages/db run seed && npm --workspace apps/api run start",
+    "render:build": "npm --workspace packages/db run use-postgres && npm --workspace packages/db run generate && npm --workspace packages/db run push && npm --workspace apps/web run build",
+    "render:start": "npm run start:prod"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}

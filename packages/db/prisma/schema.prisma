@@ -1,0 +1,197 @@
+// Edubeam LMS core data model.
+// Local dev uses SQLite for zero-setup; production switches `provider` to
+// "postgresql" and sets DATABASE_URL accordingly. The schema avoids enums and
+// arrays so it is portable across both providers (enum values are documented
+// inline and validated in application code / packages/shared).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ── School hierarchy ────────────────────────────────────────────────────────
+
+model Tenant {
+  id        String     @id @default(cuid())
+  name      String
+  code      String     @unique // e.g. "UK" (Uttarakhand)
+  createdAt DateTime   @default(now())
+  districts District[]
+  users     User[]
+}
+
+model District {
+  id       String  @id @default(cuid())
+  tenantId String
+  tenant   Tenant  @relation(fields: [tenantId], references: [id])
+  name     String
+  blocks   Block[]
+  users    User[]
+
+  @@unique([tenantId, name])
+}
+
+model Block {
+  id         String   @id @default(cuid())
+  districtId String
+  district   District @relation(fields: [districtId], references: [id])
+  name       String
+  schools    School[]
+
+  @@unique([districtId, name])
+}
+
+model School {
+  id                  String         @id @default(cuid())
+  blockId             String
+  block               Block          @relation(fields: [blockId], references: [id])
+  name                String
+  udiseCode           String         @unique
+  siteCode            String? // Virtual Classroom install code, e.g. VVEAMO352
+  type                String? // GIC | GGIC | GGIC | other (derived from name)
+  hasVirtualClassroom Boolean        @default(false)
+  hasIctLab           Boolean        @default(false)
+  enrollments         Enrollment[]
+  boardResults        BoardResult[]
+  yearlyResults       YearlyResult[]
+  ictDeployment       IctDeployment?
+  users               User[]
+  students            Student[]
+  staff               Staff[]
+}
+
+// ── Operational / analytics data (seeded from Excel) ────────────────────────
+
+model Enrollment {
+  id           String @id @default(cuid())
+  schoolId     String
+  school       School @relation(fields: [schoolId], references: [id])
+  academicYear String // e.g. "2025-26"
+  grade        Int // 6..12
+  boys         Int    @default(0)
+  girls        Int    @default(0)
+  total        Int    @default(0)
+
+  @@unique([schoolId, academicYear, grade])
+}
+
+model BoardResult {
+  id           String @id @default(cuid())
+  schoolId     String
+  school       School @relation(fields: [schoolId], references: [id])
+  examType     String // "10TH" | "12TH"
+  subject      String // Hindi, English, Science, Math, Physics, ...
+  passPct      Float // 0..1
+  academicYear String
+
+  @@unique([schoolId, examType, subject, academicYear])
+}
+
+// Historical board results, one row per school / year / exam (from the 5-year
+// dataset). Powers real year-over-year improvement trends.
+model YearlyResult {
+  id       String @id @default(cuid())
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id])
+  year     Int // e.g. 2020..2025
+  examType String // "10TH" | "12TH"
+  passPct  Float // 0..1 (Total %)
+
+  @@unique([schoolId, year, examType])
+}
+
+model IctDeployment {
+  id           String @id @default(cuid())
+  schoolId     String @unique
+  school       School @relation(fields: [schoolId], references: [id])
+  teacherCount Int    @default(0)
+  studentCount Int    @default(0)
+  academicYear String
+}
+
+// ── Student & Staff registry (tender §6.2.6.5/6, §6.2.8.2-9) ─────────────────
+
+// A pupil enrolled at a school. Captures the personal, guardian, RTE/category,
+// bank and dropout details the tender's Government Dashboard & School Management
+// System require. gender: "M" | "F" | "O". category: "GEN" | "OBC" | "SC" | "ST".
+model Student {
+  id             String   @id @default(cuid())
+  schoolId       String
+  school         School   @relation(fields: [schoolId], references: [id])
+  admissionNo    String? // school admission number
+  rollNo         String?
+  name           String
+  gender         String   @default("M") // M | F | O
+  dateOfBirth    DateTime?
+  grade          Int // class 1..12
+  section        String? // A | B | ...
+  guardianName   String?
+  guardianPhone  String?
+  guardianRelation String? // Father | Mother | Guardian
+  address        String?
+  category       String   @default("GEN") // GEN | OBC | SC | ST
+  religion       String? // Hindu | Muslim | Sikh | Christian | Other
+  isRte          Boolean  @default(false) // admitted under Right to Education
+  bankAccount    String?
+  healthNotes    String?
+  isDropout      Boolean  @default(false)
+  dropoutReason  String?
+  academicYear   String
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  @@index([schoolId, grade])
+}
+
+// A teacher / faculty / lab-assistant / principal at a school. staffType:
+// "TEACHER" | "FACULTY" | "LAB_ASSISTANT" | "PRINCIPAL".
+model Staff {
+  id             String   @id @default(cuid())
+  schoolId       String
+  school         School   @relation(fields: [schoolId], references: [id])
+  employeeId     String?
+  name           String
+  gender         String   @default("M")
+  dateOfBirth    DateTime?
+  staffType      String   @default("TEACHER")
+  designation    String?
+  qualification  String? // highest qualification, e.g. M.Sc, B.Ed
+  subjects       String? // comma-separated subjects taught
+  phone          String?
+  email          String?
+  department     String?
+  salaryGroup    String? // pay band / level
+  joiningDate    DateTime?
+  isClassTeacher Boolean  @default(false)
+  classTeacherOf String? // e.g. "8-A"
+  active         Boolean  @default(true)
+  academicYear   String
+  createdAt      DateTime @default(now())
+
+  @@index([schoolId, staffType])
+}
+
+// ── Users & RBAC ────────────────────────────────────────────────────────────
+
+// role: ADMIN | STATE_OFFICIAL | DISTRICT_OFFICIAL | PRINCIPAL | TEACHER | STUDENT | PARENT
+// Scope is enforced in app code: STATE_OFFICIAL -> tenant-wide, DISTRICT_OFFICIAL -> districtId,
+// PRINCIPAL/TEACHER/STUDENT -> schoolId.
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  name         String
+  role         String
+  tenantId     String?
+  tenant       Tenant?   @relation(fields: [tenantId], references: [id])
+  districtId   String?
+  district     District? @relation(fields: [districtId], references: [id])
+  schoolId     String?
+  school       School?   @relation(fields: [schoolId], references: [id])
+  active       Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+}

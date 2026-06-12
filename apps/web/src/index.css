@@ -1,0 +1,85 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-navy-800 antialiased;
+    font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  }
+
+  h1, h2, h3, h4, h5 {
+    font-family: 'Poppins', ui-sans-serif, system-ui, sans-serif;
+    @apply font-semibold;
+  }
+}
+
+@layer components {
+  /* ── App header (dark navy gradient) ──────────────────── */
+  .app-header {
+    background: linear-gradient(135deg, #001240 0%, #003087 60%, #005BAA 100%);
+    @apply sticky top-0 z-50 shadow-lg;
+  }
+
+  /* ── Primary button ───────────────────────────────────── */
+  .btn-primary {
+    background: linear-gradient(135deg, #5BBCD8, #3AAAC5);
+    @apply inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-white font-semibold
+           text-sm shadow-sky transition-all duration-200 hover:-translate-y-px
+           hover:shadow-lg disabled:opacity-50 disabled:transform-none;
+  }
+
+  .btn-navy {
+    background: linear-gradient(135deg, #003087, #0076BC);
+    @apply inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-white font-semibold
+           text-sm shadow-brand-sm transition-all duration-200 hover:-translate-y-px hover:shadow-brand-md;
+  }
+
+  .btn-outline {
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200
+           text-slate-600 text-sm font-medium transition-all duration-200
+           hover:bg-slate-50 hover:border-slate-300;
+  }
+
+  /* ── Section tag (like website) ───────────────────────── */
+  .section-tag {
+    @apply inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold
+           uppercase tracking-widest border;
+    background: rgba(91, 188, 216, 0.12);
+    border-color: rgba(91, 188, 216, 0.30);
+    color: #0076BC;
+  }
+
+  /* ── Stat card ────────────────────────────────────────── */
+  .stat-card {
+    @apply bg-white rounded-xl p-5 shadow-brand-sm border border-slate-100
+           hover:shadow-brand-md transition-shadow duration-200;
+  }
+
+  /* ── Data table ───────────────────────────────────────── */
+  .data-table th {
+    @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 bg-slate-50;
+  }
+  .data-table td {
+    @apply px-4 py-3 text-sm border-t border-slate-100;
+  }
+  .data-table tbody tr:hover {
+    @apply bg-sky-50/40;
+  }
+
+  /* ── Badge ────────────────────────────────────────────── */
+  .badge-real    { @apply text-[10px] uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 rounded px-1.5 py-0.5 font-semibold; }
+  .badge-sample  { @apply text-[10px] uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200 rounded px-1.5 py-0.5 font-semibold; }
+  .badge-virtual { @apply text-[10px] uppercase tracking-wider bg-sky-50 text-sky-600 border border-sky-200 rounded px-1.5 py-0.5 font-semibold; }
+  .badge-ict     { @apply text-[10px] uppercase tracking-wider bg-purple-50 text-purple-700 border border-purple-200 rounded px-1.5 py-0.5 font-semibold; }
+
+  /* ── Panel / card ─────────────────────────────────────── */
+  .panel {
+    @apply bg-white rounded-xl border border-slate-100 shadow-brand-sm;
+  }
+}
+
+@media print {
+  .no-print { display: none !important; }
+  .app-header { display: none !important; }
+}
