@@ -149,7 +149,7 @@ interface PeopleFilter {
 }
 
 /** Build a query string, dropping undefined/empty/false values. */
-function qstr(params: Record<string, unknown>): string {
+function qstr(params: object): string {
   const entries = Object.entries(params)
     .filter(([, v]) => v !== undefined && v !== '' && v !== false)
     .map(([k, v]) => [k, String(v)] as [string, string]);

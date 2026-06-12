@@ -284,7 +284,7 @@ function GenderPanel({ data }: { data: EnrollmentDemographics }) {
                 <Cell fill={GIRLS_COLOR} />
               </Pie>
               <Tooltip
-                formatter={(v: number, n) => [`${v.toLocaleString()} (${((v / total) * 100).toFixed(1)}%)`, n]}
+                formatter={(v, n) => { const num = v as number; return [`${num.toLocaleString()} (${((num / total) * 100).toFixed(1)}%)`, n]; }}
                 contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', boxShadow: '0 4px 16px rgba(0,48,135,0.10)' }}
               />
             </PieChart>
@@ -318,7 +318,7 @@ function GenderPanel({ data }: { data: EnrollmentDemographics }) {
               <XAxis dataKey="name" fontSize={12} />
               <YAxis fontSize={12} />
               <Tooltip
-                formatter={(v: number) => v.toLocaleString()}
+                formatter={(v) => (v as number).toLocaleString()}
                 contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', boxShadow: '0 4px 16px rgba(0,48,135,0.10)' }}
               />
               <Legend wrapperStyle={{ fontSize: 12 }} />
@@ -443,11 +443,12 @@ function AttendancePanel({
           <XAxis dataKey="label" fontSize={11} interval={period === 'day' ? 1 : 0} />
           <YAxis domain={[0, 1]} tickFormatter={(v) => `${Math.round(v * 100)}%`} fontSize={12} />
           <Tooltip
-            formatter={(v: number | null, _n, item) => {
-              if (v == null) return ['Holiday', 'Attendance'];
-              const present = (item?.payload as { present: number })?.present ?? 0;
-              return [`${(v * 100).toFixed(1)}%  (${present.toLocaleString()} present)`, 'Attendance'];
-            }}
+            formatter={((v: unknown, _n: unknown, item: unknown) => {
+              const val = v as number | null;
+              if (val == null) return ['Holiday', 'Attendance'];
+              const present = (item as { payload?: { present?: number } })?.payload?.present ?? 0;
+              return [`${(val * 100).toFixed(1)}%  (${present.toLocaleString()} present)`, 'Attendance'];
+            }) as never}
             labelFormatter={(l) => (period === 'month' ? l : `Day ${l}`)}
             contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', boxShadow: '0 4px 16px rgba(0,48,135,0.10)' }}
           />

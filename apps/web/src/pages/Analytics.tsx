@@ -154,7 +154,7 @@ export function Analytics() {
               <XAxis dataKey="year" fontSize={12} />
               <YAxis domain={[0, 1]} tickFormatter={(v) => `${Math.round(v * 100)}%`} fontSize={12} />
               <Tooltip
-                formatter={(v: number) => (v == null ? '—' : `${(v * 100).toFixed(1)}%`)}
+                formatter={(v) => { const n = v as number | null; return n == null ? '—' : `${(n * 100).toFixed(1)}%`; }}
                 contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', boxShadow: '0 4px 16px rgba(0,48,135,0.10)' }}
               />
               <Legend />
