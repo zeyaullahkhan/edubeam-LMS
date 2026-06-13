@@ -18,6 +18,7 @@ const NAV_ITEMS = [
   { to: '/schools',      label: 'Schools',    icon: 'fas fa-school' },
   { to: '/students',     label: 'Students',   icon: 'fas fa-user-graduate' },
   { to: '/staff',        label: 'Staff',      icon: 'fas fa-chalkboard-teacher' },
+  { to: '/planner',     label: 'Planner',    icon: 'fas fa-calendar-alt' },
 ];
 
 export function Layout({ children }: { children: ReactNode }) {

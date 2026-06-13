@@ -8,6 +8,7 @@ import { Schools } from './pages/Schools';
 import { Students } from './pages/Students';
 import { Staff } from './pages/Staff';
 import { AdminUsers } from './pages/AdminUsers';
+import { Planner } from './pages/Planner';
 
 export function App() {
   const { user, loading } = useAuth();
@@ -24,6 +25,7 @@ export function App() {
         <Route path="/students" element={<Students />} />
         <Route path="/staff" element={<Staff />} />
         {user.role === 'ADMIN' && <Route path="/admin/users" element={<AdminUsers />} />}
+        <Route path="/planner" element={<Planner />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>
