@@ -92,8 +92,27 @@ function canonDistrict(name: string): string {
   return districtCanon.get(key)!;
 }
 
+// Explicit block-name corrections for source-data typos (district key is uppercased).
+const BLOCK_CORRECTIONS: Record<string, Record<string, string>> = {
+  DEHRADUN: { DOJWALA: 'Doiwala' },
+};
+
+// Canonicalise block names case-insensitively within a district (first spelling wins).
+const blockCanon = new Map<string, string>(); // key: DISTRICT::BLOCK_UPPER
+function canonBlock(district: string, block: string): string {
+  const dKey = district.toUpperCase().replace(/\s+/g, ' ').trim();
+  const bUpper = block.toUpperCase().replace(/\s+/g, ' ').trim();
+  // Apply explicit correction first.
+  const corrected = BLOCK_CORRECTIONS[dKey]?.[bUpper];
+  const canonical = corrected ?? block.replace(/\s+/g, ' ').trim();
+  const mapKey = `${dKey}::${corrected ? corrected.toUpperCase() : bUpper}`;
+  if (!blockCanon.has(mapKey)) blockCanon.set(mapKey, canonical);
+  return blockCanon.get(mapKey)!;
+}
+
 function getSchool(udise: string, name: string, district: string, block: string): SchoolAgg {
   district = canonDistrict(district);
+  block = canonBlock(district, block);
   let s = schools.get(udise);
   if (!s) {
     s = {
