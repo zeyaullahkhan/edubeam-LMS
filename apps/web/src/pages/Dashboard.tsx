@@ -54,7 +54,7 @@ function StatCard({ label, value, sub, icon, accent, onClick, active }: StatCard
         {sub && <div className="text-[11px] text-slate-400 mt-0.5 font-medium">{sub}</div>}
         {onClick && (
           <div className="text-[10px] text-sky-500 font-semibold mt-1 flex items-center gap-1">
-            <i className="fas fa-table text-[9px]" />View district-wise
+            <i className="fas fa-table text-[9px]" />View details
           </div>
         )}
       </div>
@@ -69,7 +69,7 @@ export function Dashboard() {
   const [teacherStats, setTeacherStats] = useState<TeacherStats | null>(null);
   const [openDistrict, setOpenDistrict] = useState<string | null>(null);
   const [blocks, setBlocks] = useState<BlockSummary[]>([]);
-  const [drilldown, setDrilldown] = useState<'students' | 'teachers' | null>(null);
+  const [drilldown, setDrilldown] = useState<'districts' | 'blocks' | 'students' | 'teachers' | null>(null);
   // KPI panel drill-down: selected district + its blocks
   const [drillDistrictId, setDrillDistrictId] = useState<string | null>(null);
   const [drillBlocks, setDrillBlocks] = useState<BlockSummary[]>([]);
@@ -135,12 +135,16 @@ export function Dashboard() {
           value={overview.totalDistricts.toLocaleString()}
           icon="fas fa-map"
           accent="linear-gradient(135deg,#1e3a8a,#3b82f6)"
+          onClick={() => setDrilldown(drilldown === 'districts' ? null : 'districts')}
+          active={drilldown === 'districts'}
         />
         <StatCard
           label="Blocks"
           value={overview.totalBlocks.toLocaleString()}
           icon="fas fa-th-large"
           accent="linear-gradient(135deg,#5b21b6,#8b5cf6)"
+          onClick={() => setDrilldown(drilldown === 'blocks' ? null : 'blocks')}
+          active={drilldown === 'blocks'}
         />
         <StatCard
           label="Schools"
@@ -175,179 +179,17 @@ export function Dashboard() {
         />
       </div>
 
-      {/* ── Drill-down panel (students / teachers district-wise) ── */}
-      {drilldown && (() => {
-        const isStudents = drilldown === 'students';
-        const selectedDistrict = drillDistrictId
-          ? districts.find((d) => d.districtId === drillDistrictId) ?? null
-          : null;
-
-        return (
-          <div className="panel overflow-hidden">
-            {/* Panel header */}
-            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 bg-sky-50/50">
-              <div className="flex items-center gap-2 min-w-0">
-                <i className={`fas flex-shrink-0 ${isStudents ? 'fa-user-graduate text-emerald-600' : 'fa-chalkboard-teacher text-cyan-600'}`} />
-                {selectedDistrict ? (
-                  <div className="flex items-center gap-2 min-w-0 flex-wrap">
-                    <button
-                      onClick={() => { setDrillDistrictId(null); setDrillBlocks([]); }}
-                      className="text-sky-500 hover:text-sky-700 text-xs font-semibold flex items-center gap-1"
-                    >
-                      <i className="fas fa-arrow-left text-[10px]" />
-                      {isStudents ? 'Students by District' : 'Teachers by District'}
-                    </button>
-                    <i className="fas fa-chevron-right text-slate-300 text-[10px]" />
-                    <span className="font-semibold text-navy-700 text-sm">{selectedDistrict.district}</span>
-                    <span className="text-xs text-slate-400">— Block breakdown</span>
-                  </div>
-                ) : (
-                  <h3 className="font-semibold text-navy-700 text-sm">
-                    {isStudents ? 'Students by District' : 'Teachers by District'}
-                    <span className="ml-1.5 text-xs font-normal text-slate-400">— click a district to see blocks</span>
-                  </h3>
-                )}
-              </div>
-              <button onClick={closeDrilldown} className="text-slate-400 hover:text-slate-600 text-sm flex-shrink-0 ml-3">
-                <i className="fas fa-times" />
-              </button>
-            </div>
-
-            {/* District list */}
-            {!selectedDistrict && (
-              <table className="w-full text-sm data-table" style={{ tableLayout: 'fixed' }}>
-                <colgroup>
-                  <col style={{ width: 'auto' }} />
-                  <col style={{ width: '80px' }} />
-                  {isStudents ? (
-                    <><col style={{ width: '110px' }} /><col style={{ width: '100px' }} /><col style={{ width: '100px' }} /></>
-                  ) : (
-                    <><col style={{ width: '110px' }} /><col style={{ width: '120px' }} /></>
-                  )}
-                </colgroup>
-                <thead>
-                  <tr>
-                    <th className="text-left">District</th>
-                    <th className="text-right">Schools</th>
-                    {isStudents ? (
-                      <><th className="text-right">Students</th><th className="text-right">Pass 10th</th><th className="text-right">Pass 12th</th></>
-                    ) : (
-                      <><th className="text-right">Teachers</th><th className="text-right">ICT Students</th></>
-                    )}
-                  </tr>
-                </thead>
-                <tbody>
-                  {isStudents
-                    ? [...districts].sort((a, b) => b.totalStudents - a.totalStudents).map((d) => (
-                        <tr key={d.districtId} className="cursor-pointer hover:bg-sky-50/60 transition-colors" onClick={() => selectDrillDistrict(d.districtId)}>
-                          <td className="font-medium text-navy-700">
-                            <span className="inline-flex items-center justify-center w-4 h-4 rounded mr-1.5 bg-slate-100 text-slate-400 text-[9px]">
-                              <i className="fas fa-chevron-right" />
-                            </span>
-                            {d.district}
-                          </td>
-                          <td className="text-right">{d.schools}</td>
-                          <td className="text-right font-semibold">{d.totalStudents.toLocaleString()}</td>
-                          <td className="text-right font-semibold" style={{ color: passColor(d.avgPass10th ?? 0) }}>{pct(d.avgPass10th)}</td>
-                          <td className="text-right font-semibold" style={{ color: passColor(d.avgPass12th ?? 0) }}>{pct(d.avgPass12th)}</td>
-                        </tr>
-                      ))
-                    : teacherStats?.byDistrict.sort((a, b) => b.teachers - a.teachers).map((d) => (
-                        <tr key={d.districtId} className="cursor-pointer hover:bg-sky-50/60 transition-colors" onClick={() => selectDrillDistrict(d.districtId)}>
-                          <td className="font-medium text-navy-700">
-                            <span className="inline-flex items-center justify-center w-4 h-4 rounded mr-1.5 bg-slate-100 text-slate-400 text-[9px]">
-                              <i className="fas fa-chevron-right" />
-                            </span>
-                            {d.district}
-                          </td>
-                          <td className="text-right">{d.schools}</td>
-                          <td className="text-right font-semibold">{d.teachers.toLocaleString()}</td>
-                          <td className="text-right">{d.students.toLocaleString()}</td>
-                        </tr>
-                      ))
-                  }
-                </tbody>
-              </table>
-            )}
-
-            {/* Block list for selected district */}
-            {selectedDistrict && (
-              <>
-                {/* District summary banner */}
-                <div className="px-5 py-2.5 bg-sky-50 border-b border-sky-100 flex items-center gap-4 flex-wrap text-sm">
-                  <div className="flex items-center gap-1.5">
-                    <i className="fas fa-map text-sky-400 text-xs" />
-                    <span className="font-bold text-navy-700">{selectedDistrict.district}</span>
-                  </div>
-                  <span className="text-slate-400 text-xs">·</span>
-                  <span className="text-slate-600 text-xs"><strong>{selectedDistrict.schools}</strong> schools</span>
-                  {isStudents && (
-                    <>
-                      <span className="text-slate-400 text-xs">·</span>
-                      <span className="text-slate-600 text-xs"><strong>{selectedDistrict.totalStudents.toLocaleString()}</strong> students</span>
-                      <span className="text-slate-400 text-xs">·</span>
-                      <span className="text-xs font-semibold" style={{ color: passColor(selectedDistrict.avgPass10th ?? 0) }}>
-                        10th: {pct(selectedDistrict.avgPass10th)}
-                      </span>
-                      <span className="text-xs font-semibold" style={{ color: passColor(selectedDistrict.avgPass12th ?? 0) }}>
-                        12th: {pct(selectedDistrict.avgPass12th)}
-                      </span>
-                    </>
-                  )}
-                </div>
-                <table className="w-full text-sm data-table" style={{ tableLayout: 'fixed' }}>
-                  <colgroup>
-                    <col style={{ width: 'auto' }} />
-                    <col style={{ width: '80px' }} />
-                    {isStudents ? (
-                      <><col style={{ width: '110px' }} /><col style={{ width: '100px' }} /><col style={{ width: '100px' }} /></>
-                    ) : (
-                      <><col style={{ width: '110px' }} /><col style={{ width: '120px' }} /></>
-                    )}
-                  </colgroup>
-                  <thead>
-                    <tr>
-                      <th className="text-left">Block — {selectedDistrict.district}</th>
-                      <th className="text-right">Schools</th>
-                      {isStudents ? (
-                        <><th className="text-right">Students</th><th className="text-right">Pass 10th</th><th className="text-right">Pass 12th</th></>
-                      ) : (
-                        <><th className="text-right">Teachers</th><th className="text-right">ICT Students</th></>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {drillBlocks.length === 0 ? (
-                      <tr><td colSpan={isStudents ? 5 : 4} className="py-6 text-center text-slate-400 text-xs"><i className="fas fa-circle-notch fa-spin mr-1.5" />Loading blocks…</td></tr>
-                    ) : [...drillBlocks].sort((a, b) => b.totalStudents - a.totalStudents).map((b) => (
-                      <tr key={b.blockId}>
-                        <td className="text-slate-700">
-                          <i className="fas fa-map-pin text-sky-400 mr-1.5 text-xs" />
-                          <span className="font-medium">{b.block}</span>
-                          <span className="ml-1.5 text-xs text-slate-400">{selectedDistrict.district}</span>
-                        </td>
-                        <td className="text-right">{b.schools}</td>
-                        {isStudents ? (
-                          <>
-                            <td className="text-right font-semibold">{b.totalStudents.toLocaleString()}</td>
-                            <td className="text-right text-slate-400">—</td>
-                            <td className="text-right text-slate-400">—</td>
-                          </>
-                        ) : (
-                          <>
-                            <td className="text-right text-slate-400">—</td>
-                            <td className="text-right text-slate-400">—</td>
-                          </>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </>
-            )}
-          </div>
-        );
-      })()}
+      {/* ── Drill-down panel (districts / blocks / students / teachers) ── */}
+      {drilldown && <DrillPanel
+        type={drilldown}
+        districts={districts}
+        teacherStats={teacherStats}
+        drillDistrictId={drillDistrictId}
+        drillBlocks={drillBlocks}
+        onSelectDistrict={selectDrillDistrict}
+        onBack={() => { setDrillDistrictId(null); setDrillBlocks([]); }}
+        onClose={closeDrilldown}
+      />}
 
       {/* ── Student gender ratio (from 500 Virtual2526 enrolment) ── */}
       {enrollment && <GenderPanel data={enrollment} />}
@@ -414,6 +256,202 @@ export function Dashboard() {
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+// ── DrillPanel ────────────────────────────────────────────────────────────────
+
+type DrillType = 'districts' | 'blocks' | 'students' | 'teachers';
+
+const PANEL_META: Record<DrillType, { icon: string; iconClass: string; title: string; hint: string }> = {
+  districts: { icon: 'fas fa-map',                 iconClass: 'text-blue-600',    title: 'District Overview',      hint: 'click a district to see its blocks' },
+  blocks:    { icon: 'fas fa-th-large',             iconClass: 'text-violet-600',  title: 'Block Directory',        hint: 'click a district to see its blocks' },
+  students:  { icon: 'fas fa-user-graduate',        iconClass: 'text-emerald-600', title: 'Students by District',   hint: 'click a district to see blocks' },
+  teachers:  { icon: 'fas fa-chalkboard-teacher',   iconClass: 'text-cyan-600',    title: 'Teachers by District',   hint: 'click a district to see blocks' },
+};
+
+function DrillPanel({
+  type, districts, teacherStats, drillDistrictId, drillBlocks,
+  onSelectDistrict, onBack, onClose,
+}: {
+  type: DrillType;
+  districts: DistrictSummary[];
+  teacherStats: TeacherStats | null;
+  drillDistrictId: string | null;
+  drillBlocks: BlockSummary[];
+  onSelectDistrict: (id: string) => void;
+  onBack: () => void;
+  onClose: () => void;
+}) {
+  const meta = PANEL_META[type];
+  const selectedDistrict = drillDistrictId
+    ? districts.find((d) => d.districtId === drillDistrictId) ?? null
+    : null;
+
+  // Which columns to show in the district list
+  const showStudentCols = type === 'districts' || type === 'students';
+  const showTeacherCols = type === 'teachers';
+  // 'blocks' shows a minimal district selector (Schools + Students only)
+
+  return (
+    <div className="panel overflow-hidden">
+      {/* Header / breadcrumb */}
+      <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 bg-sky-50/50">
+        <div className="flex items-center gap-2 min-w-0 flex-wrap">
+          <i className={`fas flex-shrink-0 ${meta.icon.replace('fas ', '')} ${meta.iconClass}`} />
+          {selectedDistrict ? (
+            <>
+              <button onClick={onBack} className="text-sky-500 hover:text-sky-700 text-xs font-semibold flex items-center gap-1">
+                <i className="fas fa-arrow-left text-[10px]" />{meta.title}
+              </button>
+              <i className="fas fa-chevron-right text-slate-300 text-[10px]" />
+              <span className="font-semibold text-navy-700 text-sm">{selectedDistrict.district}</span>
+              <span className="text-xs text-slate-400">— blocks</span>
+            </>
+          ) : (
+            <h3 className="font-semibold text-navy-700 text-sm">
+              {meta.title}
+              <span className="ml-1.5 text-xs font-normal text-slate-400">— {meta.hint}</span>
+            </h3>
+          )}
+        </div>
+        <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-sm flex-shrink-0 ml-3">
+          <i className="fas fa-times" />
+        </button>
+      </div>
+
+      {/* ── District list ── */}
+      {!selectedDistrict && (
+        <table className="w-full text-sm data-table" style={{ tableLayout: 'fixed' }}>
+          <colgroup>
+            <col style={{ width: 'auto' }} />
+            <col style={{ width: '80px' }} />
+            {showStudentCols && <><col style={{ width: '110px' }} /><col style={{ width: '100px' }} /><col style={{ width: '100px' }} /></>}
+            {showTeacherCols && <><col style={{ width: '110px' }} /><col style={{ width: '120px' }} /></>}
+            {type === 'blocks'  && <col style={{ width: '110px' }} />}
+          </colgroup>
+          <thead>
+            <tr>
+              <th className="text-left">District</th>
+              <th className="text-right">Schools</th>
+              {showStudentCols && <><th className="text-right">Students</th><th className="text-right">Pass 10th</th><th className="text-right">Pass 12th</th></>}
+              {showTeacherCols && <><th className="text-right">Teachers</th><th className="text-right">ICT Students</th></>}
+              {type === 'blocks'  && <th className="text-right">Students</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {(() => {
+              // Normalise both sources into a common shape before rendering.
+              type Row = {
+                districtId: string; district: string; schools: number;
+                totalStudents: number | null; avgPass10th: number | null; avgPass12th: number | null;
+                teachers: number | null; ictStudents: number | null;
+              };
+              const rows: Row[] = type === 'teachers'
+                ? (teacherStats?.byDistrict ?? [])
+                    .sort((a, b) => b.teachers - a.teachers)
+                    .map((d) => ({ districtId: d.districtId, district: d.district, schools: d.schools,
+                      totalStudents: null, avgPass10th: null, avgPass12th: null,
+                      teachers: d.teachers, ictStudents: d.students }))
+                : [...districts]
+                    .sort((a, b) => b.totalStudents - a.totalStudents)
+                    .map((d) => ({ districtId: d.districtId, district: d.district, schools: d.schools,
+                      totalStudents: d.totalStudents, avgPass10th: d.avgPass10th, avgPass12th: d.avgPass12th,
+                      teachers: null, ictStudents: null }));
+
+              return rows.map((row) => (
+                <tr key={row.districtId} className="cursor-pointer hover:bg-sky-50/60 transition-colors" onClick={() => onSelectDistrict(row.districtId)}>
+                  <td className="font-medium text-navy-700">
+                    <span className="inline-flex items-center justify-center w-4 h-4 rounded mr-1.5 bg-slate-100 text-slate-400 text-[9px]">
+                      <i className="fas fa-chevron-right" />
+                    </span>
+                    {row.district}
+                  </td>
+                  <td className="text-right">{row.schools}</td>
+                  {showStudentCols && (
+                    <>
+                      <td className="text-right font-semibold">{row.totalStudents?.toLocaleString() ?? '—'}</td>
+                      <td className="text-right font-semibold" style={{ color: passColor(row.avgPass10th ?? 0) }}>{pct(row.avgPass10th)}</td>
+                      <td className="text-right font-semibold" style={{ color: passColor(row.avgPass12th ?? 0) }}>{pct(row.avgPass12th)}</td>
+                    </>
+                  )}
+                  {showTeacherCols && (
+                    <>
+                      <td className="text-right font-semibold">{row.teachers?.toLocaleString() ?? '—'}</td>
+                      <td className="text-right">{row.ictStudents?.toLocaleString() ?? '—'}</td>
+                    </>
+                  )}
+                  {type === 'blocks' && (
+                    <td className="text-right">{row.totalStudents?.toLocaleString() ?? '—'}</td>
+                  )}
+                </tr>
+              ));
+            })()}
+          </tbody>
+        </table>
+      )}
+
+      {/* ── Block list for selected district ── */}
+      {selectedDistrict && (
+        <>
+          {/* District summary banner */}
+          <div className="px-5 py-2.5 bg-sky-50 border-b border-sky-100 flex items-center gap-3 flex-wrap text-sm">
+            <div className="flex items-center gap-1.5">
+              <i className="fas fa-map text-sky-500 text-xs" />
+              <span className="font-bold text-navy-700">{selectedDistrict.district}</span>
+            </div>
+            <span className="text-slate-300">|</span>
+            <span className="text-slate-600 text-xs"><strong>{selectedDistrict.schools}</strong> schools</span>
+            <span className="text-slate-300">|</span>
+            <span className="text-slate-600 text-xs"><strong>{selectedDistrict.totalStudents.toLocaleString()}</strong> students</span>
+            <span className="text-slate-300">|</span>
+            <span className="text-xs font-semibold" style={{ color: passColor(selectedDistrict.avgPass10th ?? 0) }}>
+              10th: {pct(selectedDistrict.avgPass10th)}
+            </span>
+            <span className="text-xs font-semibold" style={{ color: passColor(selectedDistrict.avgPass12th ?? 0) }}>
+              12th: {pct(selectedDistrict.avgPass12th)}
+            </span>
+          </div>
+
+          <table className="w-full text-sm data-table" style={{ tableLayout: 'fixed' }}>
+            <colgroup>
+              <col style={{ width: 'auto' }} />
+              <col style={{ width: '80px' }} />
+              <col style={{ width: '90px' }} />
+              <col style={{ width: '110px' }} />
+            </colgroup>
+            <thead>
+              <tr>
+                <th className="text-left">Block — <span className="font-normal text-slate-400">{selectedDistrict.district}</span></th>
+                <th className="text-right">Schools</th>
+                <th className="text-right">Virtual</th>
+                <th className="text-right">Students</th>
+              </tr>
+            </thead>
+            <tbody>
+              {drillBlocks.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="py-6 text-center text-slate-400 text-xs">
+                    <i className="fas fa-circle-notch fa-spin mr-1.5" />Loading blocks…
+                  </td>
+                </tr>
+              ) : [...drillBlocks].sort((a, b) => b.totalStudents - a.totalStudents).map((b) => (
+                <tr key={b.blockId}>
+                  <td className="text-slate-700">
+                    <i className="fas fa-map-pin text-sky-400 mr-1.5 text-xs" />
+                    <span className="font-medium">{b.block}</span>
+                    <span className="ml-1.5 text-xs text-slate-400">{selectedDistrict.district}</span>
+                  </td>
+                  <td className="text-right">{b.schools}</td>
+                  <td className="text-right">{b.virtualClassroomSchools}</td>
+                  <td className="text-right font-semibold">{b.totalStudents.toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
     </div>
   );
 }
