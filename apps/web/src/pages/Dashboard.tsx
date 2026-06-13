@@ -429,12 +429,12 @@ function DrillPanel({
               };
               const rows: Row[] = type === 'teachers'
                 ? (teacherStats?.byDistrict ?? [])
-                    .sort((a, b) => b.teachers - a.teachers)
+                    .sort((a, b) => a.district.localeCompare(b.district))
                     .map((d) => ({ districtId: d.districtId, district: d.district, schools: d.schools,
                       totalStudents: null, avgPass10th: null, avgPass12th: null,
                       teachers: d.teachers, ictStudents: d.students }))
                 : [...districts]
-                    .sort((a, b) => b.totalStudents - a.totalStudents)
+                    .sort((a, b) => a.district.localeCompare(b.district))
                     .map((d) => ({ districtId: d.districtId, district: d.district, schools: d.schools,
                       totalStudents: d.totalStudents, avgPass10th: d.avgPass10th, avgPass12th: d.avgPass12th,
                       teachers: null, ictStudents: null }));
@@ -557,7 +557,7 @@ function DrillPanel({
             <tbody>
               {drillBlocks.length === 0 ? (
                 <tr><td colSpan={4} className="py-6 text-center text-slate-400 text-xs"><i className="fas fa-circle-notch fa-spin mr-1.5" />Loading blocks…</td></tr>
-              ) : [...drillBlocks].sort((a, b) => b.totalStudents - a.totalStudents).map((b) => (
+              ) : [...drillBlocks].sort((a, b) => a.block.localeCompare(b.block)).map((b) => (
                 <tr
                   key={b.blockId}
                   className={type === 'schools' ? 'cursor-pointer hover:bg-sky-50/60 transition-colors' : ''}
