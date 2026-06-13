@@ -70,6 +70,9 @@ export function Dashboard() {
   const [openDistrict, setOpenDistrict] = useState<string | null>(null);
   const [blocks, setBlocks] = useState<BlockSummary[]>([]);
   const [drilldown, setDrilldown] = useState<'students' | 'teachers' | null>(null);
+  // KPI panel drill-down: selected district + its blocks
+  const [drillDistrictId, setDrillDistrictId] = useState<string | null>(null);
+  const [drillBlocks, setDrillBlocks] = useState<BlockSummary[]>([]);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -77,6 +80,14 @@ export function Dashboard() {
       .then(([o, d, e, ts]) => { setOverview(o); setDistricts(d); setEnrollment(e); setTeacherStats(ts); })
       .catch((e) => setError((e as Error).message));
   }, []);
+
+  const selectDrillDistrict = async (id: string) => {
+    if (drillDistrictId === id) { setDrillDistrictId(null); setDrillBlocks([]); return; }
+    setDrillDistrictId(id);
+    setDrillBlocks(await api.blocks(id));
+  };
+
+  const closeDrilldown = () => { setDrilldown(null); setDrillDistrictId(null); setDrillBlocks([]); };
 
   const toggleDistrict = async (id: string) => {
     if (openDistrict === id) { setOpenDistrict(null); return; }
@@ -164,63 +175,179 @@ export function Dashboard() {
         />
       </div>
 
-      {/* ── Drill-down panel (students / teachers school-wise) ── */}
-      {drilldown && (
-        <div className="panel overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 bg-sky-50/50">
-            <div className="flex items-center gap-2">
-              <i className={`fas ${drilldown === 'students' ? 'fa-user-graduate text-emerald-600' : 'fa-chalkboard-teacher text-cyan-600'}`} />
-              <h3 className="font-semibold text-navy-700 text-sm">
-                {drilldown === 'students' ? 'Students by District' : 'Teachers by District'}
-              </h3>
-            </div>
-            <button onClick={() => setDrilldown(null)} className="text-slate-400 hover:text-slate-600 text-sm">
-              <i className="fas fa-times" />
-            </button>
-          </div>
-          <table className="w-full text-sm data-table">
-            <thead>
-              <tr>
-                <th className="text-left">District</th>
-                <th className="text-right">Schools</th>
-                {drilldown === 'students' ? (
-                  <>
-                    <th className="text-right">Students</th>
-                    <th className="text-right">Pass 10th</th>
-                    <th className="text-right">Pass 12th</th>
-                  </>
+      {/* ── Drill-down panel (students / teachers district-wise) ── */}
+      {drilldown && (() => {
+        const isStudents = drilldown === 'students';
+        const selectedDistrict = drillDistrictId
+          ? districts.find((d) => d.districtId === drillDistrictId) ?? null
+          : null;
+
+        return (
+          <div className="panel overflow-hidden">
+            {/* Panel header */}
+            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 bg-sky-50/50">
+              <div className="flex items-center gap-2 min-w-0">
+                <i className={`fas flex-shrink-0 ${isStudents ? 'fa-user-graduate text-emerald-600' : 'fa-chalkboard-teacher text-cyan-600'}`} />
+                {selectedDistrict ? (
+                  <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                    <button
+                      onClick={() => { setDrillDistrictId(null); setDrillBlocks([]); }}
+                      className="text-sky-500 hover:text-sky-700 text-xs font-semibold flex items-center gap-1"
+                    >
+                      <i className="fas fa-arrow-left text-[10px]" />
+                      {isStudents ? 'Students by District' : 'Teachers by District'}
+                    </button>
+                    <i className="fas fa-chevron-right text-slate-300 text-[10px]" />
+                    <span className="font-semibold text-navy-700 text-sm">{selectedDistrict.district}</span>
+                    <span className="text-xs text-slate-400">— Block breakdown</span>
+                  </div>
                 ) : (
-                  <>
-                    <th className="text-right">Teachers</th>
-                    <th className="text-right">ICT Students</th>
-                  </>
+                  <h3 className="font-semibold text-navy-700 text-sm">
+                    {isStudents ? 'Students by District' : 'Teachers by District'}
+                    <span className="ml-1.5 text-xs font-normal text-slate-400">— click a district to see blocks</span>
+                  </h3>
                 )}
-              </tr>
-            </thead>
-            <tbody>
-              {drilldown === 'students'
-                ? [...districts].sort((a, b) => b.totalStudents - a.totalStudents).map((d) => (
-                    <tr key={d.districtId}>
-                      <td className="font-medium text-navy-700">{d.district}</td>
-                      <td className="text-right">{d.schools}</td>
-                      <td className="text-right font-semibold">{d.totalStudents.toLocaleString()}</td>
-                      <td className="text-right font-semibold" style={{ color: passColor(d.avgPass10th ?? 0) }}>{pct(d.avgPass10th)}</td>
-                      <td className="text-right font-semibold" style={{ color: passColor(d.avgPass12th ?? 0) }}>{pct(d.avgPass12th)}</td>
+              </div>
+              <button onClick={closeDrilldown} className="text-slate-400 hover:text-slate-600 text-sm flex-shrink-0 ml-3">
+                <i className="fas fa-times" />
+              </button>
+            </div>
+
+            {/* District list */}
+            {!selectedDistrict && (
+              <table className="w-full text-sm data-table" style={{ tableLayout: 'fixed' }}>
+                <colgroup>
+                  <col style={{ width: 'auto' }} />
+                  <col style={{ width: '80px' }} />
+                  {isStudents ? (
+                    <><col style={{ width: '110px' }} /><col style={{ width: '100px' }} /><col style={{ width: '100px' }} /></>
+                  ) : (
+                    <><col style={{ width: '110px' }} /><col style={{ width: '120px' }} /></>
+                  )}
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th className="text-left">District</th>
+                    <th className="text-right">Schools</th>
+                    {isStudents ? (
+                      <><th className="text-right">Students</th><th className="text-right">Pass 10th</th><th className="text-right">Pass 12th</th></>
+                    ) : (
+                      <><th className="text-right">Teachers</th><th className="text-right">ICT Students</th></>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {isStudents
+                    ? [...districts].sort((a, b) => b.totalStudents - a.totalStudents).map((d) => (
+                        <tr key={d.districtId} className="cursor-pointer hover:bg-sky-50/60 transition-colors" onClick={() => selectDrillDistrict(d.districtId)}>
+                          <td className="font-medium text-navy-700">
+                            <span className="inline-flex items-center justify-center w-4 h-4 rounded mr-1.5 bg-slate-100 text-slate-400 text-[9px]">
+                              <i className="fas fa-chevron-right" />
+                            </span>
+                            {d.district}
+                          </td>
+                          <td className="text-right">{d.schools}</td>
+                          <td className="text-right font-semibold">{d.totalStudents.toLocaleString()}</td>
+                          <td className="text-right font-semibold" style={{ color: passColor(d.avgPass10th ?? 0) }}>{pct(d.avgPass10th)}</td>
+                          <td className="text-right font-semibold" style={{ color: passColor(d.avgPass12th ?? 0) }}>{pct(d.avgPass12th)}</td>
+                        </tr>
+                      ))
+                    : teacherStats?.byDistrict.sort((a, b) => b.teachers - a.teachers).map((d) => (
+                        <tr key={d.districtId} className="cursor-pointer hover:bg-sky-50/60 transition-colors" onClick={() => selectDrillDistrict(d.districtId)}>
+                          <td className="font-medium text-navy-700">
+                            <span className="inline-flex items-center justify-center w-4 h-4 rounded mr-1.5 bg-slate-100 text-slate-400 text-[9px]">
+                              <i className="fas fa-chevron-right" />
+                            </span>
+                            {d.district}
+                          </td>
+                          <td className="text-right">{d.schools}</td>
+                          <td className="text-right font-semibold">{d.teachers.toLocaleString()}</td>
+                          <td className="text-right">{d.students.toLocaleString()}</td>
+                        </tr>
+                      ))
+                  }
+                </tbody>
+              </table>
+            )}
+
+            {/* Block list for selected district */}
+            {selectedDistrict && (
+              <>
+                {/* District summary banner */}
+                <div className="px-5 py-2.5 bg-sky-50 border-b border-sky-100 flex items-center gap-4 flex-wrap text-sm">
+                  <div className="flex items-center gap-1.5">
+                    <i className="fas fa-map text-sky-400 text-xs" />
+                    <span className="font-bold text-navy-700">{selectedDistrict.district}</span>
+                  </div>
+                  <span className="text-slate-400 text-xs">·</span>
+                  <span className="text-slate-600 text-xs"><strong>{selectedDistrict.schools}</strong> schools</span>
+                  {isStudents && (
+                    <>
+                      <span className="text-slate-400 text-xs">·</span>
+                      <span className="text-slate-600 text-xs"><strong>{selectedDistrict.totalStudents.toLocaleString()}</strong> students</span>
+                      <span className="text-slate-400 text-xs">·</span>
+                      <span className="text-xs font-semibold" style={{ color: passColor(selectedDistrict.avgPass10th ?? 0) }}>
+                        10th: {pct(selectedDistrict.avgPass10th)}
+                      </span>
+                      <span className="text-xs font-semibold" style={{ color: passColor(selectedDistrict.avgPass12th ?? 0) }}>
+                        12th: {pct(selectedDistrict.avgPass12th)}
+                      </span>
+                    </>
+                  )}
+                </div>
+                <table className="w-full text-sm data-table" style={{ tableLayout: 'fixed' }}>
+                  <colgroup>
+                    <col style={{ width: 'auto' }} />
+                    <col style={{ width: '80px' }} />
+                    {isStudents ? (
+                      <><col style={{ width: '110px' }} /><col style={{ width: '100px' }} /><col style={{ width: '100px' }} /></>
+                    ) : (
+                      <><col style={{ width: '110px' }} /><col style={{ width: '120px' }} /></>
+                    )}
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th className="text-left">Block — {selectedDistrict.district}</th>
+                      <th className="text-right">Schools</th>
+                      {isStudents ? (
+                        <><th className="text-right">Students</th><th className="text-right">Pass 10th</th><th className="text-right">Pass 12th</th></>
+                      ) : (
+                        <><th className="text-right">Teachers</th><th className="text-right">ICT Students</th></>
+                      )}
                     </tr>
-                  ))
-                : teacherStats?.byDistrict.sort((a, b) => b.teachers - a.teachers).map((d) => (
-                    <tr key={d.districtId}>
-                      <td className="font-medium text-navy-700">{d.district}</td>
-                      <td className="text-right">{d.schools}</td>
-                      <td className="text-right font-semibold">{d.teachers.toLocaleString()}</td>
-                      <td className="text-right">{d.students.toLocaleString()}</td>
-                    </tr>
-                  ))
-              }
-            </tbody>
-          </table>
-        </div>
-      )}
+                  </thead>
+                  <tbody>
+                    {drillBlocks.length === 0 ? (
+                      <tr><td colSpan={isStudents ? 5 : 4} className="py-6 text-center text-slate-400 text-xs"><i className="fas fa-circle-notch fa-spin mr-1.5" />Loading blocks…</td></tr>
+                    ) : [...drillBlocks].sort((a, b) => b.totalStudents - a.totalStudents).map((b) => (
+                      <tr key={b.blockId}>
+                        <td className="text-slate-700">
+                          <i className="fas fa-map-pin text-sky-400 mr-1.5 text-xs" />
+                          <span className="font-medium">{b.block}</span>
+                          <span className="ml-1.5 text-xs text-slate-400">{selectedDistrict.district}</span>
+                        </td>
+                        <td className="text-right">{b.schools}</td>
+                        {isStudents ? (
+                          <>
+                            <td className="text-right font-semibold">{b.totalStudents.toLocaleString()}</td>
+                            <td className="text-right text-slate-400">—</td>
+                            <td className="text-right text-slate-400">—</td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="text-right text-slate-400">—</td>
+                            <td className="text-right text-slate-400">—</td>
+                          </>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ── Student gender ratio (from 500 Virtual2526 enrolment) ── */}
       {enrollment && <GenderPanel data={enrollment} />}
@@ -407,7 +534,7 @@ function DistrictRow({
   const [loadingBlock, setLoadingBlock] = useState(false);
 
   const toggleBlock = async (blockId: string) => {
-    if (openBlock === blockId) { setOpenBlock(null); return; }
+    if (openBlock === blockId) { setOpenBlock(null); setBlockSchools([]); return; }
     setOpenBlock(blockId);
     setLoadingBlock(true);
     const schools = await api.schools({ blockId }).catch(() => []);
@@ -455,8 +582,9 @@ function DistrictRow({
                 <i className="fas fa-chevron-right" />
               </span>
               <i className="fas fa-map-pin text-sky-400 mr-1.5 text-xs" />
-              {b.block}
-              <span className="ml-1.5 text-xs text-slate-400">({b.schools} schools)</span>
+              {/* Block name + district breadcrumb */}
+              <span className="font-medium">{b.block}</span>
+              <span className="ml-1.5 text-xs text-slate-400">{d.district}</span>
             </td>
             <td className="text-right text-slate-500 font-medium">{b.schools}</td>
             <td className="text-right text-slate-500 font-medium">{b.virtualClassroomSchools}</td>
@@ -478,8 +606,12 @@ function DistrictRow({
                 <td className="pl-20">
                   <i className="fas fa-school text-slate-300 mr-1.5" />
                   <span className="font-medium text-slate-700">{s.name}</span>
+                  {/* School → breadcrumb: District > Block */}
+                  <span className="ml-1.5 text-slate-400 text-[10px]">
+                    {d.district} › {b.block}
+                  </span>
                   {s.udiseCode && (
-                    <span className="ml-1.5 text-slate-400 font-mono">{s.udiseCode}</span>
+                    <span className="ml-1.5 text-slate-300 font-mono">{s.udiseCode}</span>
                   )}
                 </td>
                 <td className="text-right text-slate-400">—</td>
