@@ -17,6 +17,29 @@ export class SchoolsService {
       take: 500,
       include: { block: { include: { district: true } }, ictDeployment: true },
     });
+
+    const schoolIds = schools.map((s) => s.id);
+    const [boardResults, enrollTotals] = await Promise.all([
+      prisma.boardResult.groupBy({
+        by: ['schoolId', 'examType'],
+        _avg: { passPct: true },
+        where: { schoolId: { in: schoolIds }, examType: { in: ['10TH', '12TH'] } },
+      }),
+      prisma.enrollment.groupBy({
+        by: ['schoolId'],
+        _sum: { total: true },
+        where: { schoolId: { in: schoolIds } },
+      }),
+    ]);
+
+    const pass10Map = new Map(
+      boardResults.filter((r) => r.examType === '10TH').map((r) => [r.schoolId, r._avg.passPct]),
+    );
+    const pass12Map = new Map(
+      boardResults.filter((r) => r.examType === '12TH').map((r) => [r.schoolId, r._avg.passPct]),
+    );
+    const enrollMap = new Map(enrollTotals.map((e) => [e.schoolId, e._sum.total]));
+
     return schools.map((s) => ({
       id: s.id,
       name: s.name,
@@ -29,6 +52,9 @@ export class SchoolsService {
       hasIctLab: s.hasIctLab,
       teachers: s.ictDeployment?.teacherCount ?? null,
       students: s.ictDeployment?.studentCount ?? null,
+      enrolledStudents: enrollMap.get(s.id) ?? null,
+      avgPass10th: pass10Map.get(s.id) ?? null,
+      avgPass12th: pass12Map.get(s.id) ?? null,
     }));
   }
 

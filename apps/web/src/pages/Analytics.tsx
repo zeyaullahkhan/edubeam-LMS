@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  Bar,
+  BarChart,
   CartesianGrid,
   Legend,
   Line,
@@ -136,6 +138,34 @@ export function Analytics() {
         </div>
       )}
 
+      {/* ── Students by District bar chart (real data) ───────── */}
+      {districts.length > 0 && (
+        <div className="panel p-5">
+          <div className="flex items-center gap-3 mb-1">
+            <h2 className="font-heading font-semibold text-navy-700">Total Students — District Wise</h2>
+            <span className="badge-real">Real</span>
+          </div>
+          <p className="text-xs text-slate-400 mb-4">
+            Enrollment from Virtual Classroom data · all 13 districts
+          </p>
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart
+              data={[...districts].sort((a, b) => b.totalStudents - a.totalStudents)}
+              margin={{ top: 8, right: 16, bottom: 60, left: 0 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+              <XAxis dataKey="district" fontSize={11} angle={-35} textAnchor="end" interval={0} />
+              <YAxis fontSize={12} tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v)} />
+              <Tooltip
+                formatter={(v) => [(v as number).toLocaleString(), 'Students']}
+                contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', boxShadow: '0 4px 16px rgba(0,48,135,0.10)' }}
+              />
+              <Bar dataKey="totalStudents" name="Students" fill="#059669" radius={[4, 4, 0, 0]} isAnimationActive={false} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
       {/* ── Real 5-year board result trend ───────────────────── */}
       {data && data.yearlyResults.length > 0 && (
         <div className="panel p-5">
@@ -160,30 +190,6 @@ export function Analytics() {
               <Legend />
               <Line type="monotone" dataKey="pass10" name="Class 10" stroke="#003087" strokeWidth={2.5} connectNulls isAnimationActive={false} dot={{ fill: '#003087', r: 4 }} />
               <Line type="monotone" dataKey="pass12" name="Class 12" stroke="#5BBCD8" strokeWidth={2.5} connectNulls isAnimationActive={false} dot={{ fill: '#5BBCD8', r: 4 }} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-
-      {/* ── 6-month usage trend (sample) ─────────────────────── */}
-      {data && (
-        <div className="panel p-5">
-          <div className="flex items-center gap-3 mb-1">
-            <h2 className="font-heading font-semibold text-navy-700">Usage & Outcomes Trend</h2>
-            <span className="badge-sample">Sample</span>
-          </div>
-          <p className="text-xs text-slate-400 mb-4">Last 6 months · projected data (live tracking in Phase 2+)</p>
-          <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={data.trend} margin={{ top: 8, right: 16, bottom: 4, left: -8 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-              <XAxis dataKey="month" fontSize={12} />
-              <YAxis yAxisId="l" fontSize={12} />
-              <YAxis yAxisId="r" orientation="right" domain={[0, 1]} tickFormatter={(v) => `${v * 100}%`} fontSize={12} />
-              <Tooltip contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', boxShadow: '0 4px 16px rgba(0,48,135,0.10)' }} />
-              <Legend />
-              <Line yAxisId="l" type="monotone" dataKey="activeUsers" name="Active users" stroke="#003087" strokeWidth={2} dot={false} isAnimationActive={false} />
-              <Line yAxisId="l" type="monotone" dataKey="learningHours" name="Learning hours" stroke="#16a34a" strokeWidth={2} dot={false} isAnimationActive={false} />
-              <Line yAxisId="r" type="monotone" dataKey="avgScore" name="Avg score" stroke="#f59e0b" strokeWidth={2} dot={false} isAnimationActive={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>

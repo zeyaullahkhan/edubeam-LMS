@@ -44,6 +44,8 @@ export interface Overview {
   totalStudents: number;
   avgPass10th: number | null;
   avgPass12th: number | null;
+  totalDistricts: number;
+  totalBlocks: number;
 }
 
 export interface BlockSummary {
@@ -67,6 +69,9 @@ export interface SchoolRow {
   hasIctLab: boolean;
   teachers: number | null;
   students: number | null;
+  enrolledStudents: number | null;
+  avgPass10th: number | null;
+  avgPass12th: number | null;
 }
 
 export const api = {

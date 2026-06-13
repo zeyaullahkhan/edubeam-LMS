@@ -39,13 +39,15 @@ export class AnalyticsService {
   /** Top-line totals for the user's scope (state/district/school). */
   async overview(user: AuthUser) {
     const { schoolWhere } = schoolScope(user);
-    const [schools, vc, ict, students, p10, p12] = await Promise.all([
+    const [schools, vc, ict, students, p10, p12, totalDistricts, totalBlocks] = await Promise.all([
       prisma.school.count({ where: schoolWhere }),
       prisma.school.count({ where: { ...schoolWhere, hasVirtualClassroom: true } }),
       prisma.school.count({ where: { ...schoolWhere, hasIctLab: true } }),
       prisma.enrollment.aggregate({ _sum: { total: true }, where: { school: schoolWhere } }),
       prisma.boardResult.aggregate({ _avg: { passPct: true }, where: { examType: '10TH', school: schoolWhere } }),
       prisma.boardResult.aggregate({ _avg: { passPct: true }, where: { examType: '12TH', school: schoolWhere } }),
+      prisma.district.count(),
+      prisma.block.count(),
     ]);
     return {
       schools,
@@ -54,6 +56,8 @@ export class AnalyticsService {
       totalStudents: students._sum.total ?? 0,
       avgPass10th: p10._avg.passPct,
       avgPass12th: p12._avg.passPct,
+      totalDistricts,
+      totalBlocks,
     };
   }
 

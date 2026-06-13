@@ -12,7 +12,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import type { AttendanceSeries, DistrictSummary, EnrollmentDemographics } from '@edubeam/shared';
+import type { AttendanceSeries, DistrictSummary, EnrollmentDemographics, TeacherStats } from '@edubeam/shared';
 import { api, type BlockSummary, type Overview, type SchoolRow } from '../api';
 import { exportCsv, printPdf } from '../export';
 
@@ -34,23 +34,33 @@ interface StatCardProps {
   sub?: string;
   icon: string;
   accent: string;
+  onClick?: () => void;
+  active?: boolean;
 }
 
-function StatCard({ label, value, sub, icon, accent }: StatCardProps) {
+function StatCard({ label, value, sub, icon, accent, onClick, active }: StatCardProps) {
   return (
-    <div className="stat-card flex items-start gap-4">
+    <div
+      className={`stat-card flex items-start gap-4 transition-all ${onClick ? 'cursor-pointer hover:shadow-md' : ''} ${active ? 'ring-2 ring-sky-400' : ''}`}
+      onClick={onClick}
+    >
       <div
         className="flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center text-white text-lg shadow-sm"
         style={{ background: accent }}
       >
         <i className={icon} />
       </div>
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <div className="text-xs uppercase tracking-widest font-semibold text-slate-500 leading-none mb-1">
           {label}
         </div>
         <div className="font-heading font-bold text-navy-700 text-2xl leading-none">{value}</div>
         {sub && <div className="text-xs text-slate-400 mt-0.5">{sub}</div>}
+        {onClick && (
+          <div className="text-[10px] text-sky-500 font-medium mt-1 flex items-center gap-1">
+            <i className="fas fa-table text-[9px]" />Click for school-wise
+          </div>
+        )}
       </div>
     </div>
   );
@@ -60,17 +70,19 @@ export function Dashboard() {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [districts, setDistricts] = useState<DistrictSummary[]>([]);
   const [enrollment, setEnrollment] = useState<EnrollmentDemographics | null>(null);
+  const [teacherStats, setTeacherStats] = useState<TeacherStats | null>(null);
   const [attendance, setAttendance] = useState<AttendanceSeries | null>(null);
   const [attPeriod, setAttPeriod] = useState<'month' | 'day'>('month');
   const [attMonth, setAttMonth] = useState(new Date().getMonth());
   const [attYear, setAttYear] = useState(new Date().getFullYear());
   const [openDistrict, setOpenDistrict] = useState<string | null>(null);
   const [blocks, setBlocks] = useState<BlockSummary[]>([]);
+  const [drilldown, setDrilldown] = useState<'students' | 'teachers' | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    Promise.all([api.overview(), api.districts(), api.enrollment()])
-      .then(([o, d, e]) => { setOverview(o); setDistricts(d); setEnrollment(e); })
+    Promise.all([api.overview(), api.districts(), api.enrollment(), api.teacherStats()])
+      .then(([o, d, e, ts]) => { setOverview(o); setDistricts(d); setEnrollment(e); setTeacherStats(ts); })
       .catch((e) => setError((e as Error).message));
   }, []);
 
@@ -119,25 +131,42 @@ export function Dashboard() {
       </div>
 
       {/* ── KPI stat cards ────────────────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <StatCard
+          label="Total Districts"
+          value={overview.totalDistricts.toLocaleString()}
+          icon="fas fa-map"
+          accent="linear-gradient(135deg,#1e3a8a,#3b82f6)"
+        />
+        <StatCard
+          label="Total Blocks"
+          value={overview.totalBlocks.toLocaleString()}
+          icon="fas fa-th-large"
+          accent="linear-gradient(135deg,#5b21b6,#8b5cf6)"
+        />
         <StatCard
           label="Total Schools"
           value={overview.schools.toLocaleString()}
+          sub={`${overview.virtualClassroomSchools.toLocaleString()} with Virtual`}
           icon="fas fa-school"
           accent="linear-gradient(135deg,#003087,#0076BC)"
-        />
-        <StatCard
-          label="Virtual Classroom"
-          value={overview.virtualClassroomSchools.toLocaleString()}
-          sub="schools equipped"
-          icon="fas fa-video"
-          accent="linear-gradient(135deg,#5BBCD8,#3AAAC5)"
         />
         <StatCard
           label="Total Students"
           value={overview.totalStudents.toLocaleString()}
           icon="fas fa-user-graduate"
           accent="linear-gradient(135deg,#065f46,#059669)"
+          onClick={() => setDrilldown(drilldown === 'students' ? null : 'students')}
+          active={drilldown === 'students'}
+        />
+        <StatCard
+          label="Total Teachers"
+          value={teacherStats ? teacherStats.totalTeachers.toLocaleString() : '…'}
+          sub="ICT Lab schools"
+          icon="fas fa-chalkboard-teacher"
+          accent="linear-gradient(135deg,#0e7490,#06b6d4)"
+          onClick={() => setDrilldown(drilldown === 'teachers' ? null : 'teachers')}
+          active={drilldown === 'teachers'}
         />
         <StatCard
           label="Avg Pass Rate"
@@ -147,6 +176,64 @@ export function Dashboard() {
           accent="linear-gradient(135deg,#b45309,#f59e0b)"
         />
       </div>
+
+      {/* ── Drill-down panel (students / teachers school-wise) ── */}
+      {drilldown && (
+        <div className="panel overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 bg-sky-50/50">
+            <div className="flex items-center gap-2">
+              <i className={`fas ${drilldown === 'students' ? 'fa-user-graduate text-emerald-600' : 'fa-chalkboard-teacher text-cyan-600'}`} />
+              <h3 className="font-semibold text-navy-700 text-sm">
+                {drilldown === 'students' ? 'Students by District' : 'Teachers by District'}
+              </h3>
+            </div>
+            <button onClick={() => setDrilldown(null)} className="text-slate-400 hover:text-slate-600 text-sm">
+              <i className="fas fa-times" />
+            </button>
+          </div>
+          <table className="w-full text-sm data-table">
+            <thead>
+              <tr>
+                <th className="text-left">District</th>
+                <th className="text-right">Schools</th>
+                {drilldown === 'students' ? (
+                  <>
+                    <th className="text-right">Students</th>
+                    <th className="text-right">Pass 10th</th>
+                    <th className="text-right">Pass 12th</th>
+                  </>
+                ) : (
+                  <>
+                    <th className="text-right">Teachers</th>
+                    <th className="text-right">ICT Students</th>
+                  </>
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {drilldown === 'students'
+                ? [...districts].sort((a, b) => b.totalStudents - a.totalStudents).map((d) => (
+                    <tr key={d.districtId}>
+                      <td className="font-medium text-navy-700">{d.district}</td>
+                      <td className="text-right">{d.schools}</td>
+                      <td className="text-right font-semibold">{d.totalStudents.toLocaleString()}</td>
+                      <td className="text-right font-semibold" style={{ color: passColor(d.avgPass10th ?? 0) }}>{pct(d.avgPass10th)}</td>
+                      <td className="text-right font-semibold" style={{ color: passColor(d.avgPass12th ?? 0) }}>{pct(d.avgPass12th)}</td>
+                    </tr>
+                  ))
+                : teacherStats?.byDistrict.sort((a, b) => b.teachers - a.teachers).map((d) => (
+                    <tr key={d.districtId}>
+                      <td className="font-medium text-navy-700">{d.district}</td>
+                      <td className="text-right">{d.schools}</td>
+                      <td className="text-right font-semibold">{d.teachers.toLocaleString()}</td>
+                      <td className="text-right">{d.students.toLocaleString()}</td>
+                    </tr>
+                  ))
+              }
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* ── Student gender ratio (from 500 Virtual2526 enrolment) ── */}
       {enrollment && <GenderPanel data={enrollment} />}
@@ -568,9 +655,15 @@ function DistrictRow({
                     </span>
                   )}
                 </td>
-                <td className="text-right text-slate-500">{s.students?.toLocaleString() ?? '—'}</td>
-                <td className="text-right text-slate-400">—</td>
-                <td className="text-right text-slate-400">—</td>
+                <td className="text-right text-slate-500">
+                  {(s.enrolledStudents ?? s.students)?.toLocaleString() ?? '—'}
+                </td>
+                <td className="text-right font-semibold" style={s.avgPass10th != null ? { color: passColor(s.avgPass10th) } : {}}>
+                  {pct(s.avgPass10th)}
+                </td>
+                <td className="text-right font-semibold" style={s.avgPass12th != null ? { color: passColor(s.avgPass12th) } : {}}>
+                  {pct(s.avgPass12th)}
+                </td>
               </tr>
             ))
           )}
