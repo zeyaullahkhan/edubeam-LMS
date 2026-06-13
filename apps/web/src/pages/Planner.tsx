@@ -80,37 +80,61 @@ function CalendarWidget() {
       </div>
 
       {/* Grid header */}
-      <div className="grid grid-cols-7 gap-1 text-center">
+      <div className="grid grid-cols-7 gap-1.5">
         {DAY_NAMES.map(d => (
-          <div key={d} className={`text-xs font-semibold py-1 ${d === 'Sun' ? 'text-red-500' : 'text-slate-500'}`}>{d}</div>
+          <div key={d} className={`text-xs font-bold text-center py-1.5 ${d === 'Sun' ? 'text-red-500' : 'text-slate-500'}`}>{d}</div>
         ))}
         {cells.map((cell, i) => {
-          if (!cell.key || !cell.day) return <div key={`blank-${i}`} />;
+          if (!cell.key || !cell.day) return <div key={`blank-${i}`} className="rounded-lg" />;
           const holiday = holidayForDate(cell.key);
           const isSelected = selected === cell.key;
           const isToday = cell.key === todayKey;
           const eventsOnDay = EVENTS.filter(e => e.date === cell.key);
+          const isWorkingDay = !holiday;
 
-          let bg = 'bg-white hover:bg-slate-50';
+          let bg = 'bg-white hover:bg-sky-50';
           let border = 'border-slate-200';
-          if (holiday?.type === 'weekly') { bg = 'bg-red-50 hover:bg-red-100'; border = 'border-red-300'; }
-          else if (holiday?.type === 'national') { bg = 'bg-orange-50 hover:bg-orange-100'; border = 'border-orange-300'; }
-          else if (holiday?.type === 'institutional') { bg = 'bg-amber-50 hover:bg-amber-100'; border = 'border-amber-300'; }
+          let labelText = '';
+          let labelCls = '';
+          if (holiday?.type === 'weekly') {
+            bg = 'bg-red-50 hover:bg-red-100'; border = 'border-red-200';
+            labelText = holiday.name === 'Sunday' ? 'Sunday' : holiday.name;
+            labelCls = 'text-red-500';
+          } else if (holiday?.type === 'national') {
+            bg = 'bg-orange-50 hover:bg-orange-100'; border = 'border-orange-200';
+            labelText = holiday.name; labelCls = 'text-orange-600';
+          } else if (holiday?.type === 'institutional') {
+            bg = 'bg-amber-50 hover:bg-amber-100'; border = 'border-amber-200';
+            labelText = 'Camp Holiday'; labelCls = 'text-amber-600';
+          }
           if (isSelected) border = 'border-sky-500 ring-2 ring-sky-300';
 
           return (
             <button
               key={cell.key}
               onClick={() => setSelected(cell.key === selected ? null : cell.key)}
-              className={`relative rounded-lg border ${bg} ${border} p-1.5 text-center transition-all cursor-pointer aspect-square flex flex-col items-center justify-center gap-0.5`}
+              className={`relative rounded-xl border ${bg} ${border} px-1.5 pt-2 pb-1.5 text-left transition-all cursor-pointer flex flex-col gap-1 min-h-[80px]`}
             >
-              <span className={`text-sm font-bold leading-none ${isToday ? 'bg-sky-600 text-white rounded-full w-6 h-6 flex items-center justify-center' : holiday ? 'text-inherit' : 'text-slate-700'}`}>
+              {/* Day number */}
+              <span className={`text-sm font-bold leading-none self-center ${isToday ? 'bg-sky-600 text-white rounded-full w-6 h-6 flex items-center justify-center' : holiday ? labelCls : 'text-slate-700'}`}>
                 {cell.day}
               </span>
+              {/* Label */}
+              {holiday && (
+                <span className={`text-[9px] font-bold leading-tight text-center w-full break-words ${labelCls}`}>
+                  {labelText}
+                </span>
+              )}
+              {isWorkingDay && (
+                <span className="text-[9px] text-emerald-500 font-semibold text-center w-full">
+                  Camp Day
+                </span>
+              )}
+              {/* Event dots */}
               {eventsOnDay.length > 0 && (
-                <span className="flex gap-0.5 justify-center">
-                  {eventsOnDay.slice(0, 2).map(e => (
-                    <span key={e.id} className={`w-1.5 h-1.5 rounded-full ${e.urgent ? 'bg-rose-500' : 'bg-sky-400'}`} />
+                <span className="flex gap-0.5 justify-center mt-auto">
+                  {eventsOnDay.map(e => (
+                    <span key={e.id} className={`w-1.5 h-1.5 rounded-full ${e.urgent ? 'bg-rose-500 animate-pulse' : 'bg-sky-400'}`} />
                   ))}
                 </span>
               )}
@@ -210,7 +234,12 @@ for (let d = 1; d <= JUNE_DAYS; d++) {
 function SchoolPlanner() {
   const [studio, setStudio] = useState<1|2|3|4>(1);
   const [view, setView] = useState<'daily'|'weekly'>('daily');
-  const [selectedDate, setSelectedDate] = useState<string>(WORKING_DAYS[0] ?? '2026-06-01');
+  // Default to today if it's a working day, else nearest future working day
+  const [selectedDate, setSelectedDate] = useState<string>(() => {
+    const today = new Date();
+    const key = dateKey(today.getFullYear(), today.getMonth() + 1, today.getDate());
+    return WORKING_DAYS.find(d => d >= key) ?? WORKING_DAYS[0] ?? '2026-06-01';
+  });
 
   // Week containing selected date
   const weekStart = useMemo(() => {

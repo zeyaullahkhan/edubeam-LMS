@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { EVENTS } from '../data/schedule';
 import {
   Bar,
   BarChart,
@@ -140,6 +141,41 @@ export function Dashboard() {
           Export PDF
         </button>
       </div>
+
+      {/* ── Event notification ticker ────────────────────────── */}
+      {(() => {
+        const today = new Date().toISOString().slice(0, 10);
+        const upcoming = EVENTS.filter(e => e.date >= today).slice(0, 4);
+        const urgent = upcoming.filter(e => e.urgent);
+        if (!upcoming.length) return null;
+        return (
+          <div className="flex items-stretch gap-3 bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden no-print">
+            {/* Bell badge */}
+            <div className={`flex items-center justify-center w-14 shrink-0 ${urgent.length ? 'bg-rose-500' : 'bg-sky-600'}`}>
+              <i className={`fas fa-bell text-white text-lg ${urgent.length ? 'animate-bounce' : ''}`} />
+            </div>
+            {/* Scrolling ticker */}
+            <div className="flex-1 min-w-0 py-2 overflow-hidden">
+              <p className="text-[10px] uppercase tracking-widest font-bold text-slate-400 mb-1">
+                {urgent.length ? '⚠ Upcoming Alerts' : 'Upcoming Events'}
+              </p>
+              <div className="flex flex-wrap gap-x-6 gap-y-1">
+                {upcoming.map(ev => (
+                  <span key={ev.id} className={`flex items-center gap-1.5 text-sm font-semibold ${ev.urgent ? 'text-rose-600' : 'text-slate-700'}`}>
+                    {ev.urgent && <span className="inline-block w-2 h-2 rounded-full bg-rose-500 animate-pulse" />}
+                    <span className="text-slate-400 font-normal text-xs">{new Date(ev.date + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>
+                    {ev.title}
+                  </span>
+                ))}
+              </div>
+            </div>
+            {/* CTA */}
+            <a href="/planner" className="flex items-center gap-1.5 px-4 text-xs font-bold text-sky-600 hover:text-sky-800 shrink-0 border-l border-slate-100">
+              View All <i className="fas fa-arrow-right text-[10px]" />
+            </a>
+          </div>
+        );
+      })()}
 
       {/* ── KPI stat cards ────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
