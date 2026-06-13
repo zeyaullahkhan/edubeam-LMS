@@ -12,16 +12,12 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import type { AttendanceSeries, DistrictSummary, EnrollmentDemographics, TeacherStats } from '@edubeam/shared';
+import type { DistrictSummary, EnrollmentDemographics, TeacherStats } from '@edubeam/shared';
 import { api, type BlockSummary, type Overview, type SchoolRow } from '../api';
 import { exportCsv, printPdf } from '../export';
 
 const BOYS_COLOR = '#0076BC';
 const GIRLS_COLOR = '#EC4899';
-
-// Attendance bar colour by rate (green ≥90%, amber 75–89%, red <75%).
-const attColor = (v: number | null) =>
-  v == null ? '#cbd5e1' : v >= 0.9 ? '#16a34a' : v >= 0.75 ? '#f59e0b' : '#dc2626';
 
 const pct = (v: number | null | undefined) =>
   v == null ? '—' : `${(v * 100).toFixed(1)}%`;
@@ -41,24 +37,24 @@ interface StatCardProps {
 function StatCard({ label, value, sub, icon, accent, onClick, active }: StatCardProps) {
   return (
     <div
-      className={`stat-card flex items-start gap-4 transition-all ${onClick ? 'cursor-pointer hover:shadow-md' : ''} ${active ? 'ring-2 ring-sky-400' : ''}`}
+      className={`stat-card flex items-center gap-3 transition-all ${onClick ? 'cursor-pointer hover:shadow-md' : ''} ${active ? 'ring-2 ring-sky-400' : ''}`}
       onClick={onClick}
     >
       <div
-        className="flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center text-white text-lg shadow-sm"
+        className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-white text-base shadow-sm"
         style={{ background: accent }}
       >
         <i className={icon} />
       </div>
       <div className="min-w-0 flex-1">
-        <div className="text-xs uppercase tracking-widest font-semibold text-slate-500 leading-none mb-1">
+        <div className="text-[11px] uppercase tracking-wider font-bold text-slate-400 leading-none mb-1">
           {label}
         </div>
-        <div className="font-heading font-bold text-navy-700 text-2xl leading-none">{value}</div>
-        {sub && <div className="text-xs text-slate-400 mt-0.5">{sub}</div>}
+        <div className="font-heading font-extrabold text-navy-700 text-2xl leading-none">{value}</div>
+        {sub && <div className="text-[11px] text-slate-400 mt-0.5 font-medium">{sub}</div>}
         {onClick && (
-          <div className="text-[10px] text-sky-500 font-medium mt-1 flex items-center gap-1">
-            <i className="fas fa-table text-[9px]" />Click for school-wise
+          <div className="text-[10px] text-sky-500 font-semibold mt-1 flex items-center gap-1">
+            <i className="fas fa-table text-[9px]" />View district-wise
           </div>
         )}
       </div>
@@ -71,10 +67,6 @@ export function Dashboard() {
   const [districts, setDistricts] = useState<DistrictSummary[]>([]);
   const [enrollment, setEnrollment] = useState<EnrollmentDemographics | null>(null);
   const [teacherStats, setTeacherStats] = useState<TeacherStats | null>(null);
-  const [attendance, setAttendance] = useState<AttendanceSeries | null>(null);
-  const [attPeriod, setAttPeriod] = useState<'month' | 'day'>('month');
-  const [attMonth, setAttMonth] = useState(new Date().getMonth());
-  const [attYear, setAttYear] = useState(new Date().getFullYear());
   const [openDistrict, setOpenDistrict] = useState<string | null>(null);
   const [blocks, setBlocks] = useState<BlockSummary[]>([]);
   const [drilldown, setDrilldown] = useState<'students' | 'teachers' | null>(null);
@@ -85,11 +77,6 @@ export function Dashboard() {
       .then(([o, d, e, ts]) => { setOverview(o); setDistricts(d); setEnrollment(e); setTeacherStats(ts); })
       .catch((e) => setError((e as Error).message));
   }, []);
-
-  useEffect(() => {
-    api.attendance(attPeriod, attPeriod === 'day' ? attMonth : undefined, attPeriod === 'day' ? attYear : undefined)
-      .then(setAttendance).catch(() => setAttendance(null));
-  }, [attPeriod, attMonth, attYear]);
 
   const toggleDistrict = async (id: string) => {
     if (openDistrict === id) { setOpenDistrict(null); return; }
@@ -133,26 +120,26 @@ export function Dashboard() {
       {/* ── KPI stat cards ────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <StatCard
-          label="Total Districts"
+          label="Districts"
           value={overview.totalDistricts.toLocaleString()}
           icon="fas fa-map"
           accent="linear-gradient(135deg,#1e3a8a,#3b82f6)"
         />
         <StatCard
-          label="Total Blocks"
+          label="Blocks"
           value={overview.totalBlocks.toLocaleString()}
           icon="fas fa-th-large"
           accent="linear-gradient(135deg,#5b21b6,#8b5cf6)"
         />
         <StatCard
-          label="Total Schools"
+          label="Schools"
           value={overview.schools.toLocaleString()}
           sub={`${overview.virtualClassroomSchools.toLocaleString()} with Virtual`}
           icon="fas fa-school"
           accent="linear-gradient(135deg,#003087,#0076BC)"
         />
         <StatCard
-          label="Total Students"
+          label="Students"
           value={overview.totalStudents.toLocaleString()}
           icon="fas fa-user-graduate"
           accent="linear-gradient(135deg,#065f46,#059669)"
@@ -160,7 +147,7 @@ export function Dashboard() {
           active={drilldown === 'students'}
         />
         <StatCard
-          label="Total Teachers"
+          label="Teachers"
           value={teacherStats ? teacherStats.totalTeachers.toLocaleString() : '…'}
           sub="ICT Lab schools"
           icon="fas fa-chalkboard-teacher"
@@ -237,18 +224,6 @@ export function Dashboard() {
 
       {/* ── Student gender ratio (from 500 Virtual2526 enrolment) ── */}
       {enrollment && <GenderPanel data={enrollment} />}
-
-      {/* ── Attendance calendar (sample) ──────────────────────── */}
-      {attendance && (
-        <AttendancePanel
-          data={attendance}
-          period={attPeriod}
-          onPeriod={setAttPeriod}
-          selMonth={attMonth}
-          selYear={attYear}
-          onMonthChange={(m, y) => { setAttMonth(m); setAttYear(y); }}
-        />
-      )}
 
       {/* ── District performance table ────────────────────────── */}
       <div className="panel overflow-hidden">
@@ -414,146 +389,6 @@ function GenderPanel({ data }: { data: EnrollmentDemographics }) {
             </BarChart>
           </ResponsiveContainer>
         </div>
-      </div>
-    </div>
-  );
-}
-
-const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-function buildMonthOptions() {
-  const options: { label: string; month: number; year: number }[] = [];
-  const now = new Date();
-  const endYear = now.getFullYear();
-  const endMonth = now.getMonth();
-  // Walk backward from current month to Jan 2019
-  for (let y = endYear; y >= 2019; y--) {
-    const startM = y === endYear ? endMonth : 11;
-    const endM = y === 2019 ? 0 : 0;
-    for (let m = startM; m >= endM; m--) {
-      options.push({ label: `${MONTH_NAMES[m]} ${y}`, month: m, year: y });
-    }
-  }
-  return options;
-}
-
-function AttendancePanel({
-  data, period, onPeriod, selMonth, selYear, onMonthChange,
-}: {
-  data: AttendanceSeries;
-  period: 'month' | 'day';
-  onPeriod: (p: 'month' | 'day') => void;
-  selMonth: number;
-  selYear: number;
-  onMonthChange: (month: number, year: number) => void;
-}) {
-  const monthOptions = buildMonthOptions();
-  const chartData = data.points.map((p) => ({
-    label: p.label,
-    pct: p.attendancePct,
-    present: p.present,
-    total: p.total,
-    isHoliday: p.isHoliday,
-  }));
-
-  return (
-    <div className="panel p-5">
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="font-heading font-semibold text-navy-700">Student Attendance</h2>
-            <span className="badge-sample">Sample</span>
-          </div>
-          <p className="text-xs text-slate-500 mt-0.5">
-            {period === 'month'
-              ? 'Average daily attendance by month · 2026'
-              : `Daily attendance · ${data.monthLabel}`}
-            {data.averagePct != null && (
-              <span className="ml-1 text-slate-400">· avg {(data.averagePct * 100).toFixed(1)}%</span>
-            )}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 no-print flex-wrap">
-          <div className="flex gap-1 text-sm">
-            {(['month', 'day'] as const).map((p) => (
-              <button
-                key={p}
-                onClick={() => onPeriod(p)}
-                className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${
-                  period === p ? 'text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                }`}
-                style={period === p ? { background: 'linear-gradient(135deg,#003087,#0076BC)' } : {}}
-              >
-                {p === 'month' ? 'By Month' : 'By Day'}
-              </button>
-            ))}
-          </div>
-          {period === 'day' && (
-            <select
-              value={`${selYear}-${selMonth}`}
-              onChange={(e) => {
-                const [y, m] = e.target.value.split('-').map(Number);
-                onMonthChange(m, y);
-              }}
-              className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sky-300/50 focus:border-sky-300"
-            >
-              {monthOptions.map((o) => (
-                <option key={`${o.year}-${o.month}`} value={`${o.year}-${o.month}`}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          )}
-          <button
-            onClick={() =>
-              exportCsv(
-                `attendance-by-${period}`,
-                data.points.map((p) => ({
-                  [period === 'month' ? 'Month' : 'Day']: p.label,
-                  'Attendance %': p.attendancePct == null ? 'Holiday' : (p.attendancePct * 100).toFixed(1),
-                  Present: p.present,
-                  Total: p.total,
-                })),
-              )
-            }
-            className="btn-outline text-xs"
-          >
-            <i className="fas fa-download" />
-            Export CSV
-          </button>
-        </div>
-      </div>
-
-      <ResponsiveContainer width="100%" height={260}>
-        <BarChart data={chartData} margin={{ top: 8, right: 8, bottom: 4, left: -8 }} barCategoryGap={period === 'day' ? 2 : '20%'}>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-          <XAxis dataKey="label" fontSize={11} interval={period === 'day' ? 1 : 0} />
-          <YAxis domain={[0, 1]} tickFormatter={(v) => `${Math.round(v * 100)}%`} fontSize={12} />
-          <Tooltip
-            formatter={((v: unknown, _n: unknown, item: unknown) => {
-              const val = v as number | null;
-              if (val == null) return ['Holiday', 'Attendance'];
-              const present = (item as { payload?: { present?: number } })?.payload?.present ?? 0;
-              return [`${(val * 100).toFixed(1)}%  (${present.toLocaleString()} present)`, 'Attendance'];
-            }) as never}
-            labelFormatter={(l) => (period === 'month' ? l : `Day ${l}`)}
-            contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', boxShadow: '0 4px 16px rgba(0,48,135,0.10)' }}
-          />
-          <Bar dataKey="pct" radius={[4, 4, 0, 0]} isAnimationActive={false}>
-            {chartData.map((p, i) => (
-              <Cell key={i} fill={attColor(p.pct)} />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-
-      <div className="flex items-center gap-4 mt-2 text-xs text-slate-400">
-        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-green-600 inline-block" />≥ 90%</span>
-        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" />75–89%</span>
-        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-600 inline-block" />&lt; 75%</span>
-        {period === 'day' && (
-          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-slate-300 inline-block" />Holiday</span>
-        )}
       </div>
     </div>
   );
