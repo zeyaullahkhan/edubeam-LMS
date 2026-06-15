@@ -192,6 +192,60 @@ model User {
   district     District? @relation(fields: [districtId], references: [id])
   schoolId     String?
   school       School?   @relation(fields: [schoolId], references: [id])
+  studentId         String?   // for STUDENT role: links to Student.id
+  linkedStudentIds  String?   // for PARENT role: comma-separated Student ids
   active       Boolean   @default(true)
   createdAt    DateTime  @default(now())
+}
+
+// ── Attendance ───────────────────────────────────────────────────────────────
+
+// status: "P" present | "A" absent | "L" late | "HD" half-day
+model Attendance {
+  id          String   @id @default(cuid())
+  studentId   String
+  schoolId    String
+  date        String   // "YYYY-MM-DD"
+  status      String   @default("P")
+  markedBy    String?  // userId of teacher/admin who marked
+  academicYear String
+
+  @@unique([studentId, date])
+  @@index([schoolId, date])
+  @@index([studentId])
+}
+
+// status: "P" present | "A" absent | "L" late | "OD" on-duty
+model StaffAttendance {
+  id          String   @id @default(cuid())
+  staffId     String
+  schoolId    String
+  date        String   // "YYYY-MM-DD"
+  status      String   @default("P")
+  markedBy    String?
+  academicYear String
+
+  @@unique([staffId, date])
+  @@index([schoolId, date])
+}
+
+// ── Exam Results / Report Card ───────────────────────────────────────────────
+
+// examType: "FA1" | "FA2" | "SA1" | "SA2" | "ANNUAL" | "BOARD"
+model ExamResult {
+  id           String @id @default(cuid())
+  studentId    String
+  schoolId     String
+  subject      String
+  grade        Int    // class 1..12
+  section      String? // A | B | ...
+  examType     String
+  academicYear String
+  marksObtained Float
+  maxMarks      Float  @default(100)
+  grade_letter  String? // A+ | A | B+ | B | C | D | F
+  remarks       String?
+
+  @@unique([studentId, subject, examType, academicYear])
+  @@index([schoolId, grade, academicYear])
 }

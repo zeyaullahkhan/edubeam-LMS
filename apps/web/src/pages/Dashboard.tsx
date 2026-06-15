@@ -77,11 +77,13 @@ export function Dashboard() {
   const [drillBlockId, setDrillBlockId] = useState<string | null>(null);
   const [drillSchools, setDrillSchools] = useState<SchoolRow[]>([]);
   const [error, setError] = useState('');
+  const [todayAtt, setTodayAtt] = useState<any>(null);
 
   useEffect(() => {
     Promise.all([api.overview(), api.districts(), api.enrollment(), api.teacherStats()])
       .then(([o, d, e, ts]) => { setOverview(o); setDistricts(d); setEnrollment(e); setTeacherStats(ts); })
       .catch((e) => setError((e as Error).message));
+    api.attendance.today().then(setTodayAtt).catch(() => null);
   }, []);
 
   const selectDrillDistrict = async (id: string) => {
@@ -177,6 +179,54 @@ export function Dashboard() {
         );
       })()}
 
+      {/* ── Today's attendance summary ───────────────────────── */}
+      {todayAtt && (todayAtt.students.present > 0 || todayAtt.staff.present > 0 || todayAtt.students.absent > 0) && (
+        <div className="grid grid-cols-2 gap-4 no-print">
+          {/* Student today */}
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Today — Students</span>
+              <span className="ml-auto text-xs text-slate-400">{todayAtt.date}</span>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {[
+                { label: 'Present', val: todayAtt.students.present, cls: 'text-emerald-600 bg-emerald-50' },
+                { label: 'Absent',  val: todayAtt.students.absent,  cls: 'text-red-600 bg-red-50' },
+                { label: 'Late',    val: todayAtt.students.late,    cls: 'text-amber-600 bg-amber-50' },
+                { label: 'Not Marked', val: todayAtt.students.notMarked, cls: 'text-slate-400 bg-slate-50' },
+              ].map(item => (
+                <div key={item.label} className={`rounded-lg p-2 text-center ${item.cls}`}>
+                  <div className="text-xl font-bold">{item.val}</div>
+                  <div className="text-[10px] font-medium">{item.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          {/* Staff today */}
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="w-2 h-2 rounded-full bg-sky-400 animate-pulse" />
+              <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Today — Staff</span>
+              <span className="ml-auto text-xs text-slate-400">{todayAtt.date}</span>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {[
+                { label: 'Present', val: todayAtt.staff.present, cls: 'text-emerald-600 bg-emerald-50' },
+                { label: 'Absent',  val: todayAtt.staff.absent,  cls: 'text-red-600 bg-red-50' },
+                { label: 'On Duty', val: todayAtt.staff.onDuty,  cls: 'text-blue-600 bg-blue-50' },
+                { label: 'Not Marked', val: todayAtt.staff.notMarked, cls: 'text-slate-400 bg-slate-50' },
+              ].map(item => (
+                <div key={item.label} className={`rounded-lg p-2 text-center ${item.cls}`}>
+                  <div className="text-xl font-bold">{item.val}</div>
+                  <div className="text-[10px] font-medium">{item.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── KPI stat cards ────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <StatCard
@@ -222,7 +272,7 @@ export function Dashboard() {
           active={drilldown === 'teachers'}
         />
         <StatCard
-          label="Avg Pass Rate"
+          label="Annual Pass Rate (APR)"
           value={`${pct(overview.avgPass10th)}`}
           sub={`Class 12: ${pct(overview.avgPass12th)}`}
           icon="fas fa-award"

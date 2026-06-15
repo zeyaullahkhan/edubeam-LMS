@@ -21,6 +21,8 @@ export interface AuthUser {
   tenantId?: string | null;
   districtId?: string | null;
   schoolId?: string | null;
+  studentId?: string | null;        // STUDENT role: linked Student.id
+  linkedStudentIds?: string | null; // PARENT role: comma-separated Student ids
 }
 
 export interface DistrictSummary {

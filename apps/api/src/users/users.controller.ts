@@ -27,7 +27,7 @@ export class UsersController {
   update(
     @CurrentUser() admin: AuthUser,
     @Param('id') id: string,
-    @Body() body: { name?: string; role?: Role; active?: boolean; districtId?: string | null; schoolId?: string | null; password?: string },
+    @Body() body: { name?: string; role?: Role; active?: boolean; districtId?: string | null; schoolId?: string | null; password?: string; studentId?: string | null; linkedStudentIds?: string | null },
   ) {
     return this.users.update(admin, id, body);
   }

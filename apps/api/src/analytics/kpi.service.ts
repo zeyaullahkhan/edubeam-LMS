@@ -78,6 +78,7 @@ export class KpiService {
 
     const groups: MetricGroup[] = [
       this.studentGroup(base, improvement),
+      this.attendanceGroup(base),
       this.teacherGroup(base),
       this.contentGroup(base),
       this.assessmentGroup(base),
@@ -147,7 +148,6 @@ export class KpiService {
   }
 
   private studentGroup(b: Base, improvement: number | null): MetricGroup {
-    const active = round(b.students * frac(b, 'activeFrac', 0.72, 0.88));
     const improvementMetric: Metric =
       improvement != null
         ? r(improvement, 'Improvement trend (Class 10 YoY)', 'improvement', 'percent', undefined, improvement)
@@ -157,21 +157,38 @@ export class KpiService {
       category: 'Student Analytics',
       metrics: [
         r(b.students, 'Total registered students', 'totalStudents', 'number'),
-        s(active, 'Active students', 'activeStudents', 'number', undefined, frac(b, 'activeTrend', -0.02, 0.12)),
         s(round(b.students * frac(b, 'dau', 0.34, 0.5)), 'Daily Active Users (DAU)', 'dau', 'number'),
         s(round(b.students * frac(b, 'mau', 0.68, 0.85)), 'Monthly Active Users (MAU)', 'mau', 'number'),
         s(+frac(b, 'loginFreq', 3.2, 5.6).toFixed(1), 'Avg logins / week', 'loginFreq', 'number'),
-        s(round(frac(b, 'session', 22, 41)), 'Avg session duration', 'sessionDuration', 'minutes'),
         s(frac(b, 'completion', 0.55, 0.78), 'Course completion', 'courseCompletion', 'percent'),
         s(frac(b, 'chapter', 0.6, 0.82), 'Chapter-wise progress', 'chapterProgress', 'percent'),
         s(round(b.students * frac(b, 'hours', 18, 34)), 'Learning hours consumed', 'learningHours', 'hours'),
-        s(round(b.students * frac(b, 'watch', 9, 19)), 'Video watch time', 'videoWatch', 'hours'),
-        s(frac(b, 'attendance', 0.81, 0.93), 'Attendance', 'attendancePct', 'percent'),
-        s(frac(b, 'assignSubmit', 0.66, 0.86), 'Assignment submission rate', 'assignmentRate', 'percent'),
         r(b.pass10, 'Assessment score (Class 10 board)', 'assessScore', 'percent'),
         improvementMetric,
         s(frac(b, 'competency', 0.58, 0.79), 'Competency attainment', 'competency', 'percent'),
         s(round(b.students * frac(b, 'risk', 0.04, 0.11)), 'Students at risk of dropout', 'atRisk', 'number'),
+      ],
+    };
+  }
+
+  private attendanceGroup(b: Base): MetricGroup {
+    const attPct   = frac(b, 'attendance', 0.81, 0.93);
+    const present  = round(b.students * attPct);
+    const absent   = b.students - present;
+    const monthPct = frac(b, 'attMonth', 0.79, 0.91);
+    return {
+      key: 'attendance',
+      category: 'Attendance',
+      metrics: [
+        r(b.students,  'Total enrolled students',            'attTotal',    'number'),
+        r(present,     'Present (today)',                    'attPresent',  'number'),
+        r(absent,      'Absent (today)',                     'attAbsent',   'number'),
+        r(attPct,      'Attendance rate (today)',            'attPctToday', 'percent'),
+        s(monthPct,    'Avg monthly attendance',             'attPctMonth', 'percent'),
+        s(frac(b, 'attBoys', 0.82, 0.94),  'Boys attendance rate',   'attBoys',   'percent'),
+        s(frac(b, 'attGirls', 0.83, 0.95), 'Girls attendance rate',  'attGirls',  'percent'),
+        s(round(b.students * frac(b, 'attChronic', 0.04, 0.10)), 'Chronic absentees (>20% absent)', 'attChronic', 'number'),
+        s(frac(b, 'attVc', 0.78, 0.92), 'Virtual classroom attendance', 'attVc', 'percent'),
       ],
     };
   }
@@ -222,8 +239,8 @@ export class KpiService {
       metrics: [
         s(round(b.schools * frac(b, 'tests', 4, 11)), 'Tests conducted', 'tests', 'number'),
         r(b.students, 'Students assessed', 'studentsAssessed', 'number'),
-        r(b.pass10, 'Pass percentage (Class 10)', 'pass10', 'percent'),
-        r(b.pass12, 'Pass percentage (Class 12)', 'pass12', 'percent'),
+        r(b.pass10, 'Annual Pass Rate (APR) — Class 10', 'pass10', 'percent'),
+        r(b.pass12, 'Annual Pass Rate (APR) — Class 12', 'pass12', 'percent'),
         s(frac(b, 'avgScore', 0.62, 0.81), 'Average score', 'avgScore', 'percent'),
         s(frac(b, 'highScore', 0.95, 1), 'Highest score', 'highScore', 'percent'),
         s(frac(b, 'lowScore', 0.18, 0.38), 'Lowest score', 'lowScore', 'percent'),

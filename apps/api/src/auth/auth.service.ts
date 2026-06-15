@@ -22,6 +22,8 @@ export class AuthService {
       tenantId: user.tenantId,
       districtId: user.districtId,
       schoolId: user.schoolId,
+      studentId: user.studentId,
+      linkedStudentIds: user.linkedStudentIds,
     };
     const token = this.jwt.sign({
       sub: user.id,
@@ -31,6 +33,8 @@ export class AuthService {
       tenantId: user.tenantId,
       districtId: user.districtId,
       schoolId: user.schoolId,
+      studentId: user.studentId ?? null,
+      linkedStudentIds: user.linkedStudentIds ?? null,
     });
     return { token, user: authUser };
   }

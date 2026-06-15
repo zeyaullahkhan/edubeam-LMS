@@ -10,9 +10,11 @@ interface CreateUserDto {
   role: Role;
   districtId?: string | null;
   schoolId?: string | null;
+  studentId?: string | null;
+  linkedStudentIds?: string | null;
 }
 
-type UpdateUserDto = Partial<Omit<CreateUserDto, 'email'>> & { active?: boolean };
+type UpdateUserDto = Partial<Omit<CreateUserDto, 'email'>> & { active?: boolean; studentId?: string | null; linkedStudentIds?: string | null };
 
 const SCHOOL_ROLES: Role[] = ['PRINCIPAL', 'TEACHER', 'STUDENT', 'PARENT'];
 
@@ -66,6 +68,8 @@ export class UsersService {
         tenantId: admin.tenantId,
         districtId: dto.role === 'STATE_OFFICIAL' || dto.role === 'ADMIN' ? null : dto.districtId ?? null,
         schoolId: SCHOOL_ROLES.includes(dto.role) ? dto.schoolId ?? null : null,
+        studentId: dto.role === 'STUDENT' ? (dto.studentId ?? null) : null,
+        linkedStudentIds: dto.role === 'PARENT' ? (dto.linkedStudentIds ?? null) : null,
       },
     });
     return { id: user.id };
@@ -86,6 +90,8 @@ export class UsersService {
         active: dto.active,
         districtId: dto.role && (role === 'STATE_OFFICIAL' || role === 'ADMIN') ? null : dto.districtId,
         schoolId: dto.role && !SCHOOL_ROLES.includes(role) ? null : dto.schoolId,
+        studentId: dto.studentId !== undefined ? dto.studentId : undefined,
+        linkedStudentIds: dto.linkedStudentIds !== undefined ? dto.linkedStudentIds : undefined,
         ...(dto.password ? { passwordHash: await bcrypt.hash(dto.password, 10) } : {}),
       },
     });

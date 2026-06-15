@@ -12,18 +12,29 @@ const ROLE_LABELS: Record<string, string> = {
   PARENT: 'Parent',
 };
 
-const NAV_ITEMS = [
+const ADMIN_NAV = [
   { to: '/',             label: 'Dashboard',  icon: 'fas fa-chart-bar' },
   { to: '/analytics',    label: 'Analytics',  icon: 'fas fa-chart-line' },
   { to: '/schools',      label: 'Schools',    icon: 'fas fa-school' },
   { to: '/students',     label: 'Students',   icon: 'fas fa-user-graduate' },
   { to: '/staff',        label: 'Staff',      icon: 'fas fa-chalkboard-teacher' },
-  { to: '/planner',     label: 'Planner',    icon: 'fas fa-calendar-alt' },
+  { to: '/attendance',   label: 'Attendance', icon: 'fas fa-user-check' },
+  { to: '/report-card',  label: 'Report Card',icon: 'fas fa-file-alt' },
+  { to: '/planner',      label: 'Planner',    icon: 'fas fa-calendar-alt' },
+];
+
+const STUDENT_NAV = [
+  { to: '/', label: 'My Portal', icon: 'fas fa-id-card' },
+];
+
+const PARENT_NAV = [
+  { to: '/', label: 'My Children', icon: 'fas fa-users' },
 ];
 
 export function Layout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const navItems = user?.role === 'STUDENT' ? STUDENT_NAV : user?.role === 'PARENT' ? PARENT_NAV : ADMIN_NAV;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -61,7 +72,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
             {/* Nav links */}
             <nav className="flex items-center gap-1 ml-4">
-              {NAV_ITEMS.map(({ to, label, icon }) => (
+              {navItems.map(({ to, label, icon }) => (
                 <NavLink
                   key={to}
                   to={to}
@@ -78,7 +89,7 @@ export function Layout({ children }: { children: ReactNode }) {
                   {label}
                 </NavLink>
               ))}
-              {user?.role === 'ADMIN' && (
+              {user?.role === 'ADMIN' && user?.role !== 'STUDENT' && user?.role !== 'PARENT' && (
                 <NavLink
                   to="/admin/users"
                   className={({ isActive }) =>

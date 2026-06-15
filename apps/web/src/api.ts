@@ -145,6 +145,36 @@ export const api = {
       req<{ ok: boolean }>(`/staff/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
     remove: (id: string) => req<{ ok: boolean }>(`/staff/${id}`, { method: 'DELETE' }),
   },
+  attendance: {
+    markStudents: (body: { schoolId?: string; date?: string; academicYear: string; records: { studentId: string; status: string }[] }) =>
+      req<{ marked: number; date: string }>('/attendance/students/mark', { method: 'POST', body: JSON.stringify(body) }),
+    byDate: (schoolId: string, date: string, grade?: number) =>
+      req<any>(`/attendance/students/date?schoolId=${schoolId}&date=${date}${grade ? `&grade=${grade}` : ''}`),
+    calendar: (studentId: string, month: string) =>
+      req<any>(`/attendance/students/calendar?studentId=${studentId}&month=${month}`),
+    monthly: (schoolId: string, month: string, grade?: number) =>
+      req<any>(`/attendance/students/monthly?schoolId=${schoolId}&month=${month}${grade ? `&grade=${grade}` : ''}`),
+    report: (schoolId: string, from: string, to: string) =>
+      req<any>(`/attendance/students/report?schoolId=${schoolId}&from=${from}&to=${to}`),
+    markStaff: (body: { schoolId?: string; date?: string; academicYear: string; records: { staffId: string; status: string }[] }) =>
+      req<{ marked: number }>('/attendance/staff/mark', { method: 'POST', body: JSON.stringify(body) }),
+    staffByDate: (schoolId: string, date: string) =>
+      req<any>(`/attendance/staff/date?schoolId=${schoolId}&date=${date}`),
+    staffMonthly: (schoolId: string, month: string) =>
+      req<any>(`/attendance/staff/monthly?schoolId=${schoolId}&month=${month}`),
+    saveResults: (body: any) =>
+      req<{ saved: number }>('/attendance/results/save', { method: 'POST', body: JSON.stringify(body) }),
+    reportCard: (studentId: string, year: string) =>
+      req<any>(`/attendance/results/reportcard?studentId=${studentId}&year=${year}`),
+    classResults: (schoolId: string, grade: number, examType: string, year: string, section?: string) =>
+      req<any>(`/attendance/results/class?schoolId=${schoolId}&grade=${grade}&examType=${examType}&year=${year}${section ? `&section=${section}` : ''}`),
+    today: (schoolId?: string) =>
+      req<any>(`/attendance/today${schoolId ? `?schoolId=${schoolId}` : ''}`),
+    studentMe: () =>
+      req<any>('/attendance/students/me'),
+    children: () =>
+      req<any>('/attendance/children'),
+  },
 };
 
 interface PeopleFilter {
