@@ -46,6 +46,48 @@ function formatDate(d: string) {
   catch { return d; }
 }
 
+// ── YouTube description-format mapping ────────────────────────────────────────
+// Studio channels label every video description with a fixed pattern, e.g.
+//   "13062026_10.00 To 10.40_Science_Physics Experiments_Mr. Yogesh Kemni_VI_Part 02"
+// We reconstruct that exact string from the lecture's fields so an in-channel
+// search lands on the precise video (YouTube indexes the description text).
+
+const ROMAN: Record<number, string> = {
+  6: 'VI', 7: 'VII', 8: 'VIII', 9: 'IX', 10: 'X', 11: 'XI', 12: 'XII',
+};
+
+/** "2026-06-13" → "13062026" (DDMMYYYY, as used in the video descriptions). */
+function toDDMMYYYY(iso: string): string {
+  const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}${m[2]}${m[1]}` : String(iso).replace(/\D/g, '');
+}
+
+/** "10:00 am" → "10.00" (drop am/pm marker, colon → dot, matching the format). */
+function cleanTime(t: string): string {
+  return String(t ?? '').replace(/\s*(am|pm)\s*$/i, '').replace(':', '.').trim();
+}
+
+/** Split "Physics Experiments Part 02" → { body: "Physics Experiments", part: "Part 02" }. */
+function splitTopicPart(topic: string): { body: string; part: string } {
+  const m = String(topic ?? '').match(/^(.*?)[\s_-]*((?:part|भाग)\s*\d+)\s*$/i);
+  return m ? { body: m[1].trim(), part: m[2].trim() } : { body: String(topic ?? '').trim(), part: '' };
+}
+
+/**
+ * Build the studio's video-description string for a lecture so it can be used as
+ * the YouTube in-channel search query. Mirrors the manual labelling format:
+ *   {DDMMYYYY}_{H.MM To H.MM}_{Subject}_{TopicBody}_{Teacher}_{RomanClass}_{Part NN}
+ */
+function descriptionQuery(lecture: any): string {
+  const date = toDDMMYYYY(lecture.date);
+  const time = `${cleanTime(lecture.startTime)} To ${cleanTime(lecture.endTime)}`;
+  const { body, part } = splitTopicPart(lecture.topic);
+  const roman = ROMAN[lecture.standard] ?? String(lecture.standard);
+  return [date, time, lecture.subject, body, lecture.teacherName, roman, part]
+    .filter(Boolean)
+    .join('_');
+}
+
 // ── Sub-components ───────────────────────────────────────────────────────────
 
 type ContentTab = 'video' | 'ebook' | 'assessment';
@@ -131,7 +173,7 @@ function LectureCard({ lecture, channelMap }: { lecture: any; channelMap: Record
   const { user } = useAuth();
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'PRINCIPAL' || user?.role === 'TEACHER';
   const channelUrl = channelMap[lecture.studioName];
-  const searchUrl = channelUrl ? channelSearchUrl(channelUrl, `${lecture.topic} Class ${lecture.standard} ${lecture.subject}`) : '#';
+  const searchUrl = channelUrl ? channelSearchUrl(channelUrl, descriptionQuery(lecture)) : '#';
 
   const handleSave = async () => {
     setSaving(true);
