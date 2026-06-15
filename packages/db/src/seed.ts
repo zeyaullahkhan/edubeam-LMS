@@ -201,6 +201,8 @@ function importResults(sheet: string, examType: string, subjects: Record<number,
 // ── persistence ───────────────────────────────────────────────────────────────
 
 async function wipe() {
+  await prisma.lecture.deleteMany();
+  await prisma.contentChannel.deleteMany();
   await prisma.student.deleteMany();
   await prisma.staff.deleteMany();
   await prisma.enrollment.deleteMany();
@@ -542,6 +544,90 @@ async function seedPeople() {
   return { students: students.length, staff: staff.length };
 }
 
+// ── Content channels & lecture import ───────────────────────────────────────
+
+const STUDIO_CHANNELS = [
+  { id: 'ch_studio1', studioName: 'Studio1', channelName: 'ICT Virtual Class Uttarakhand', channelUrl: 'https://www.youtube.com/@ictvirtualclassuttarakhand882' },
+  { id: 'ch_studio2', studioName: 'Studio2', channelName: 'ICT UK Studio 2', channelUrl: 'https://www.youtube.com/@ictukstudio2940' },
+  { id: 'ch_studio3', studioName: 'Studio3', channelName: 'ICT UK Studio 3', channelUrl: 'https://www.youtube.com/@ictukstudio3778' },
+  { id: 'ch_studio4', studioName: 'Studio4', channelName: 'ICT UK Studio 4', channelUrl: 'https://www.youtube.com/@ictukstudio4568' },
+];
+
+function parseLectureDate(v: unknown): string {
+  if (v == null) return '2000-01-01';
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  const s = String(v).trim();
+  // DD/MM/YYYY
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  // Already YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  return '2000-01-01';
+}
+
+async function seedLectures(): Promise<number> {
+  const lecturesFile = join(DATA_DIR, 'lectures.xlsx');
+  const wb2 = XLSX.readFile(lecturesFile);
+  const ws2 = wb2.Sheets[wb2.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(ws2, { header: 1, raw: true, defval: null });
+
+  // Seed channels first
+  for (const ch of STUDIO_CHANNELS) {
+    await prisma.contentChannel.upsert({ where: { studioName: ch.studioName }, create: ch, update: { channelName: ch.channelName, channelUrl: ch.channelUrl } });
+  }
+
+  const batch: {
+    id: string; srNo: number; date: string; studioName: string; medium: string;
+    startTime: string; endTime: string; standard: number; teacherName: string;
+    subject: string; topic: string; youtubeUrl: null;
+  }[] = [];
+
+  let inserted = 0;
+  let skipped = 0;
+  let rowIdx = 0;
+
+  for (const row of rows.slice(1)) {
+    rowIdx++;
+    const r = row as unknown[];
+    const sr = r[0];
+    const studioName = clean(r[2]);
+    const subject = clean(r[8]);
+    const topic = clean(r[9]);
+
+    if (!sr || !studioName || !subject || !topic) { skipped++; continue; }
+
+    let standard: number;
+    try { standard = Number(r[6]); } catch { skipped++; continue; }
+    if (!Number.isFinite(standard) || standard < 6 || standard > 12) { skipped++; continue; }
+
+    batch.push({
+      id: `lec_${String(rowIdx).padStart(6, '0')}`,
+      srNo: Number(sr),
+      date: parseLectureDate(r[1]),
+      studioName,
+      medium: clean(r[3]) || 'Hindi',
+      startTime: clean(r[4]),
+      endTime: clean(r[5]),
+      standard,
+      teacherName: clean(r[7]),
+      subject,
+      topic,
+      youtubeUrl: null,
+    });
+
+    if (batch.length >= 500) {
+      await prisma.lecture.createMany({ data: batch, skipDuplicates: true });
+      inserted += batch.length;
+      batch.length = 0;
+    }
+  }
+  if (batch.length) {
+    await prisma.lecture.createMany({ data: batch, skipDuplicates: true });
+    inserted += batch.length;
+  }
+  return inserted;
+}
+
 async function main() {
   // Idempotent first-run guard: on a deployed DB we only seed when it's empty, so
   // a redeploy never wipes data that reviewers/managers have added. Pass --force
@@ -587,6 +673,7 @@ async function main() {
   const userCount = await seedDemoUsers(tenant.id);
   const yearly = await importYearlyResults();
   const people = await seedPeople();
+  const lectureCount = await seedLectures();
 
   const [schoolCount, vc, il, enr, br, yr] = await Promise.all([
     prisma.school.count(),
@@ -606,6 +693,8 @@ async function main() {
       `${yearly.skippedUnknownSchools} rows for schools not in our 500 set skipped)`,
   );
   console.log(`  Students: ${people.students}   Staff: ${people.staff} (sample registry)`);
+  console.log(`  Lectures: ${lectureCount} (virtual classroom recordings 2019–2026)`);
+  console.log(`  Content channels: ${STUDIO_CHANNELS.length} (Studio1–4 YouTube mappings)`);
 
   // Spot-check a known school from the plan's verification step.
   const spot = await prisma.school.findUnique({

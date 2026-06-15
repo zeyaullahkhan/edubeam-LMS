@@ -7,11 +7,13 @@ const PAGE_SIZE = 30;
 export class ContentService {
   /** Unique subjects for a standard, ordered by lecture count desc. */
   async subjects(standard: number) {
-    const rows = await prisma.$queryRawUnsafe<{ subject: string; count: number }[]>(
-      `SELECT subject, COUNT(*) as count FROM Lecture WHERE standard = ? GROUP BY subject ORDER BY count DESC`,
-      standard,
-    );
-    return { standard, subjects: rows.map(r => ({ subject: r.subject, count: Number(r.count) })) };
+    const rows = await prisma.lecture.groupBy({
+      by: ['subject'],
+      where: { standard },
+      _count: { subject: true },
+      orderBy: { _count: { subject: 'desc' } },
+    });
+    return { standard, subjects: rows.map(r => ({ subject: r.subject, count: r._count.subject })) };
   }
 
   /** Paginated lecture list with search filters. */
@@ -20,37 +22,29 @@ export class ContentService {
     subject: string,
     opts: { search?: string; date?: string; page?: number },
   ) {
-    const page = opts.page ?? 1;
+    const page = Math.max(1, opts.page ?? 1);
     const offset = (page - 1) * PAGE_SIZE;
 
-    const conditions: string[] = ['standard = ?', 'subject = ?'];
-    const params: unknown[] = [standard, subject];
-
-    if (opts.date) {
-      conditions.push('date = ?');
-      params.push(opts.date);
-    }
+    const where: Record<string, unknown> = { standard, subject };
+    if (opts.date) where.date = opts.date;
     if (opts.search) {
-      conditions.push(`(topic LIKE ? OR teacherName LIKE ?)`);
-      const like = `%${opts.search}%`;
-      params.push(like, like);
+      where.OR = [
+        { topic: { contains: opts.search } },
+        { teacherName: { contains: opts.search } },
+      ];
     }
 
-    const where = conditions.join(' AND ');
-
-    const [countRows, lectures] = await Promise.all([
-      prisma.$queryRawUnsafe<{ total: number }[]>(
-        `SELECT COUNT(*) as total FROM Lecture WHERE ${where}`,
-        ...params,
-      ),
-      prisma.$queryRawUnsafe<any[]>(
-        `SELECT id, srNo, date, studioName, medium, startTime, endTime, teacherName, subject, topic, youtubeUrl
-         FROM Lecture WHERE ${where} ORDER BY date DESC, srNo ASC LIMIT ? OFFSET ?`,
-        ...params, PAGE_SIZE, offset,
-      ),
+    const [total, lectures] = await Promise.all([
+      prisma.lecture.count({ where }),
+      prisma.lecture.findMany({
+        where,
+        orderBy: [{ date: 'desc' }, { srNo: 'asc' }],
+        skip: offset,
+        take: PAGE_SIZE,
+        select: { id: true, srNo: true, date: true, studioName: true, medium: true, startTime: true, endTime: true, teacherName: true, subject: true, topic: true, youtubeUrl: true },
+      }),
     ]);
 
-    const total = Number(countRows[0]?.total ?? 0);
     return { total, page, pageSize: PAGE_SIZE, pages: Math.ceil(total / PAGE_SIZE), lectures };
   }
 
@@ -59,33 +53,26 @@ export class ContentService {
     return prisma.contentChannel.findMany({ orderBy: { studioName: 'asc' } });
   }
 
-  /** Summary stats: total lectures, by studio, available years. */
+  /** Summary stats: total lectures, by studio, by standard, years. */
   async stats() {
-    const [byStudio, byStandard, years] = await Promise.all([
-      prisma.$queryRawUnsafe<{ studioName: string; count: number }[]>(
-        `SELECT studioName, COUNT(*) as count FROM Lecture GROUP BY studioName ORDER BY studioName`,
-      ),
-      prisma.$queryRawUnsafe<{ standard: number; count: number }[]>(
-        `SELECT standard, COUNT(*) as count FROM Lecture GROUP BY standard ORDER BY standard`,
-      ),
-      prisma.$queryRawUnsafe<{ year: string }[]>(
-        `SELECT DISTINCT substr(date,1,4) as year FROM Lecture ORDER BY year DESC`,
-      ),
+    const [byStudio, byStandard, earliest, latest] = await Promise.all([
+      prisma.lecture.groupBy({ by: ['studioName'], _count: { id: true }, orderBy: { studioName: 'asc' } }),
+      prisma.lecture.groupBy({ by: ['standard'], _count: { id: true }, orderBy: { standard: 'asc' } }),
+      prisma.lecture.findFirst({ orderBy: { date: 'asc' }, select: { date: true } }),
+      prisma.lecture.findFirst({ orderBy: { date: 'desc' }, select: { date: true } }),
     ]);
+
     return {
-      total: byStudio.reduce((a, r) => a + Number(r.count), 0),
-      byStudio: byStudio.map(r => ({ ...r, count: Number(r.count) })),
-      byStandard: byStandard.map(r => ({ ...r, standard: Number(r.standard), count: Number(r.count) })),
-      years: years.map(r => r.year),
+      total: byStudio.reduce((a, r) => a + r._count.id, 0),
+      byStudio: byStudio.map(r => ({ studioName: r.studioName, count: r._count.id })),
+      byStandard: byStandard.map(r => ({ standard: r.standard, count: r._count.id })),
+      dateRange: { from: earliest?.date ?? null, to: latest?.date ?? null },
     };
   }
 
   /** Set a YouTube URL on a specific lecture (admin action). */
   async setYoutubeUrl(id: string, youtubeUrl: string | null) {
-    await prisma.$executeRawUnsafe(
-      `UPDATE Lecture SET youtubeUrl = ? WHERE id = ?`,
-      youtubeUrl, id,
-    );
+    await prisma.lecture.update({ where: { id }, data: { youtubeUrl } });
     return { ok: true };
   }
 }
