@@ -586,43 +586,46 @@ async function seedLectures(): Promise<number> {
   let skipped = 0;
   let rowIdx = 0;
 
+  // New file columns (Lecturer Detail data.xlsx):
+  // 0:studio_name  1:lec_date  2:start_time  3:end_time  4:teacher_name
+  // 5:Medium  6:subject_name  7:teacher_name(dup)  8:standard  9:topic
+  // 10:lecture_type  11:updated_by  12:remark  13:id  14:Session_Remark
   for (const row of rows.slice(1)) {
     rowIdx++;
     const r = row as unknown[];
-    const sr = r[0];
-    const studioName = clean(r[2]);
-    const subject = clean(r[8]);
-    const topic = clean(r[9]);
+    const studioName = clean(r[0]);
+    const subject    = clean(r[6]);
+    const topic      = clean(r[9]);
+    const srNo       = Number(r[13]) || rowIdx;
 
-    if (!sr || !studioName || !subject || !topic) { skipped++; continue; }
+    if (!studioName || !subject || !topic) { skipped++; continue; }
 
-    let standard: number;
-    try { standard = Number(r[6]); } catch { skipped++; continue; }
+    const standard = Number(r[8]);
     if (!Number.isFinite(standard) || standard < 6 || standard > 12) { skipped++; continue; }
 
     batch.push({
       id: `lec_${String(rowIdx).padStart(6, '0')}`,
-      srNo: Number(sr),
+      srNo,
       date: parseLectureDate(r[1]),
       studioName,
-      medium: clean(r[3]) || 'Hindi',
-      startTime: clean(r[4]),
-      endTime: clean(r[5]),
+      medium: clean(r[5]) || 'Hindi',
+      startTime: clean(r[2]),
+      endTime: clean(r[3]),
       standard,
-      teacherName: clean(r[7]),
+      teacherName: clean(r[4]),
       subject,
       topic,
       youtubeUrl: null,
     });
 
     if (batch.length >= 500) {
-      await prisma.lecture.createMany({ data: batch, skipDuplicates: true });
+      await prisma.lecture.createMany({ data: batch });
       inserted += batch.length;
       batch.length = 0;
     }
   }
   if (batch.length) {
-    await prisma.lecture.createMany({ data: batch, skipDuplicates: true });
+    await prisma.lecture.createMany({ data: batch });
     inserted += batch.length;
   }
   return inserted;
