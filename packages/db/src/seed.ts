@@ -556,10 +556,15 @@ const STUDIO_CHANNELS = [
 function parseLectureDate(v: unknown): string {
   if (v == null) return '2000-01-01';
   if (v instanceof Date) return v.toISOString().slice(0, 10);
+  // Excel serial number (e.g. 46022 = 2025-12-31)
+  if (typeof v === 'number') {
+    const d = new Date(Math.round((v - 25569) * 86400 * 1000));
+    return d.toISOString().slice(0, 10);
+  }
   const s = String(v).trim();
-  // DD/MM/YYYY
+  // MM/DD/YYYY or DD/MM/YYYY
   const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  if (m) return `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
   // Already YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
   return '2000-01-01';
