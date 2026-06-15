@@ -89,7 +89,7 @@ export const api = {
   enrollment: () => req<EnrollmentDemographics>('/analytics/enrollment'),
   teacherStats: (districtId?: string) =>
     req<TeacherStats>(`/analytics/teacher-stats${districtId ? `?districtId=${encodeURIComponent(districtId)}` : ''}`),
-  attendance: (period: 'month' | 'day', month?: number, year?: number) => {
+  attendanceSeries: (period: 'month' | 'day', month?: number, year?: number) => {
     const qs = new URLSearchParams({ period });
     if (month !== undefined) qs.set('month', String(month));
     if (year !== undefined) qs.set('year', String(year));

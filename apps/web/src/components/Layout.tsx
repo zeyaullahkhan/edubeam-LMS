@@ -91,7 +91,7 @@ export function Layout({ children }: { children: ReactNode }) {
                   {label}
                 </NavLink>
               ))}
-              {user?.role === 'ADMIN' && user?.role !== 'STUDENT' && user?.role !== 'PARENT' && (
+              {user?.role === 'ADMIN' && (
                 <NavLink
                   to="/admin/users"
                   className={({ isActive }) =>

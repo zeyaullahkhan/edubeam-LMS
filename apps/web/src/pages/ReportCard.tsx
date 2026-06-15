@@ -412,7 +412,7 @@ export function ReportCard() {
       </div>
 
       {!user?.schoolId && (
-        <ScopeBar value={scope} onChange={setScope} levels={['district', 'block', 'school']} />
+        <ScopeBar value={scope} onChange={setScope} />
       )}
 
       {!schoolId ? (

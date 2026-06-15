@@ -581,7 +581,7 @@ export function Attendance() {
 
       {/* School scope picker for state/district admins */}
       {!user?.schoolId && (
-        <ScopeBar value={scope} onChange={setScope} levels={['district', 'block', 'school']} />
+        <ScopeBar value={scope} onChange={setScope} />
       )}
 
       {!schoolId ? (
