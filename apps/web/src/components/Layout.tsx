@@ -20,11 +20,13 @@ const ADMIN_NAV = [
   { to: '/staff',        label: 'Staff',      icon: 'fas fa-chalkboard-teacher' },
   { to: '/attendance',   label: 'Attendance', icon: 'fas fa-user-check' },
   { to: '/report-card',  label: 'Report Card',icon: 'fas fa-file-alt' },
+  { to: '/content',      label: 'Content',    icon: 'fas fa-play-circle' },
   { to: '/planner',      label: 'Planner',    icon: 'fas fa-calendar-alt' },
 ];
 
 const STUDENT_NAV = [
-  { to: '/', label: 'My Portal', icon: 'fas fa-id-card' },
+  { to: '/',        label: 'My Portal', icon: 'fas fa-id-card' },
+  { to: '/content', label: 'Content',   icon: 'fas fa-play-circle' },
 ];
 
 const PARENT_NAV = [

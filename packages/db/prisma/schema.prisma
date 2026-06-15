@@ -249,3 +249,35 @@ model ExamResult {
   @@unique([studentId, subject, examType, academicYear])
   @@index([schoolId, grade, academicYear])
 }
+
+// ── Content / Virtual Classroom recordings ───────────────────────────────────
+
+// One row per live-broadcast session imported from the Lecture data Excel.
+// studioName: "Studio1" | "Studio2" | "Studio3" | "Studio4"
+// medium: "Hindi" | "English"
+model Lecture {
+  id          String  @id @default(cuid())
+  srNo        Int
+  date        String  // "YYYY-MM-DD"
+  studioName  String  // Studio1..4
+  medium      String  @default("Hindi")
+  startTime   String
+  endTime     String
+  standard    Int     // 6..12
+  teacherName String
+  subject     String
+  topic       String
+  youtubeUrl  String? // exact video URL once linked
+
+  @@index([standard, subject])
+  @@index([studioName, date])
+  @@index([standard, subject, studioName])
+}
+
+// Studio → YouTube channel mapping (one row per studio).
+model ContentChannel {
+  id          String @id @default(cuid())
+  studioName  String @unique
+  channelName String
+  channelUrl  String
+}

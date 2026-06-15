@@ -175,6 +175,21 @@ export const api = {
     children: () =>
       req<any>('/attendance/children'),
   },
+
+  content: {
+    stats: () => req<any>('/content/stats'),
+    channels: () => req<any>('/content/channels'),
+    subjects: (standard: number) => req<any>(`/content/subjects?standard=${standard}`),
+    lectures: (standard: number, subject: string, opts?: { search?: string; date?: string; page?: number }) => {
+      const qs = new URLSearchParams({ standard: String(standard), subject });
+      if (opts?.search) qs.set('search', opts.search);
+      if (opts?.date) qs.set('date', opts.date);
+      if (opts?.page) qs.set('page', String(opts.page));
+      return req<any>(`/content/lectures?${qs}`);
+    },
+    setUrl: (id: string, youtubeUrl: string | null) =>
+      req<any>(`/content/lectures/${id}/url`, { method: 'PATCH', body: JSON.stringify({ youtubeUrl }) }),
+  },
 };
 
 interface PeopleFilter {

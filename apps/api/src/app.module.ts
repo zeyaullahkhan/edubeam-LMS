@@ -9,6 +9,7 @@ import { SchoolsModule } from './schools/schools.module';
 import { UsersModule } from './users/users.module';
 import { PeopleModule } from './people/people.module';
 import { AttendanceModule } from './attendance/attendance.module';
+import { ContentModule } from './content/content.module';
 import { JWT_SECRET } from './auth/constants';
 
 // In production the built React SPA (apps/web/dist) is served from this same
@@ -36,6 +37,7 @@ function serveStatic(): DynamicModule[] {
     UsersModule,
     PeopleModule,
     AttendanceModule,
+    ContentModule,
   ],
 })
 export class AppModule {}

@@ -13,6 +13,7 @@ import { Attendance } from './pages/Attendance';
 import { ReportCard } from './pages/ReportCard';
 import { StudentPortal } from './pages/StudentPortal';
 import { ParentPortal } from './pages/ParentPortal';
+import { Content } from './pages/Content';
 
 export function App() {
   const { user, loading } = useAuth();
@@ -26,6 +27,7 @@ export function App() {
       <Layout>
         <Routes>
           <Route path="/" element={<StudentPortal />} />
+          <Route path="/content" element={<Content />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Layout>
@@ -55,6 +57,7 @@ export function App() {
         <Route path="/planner" element={<Planner />} />
         <Route path="/attendance" element={<Attendance />} />
         <Route path="/report-card" element={<ReportCard />} />
+        <Route path="/content" element={<Content />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>
