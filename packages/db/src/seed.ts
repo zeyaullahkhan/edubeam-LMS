@@ -317,7 +317,11 @@ async function seedDemoUsers(tenantId: string) {
   for (const u of users) {
     const pw = u.email.split('@')[0];
     const passwordHash = await bcrypt.hash(pw, 10);
-    await prisma.user.create({ data: { id: `u_${pw}`, ...u, passwordHash } });
+    await prisma.user.upsert({
+      where: { email: u.email },
+      create: { id: `u_${pw}`, ...u, passwordHash },
+      update: { passwordHash, name: u.name, role: u.role, districtId: (u as any).districtId ?? null, schoolId: (u as any).schoolId ?? null },
+    });
   }
   return users.length;
 }
