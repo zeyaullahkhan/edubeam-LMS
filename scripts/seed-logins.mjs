@@ -11,9 +11,6 @@
 
 import { createRequire } from 'module';
 import { writeFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
-import { createId } from '@paralleldrive/cuid2';
 
 const require = createRequire(import.meta.url);
 const pg      = require('pg');
