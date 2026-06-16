@@ -44,6 +44,7 @@ export function Students() {
   const [grade, setGrade] = useState<string>('');
   const [gender, setGender] = useState<string>('');
   const [q, setQ] = useState('');
+  const [page, setPage] = useState(1);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<Partial<Student>>(emptyStudent);
   const [editStudent, setEditStudent] = useState<Student | null>(null);
@@ -65,9 +66,14 @@ export function Students() {
   // Only load list when a scope is actively selected OR the user has a fixed scope (principal/district)
   const hasScope = !!(scope.districtId || scope.blockId || scope.schoolId || user?.schoolId || user?.districtId);
 
+  const PAGE_SIZE = 50;
+  const totalPages = Math.ceil(rows.length / PAGE_SIZE);
+  const pageRows = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   const load = () => {
     if (!hasScope) { setRows([]); setSummary(null); setLoading(false); return; }
     setLoading(true);
+    setPage(1);
     Promise.all([api.students.list(filter), api.students.summary(scope)])
       .then(([r, s]) => { setRows(r); setSummary(s); })
       .catch((e) => setErr((e as Error).message))
@@ -312,7 +318,7 @@ export function Students() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((s) => (
+            {pageRows.map((s) => (
               <tr key={s.id}>
                 <td>
                   <div className="font-semibold text-navy-700">{s.name}</div>
@@ -357,7 +363,31 @@ export function Students() {
           <div className="py-10 text-center text-slate-400 text-sm"><i className="fas fa-user-graduate text-2xl mb-2 block" />No students match the current filters.</div>
         )}
         {!loading && rows.length > 0 && (
-          <div className="px-4 py-3 text-xs text-slate-400 border-t border-slate-100 bg-slate-50/50">Showing {rows.length} students</div>
+          <div className="px-4 py-3 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between gap-3 flex-wrap">
+            <span className="text-xs text-slate-400">
+              Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, rows.length)} of {rows.length} students
+            </span>
+            {totalPages > 1 && (
+              <div className="flex items-center gap-1">
+                <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+                  className="px-2 py-1 rounded text-xs border border-slate-200 hover:bg-slate-100 disabled:opacity-40">‹</button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter(n => n === 1 || n === totalPages || Math.abs(n - page) <= 2)
+                  .reduce<(number | '…')[]>((acc, n, i, arr) => {
+                    if (i > 0 && n - (arr[i - 1] as number) > 1) acc.push('…');
+                    acc.push(n);
+                    return acc;
+                  }, [])
+                  .map((n, i) => n === '…'
+                    ? <span key={`e${i}`} className="px-1 text-xs text-slate-400">…</span>
+                    : <button key={n} onClick={() => setPage(n as number)}
+                        className={`px-2.5 py-1 rounded text-xs border transition-colors ${page === n ? 'bg-sky-500 text-white border-sky-500' : 'border-slate-200 hover:bg-slate-100'}`}>{n}</button>
+                  )}
+                <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+                  className="px-2 py-1 rounded text-xs border border-slate-200 hover:bg-slate-100 disabled:opacity-40">›</button>
+              </div>
+            )}
+          </div>
         )}
       </div>
 
