@@ -9,6 +9,15 @@ import { useAuth } from '../auth';
 import { exportCsv } from '../export';
 import { parseCsv, readFileText } from '../csv';
 import { ScopeBar, type Scope } from '../components/ScopeBar';
+import { Attendance } from './Attendance';
+import { ReportCard } from './ReportCard';
+
+type SubPage = 'list' | 'attendance' | 'report-card';
+const SUB_TABS: { id: SubPage; label: string; icon: string }[] = [
+  { id: 'list',        label: 'Students List', icon: 'fas fa-list' },
+  { id: 'attendance',  label: 'Attendance',    icon: 'fas fa-user-check' },
+  { id: 'report-card', label: 'Report Card',   icon: 'fas fa-file-alt' },
+];
 
 const GRADES_6_12 = [6, 7, 8, 9, 10, 11, 12];
 
@@ -27,6 +36,7 @@ export function Students() {
   const canWrite = WRITE_ROLES.includes(user?.role ?? '');
   const needsSchool = user?.role === 'ADMIN' || user?.role === 'STATE_OFFICIAL' || user?.role === 'DISTRICT_OFFICIAL';
 
+  const [subPage, setSubPage] = useState<SubPage>('list');
   const [scope, setScope] = useState<Scope>({});
   const [rows, setRows] = useState<Student[]>([]);
   const [summary, setSummary] = useState<StudentDemographics | null>(null);
@@ -36,6 +46,8 @@ export function Students() {
   const [q, setQ] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<Partial<Student>>(emptyStudent);
+  const [editStudent, setEditStudent] = useState<Student | null>(null);
+  const [editForm, setEditForm] = useState<Partial<Student>>(emptyStudent);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(true);
@@ -120,8 +132,43 @@ export function Students() {
     catch (e) { setErr((e as Error).message); }
   };
 
+  const openEdit = (s: Student) => {
+    setEditStudent(s);
+    setEditForm({ ...s });
+  };
+
+  const submitEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editStudent) return;
+    setErr(''); setMsg('');
+    try {
+      await api.students.update(editStudent.id, editForm);
+      setMsg(`${editForm.name} updated.`);
+      setEditStudent(null);
+      load();
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  };
+
   return (
     <div className="space-y-5">
+      {/* Sub-page tab bar */}
+      <div className="flex gap-1 border-b border-slate-200">
+        {SUB_TABS.map(t => (
+          <button key={t.id} onClick={() => setSubPage(t.id)}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              subPage === t.id ? 'border-sky-500 text-sky-600' : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}>
+            <i className={t.icon} />{t.label}
+          </button>
+        ))}
+      </div>
+
+      {subPage === 'attendance' && <Attendance />}
+      {subPage === 'report-card' && <ReportCard />}
+
+      {subPage === 'list' && <>
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
@@ -157,11 +204,6 @@ export function Students() {
         </div>
       </div>
 
-      <ScopeBar value={scope} onChange={setScope} />
-
-      {msg && <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl px-4 py-3 text-sm"><i className="fas fa-check-circle" />{msg}</div>}
-      {err && <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm"><i className="fas fa-exclamation-circle" />{err}</div>}
-
       {/* Demographics cards — use real enrollment data for gender */}
       {enrollment && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -191,6 +233,11 @@ export function Students() {
           </ResponsiveContainer>
         </div>
       )}
+
+      <ScopeBar value={scope} onChange={setScope} />
+
+      {msg && <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl px-4 py-3 text-sm"><i className="fas fa-check-circle" />{msg}</div>}
+      {err && <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm"><i className="fas fa-exclamation-circle" />{err}</div>}
 
       {/* Add form */}
       {showForm && canWrite && (
@@ -284,6 +331,9 @@ export function Students() {
                 </td>
                 {canWrite && (
                   <td className="text-right whitespace-nowrap">
+                    <button onClick={() => openEdit(s)} className="text-xs text-sky-600 hover:text-sky-800 font-medium px-2 py-1 rounded hover:bg-sky-50 mr-1">
+                      <i className="fas fa-edit mr-1" />Edit
+                    </button>
                     <button onClick={() => remove(s)} className="text-xs text-red-500 hover:text-red-700 font-medium px-2 py-1 rounded hover:bg-red-50">Remove</button>
                   </td>
                 )}
@@ -299,6 +349,61 @@ export function Students() {
           <div className="px-4 py-3 text-xs text-slate-400 border-t border-slate-100 bg-slate-50/50">Showing {rows.length} students</div>
         )}
       </div>
+
+      {/* ── Edit student modal ─────────────────────────────── */}
+      {editStudent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+              <h2 className="font-heading font-bold text-navy-700 text-lg">Edit Student</h2>
+              <button onClick={() => setEditStudent(null)} className="text-slate-400 hover:text-slate-600">
+                <i className="fas fa-times text-lg" />
+              </button>
+            </div>
+            <form onSubmit={submitEdit} className="p-6 space-y-4">
+              <div className="grid md:grid-cols-3 gap-4">
+                <Field label="Full name"><input required className={inputCls} value={editForm.name ?? ''} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} /></Field>
+                <Field label="Gender">
+                  <select className={inputCls} value={editForm.gender} onChange={e => setEditForm(f => ({ ...f, gender: e.target.value as Student['gender'] }))}>
+                    {GENDERS.map(g => <option key={g} value={g}>{GENDER_LABELS[g]}</option>)}
+                  </select>
+                </Field>
+                <Field label="Grade / Class">
+                  <select className={inputCls} value={editForm.grade} onChange={e => setEditForm(f => ({ ...f, grade: Number(e.target.value) }))}>
+                    {GRADES_6_12.map(g => <option key={g} value={g}>Class {g}</option>)}
+                  </select>
+                </Field>
+                <Field label="Section"><input className={inputCls} value={editForm.section ?? ''} onChange={e => setEditForm(f => ({ ...f, section: e.target.value }))} /></Field>
+                <Field label="Roll No"><input className={inputCls} value={editForm.rollNo ?? ''} onChange={e => setEditForm(f => ({ ...f, rollNo: e.target.value }))} /></Field>
+                <Field label="Admission No"><input className={inputCls} value={editForm.admissionNo ?? ''} onChange={e => setEditForm(f => ({ ...f, admissionNo: e.target.value }))} /></Field>
+                <Field label="Guardian name"><input className={inputCls} value={editForm.guardianName ?? ''} onChange={e => setEditForm(f => ({ ...f, guardianName: e.target.value }))} /></Field>
+                <Field label="Guardian phone"><input className={inputCls} value={editForm.guardianPhone ?? ''} onChange={e => setEditForm(f => ({ ...f, guardianPhone: e.target.value }))} /></Field>
+                <Field label="Relation">
+                  <select className={inputCls} value={editForm.guardianRelation ?? 'Father'} onChange={e => setEditForm(f => ({ ...f, guardianRelation: e.target.value }))}>
+                    {['Father', 'Mother', 'Guardian'].map(r => <option key={r}>{r}</option>)}
+                  </select>
+                </Field>
+                <Field label="Category">
+                  <select className={inputCls} value={editForm.category} onChange={e => setEditForm(f => ({ ...f, category: e.target.value as Student['category'] }))}>
+                    {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                  </select>
+                </Field>
+                <Field label="Status">
+                  <select className={inputCls} value={editForm.isDropout ? 'dropout' : 'active'} onChange={e => setEditForm(f => ({ ...f, isDropout: e.target.value === 'dropout' }))}>
+                    <option value="active">Active</option>
+                    <option value="dropout">Dropout</option>
+                  </select>
+                </Field>
+              </div>
+              <div className="flex gap-3 justify-end pt-2 border-t border-slate-100">
+                <button type="button" onClick={() => setEditStudent(null)} className="btn-outline px-5 py-2.5">Cancel</button>
+                <button type="submit" className="btn-navy px-6 py-2.5"><i className="fas fa-save mr-2" />Save Changes</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      </>}
     </div>
   );
 }

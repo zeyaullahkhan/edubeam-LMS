@@ -1,4 +1,8 @@
 import 'reflect-metadata';
+import { config } from 'dotenv';
+import { resolve } from 'node:path';
+// Load .env from apps/api directory before any Prisma client is imported
+config({ path: resolve(__dirname, '..', '.env') });
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 

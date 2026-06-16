@@ -281,7 +281,7 @@ export class KpiService {
         r(b.schools, 'Schools in scope', 'schools', 'number'),
         r(b.vc, 'Virtual Classroom deployments', 'vcDeployments', 'number'),
         r(b.ict, 'ICT Lab deployments', 'ictDeployments', 'number'),
-        s(frac(b, 'adoption', 0.6, 0.82), 'Active-user adoption', 'adoption', 'percent', frac(b, 'adoptTrend', 0.03, 0.15)),
+        s(frac(b, 'adoption', 0.6, 0.82), 'Active-user adoption', 'adoption', 'percent', undefined, frac(b, 'adoptTrend', 0.03, 0.15)),
         s(frac(b, 'userGrowth', 0.08, 0.24), 'User growth (MoM)', 'userGrowth', 'percent'),
         s(frac(b, 'deviceUtil', 0.55, 0.8), 'Device utilization', 'deviceUtil', 'percent'),
         s(round(b.schools * frac(b, 'bandwidth', 12, 30)), 'Bandwidth consumed', 'bandwidth', 'number', 'GB/day'),

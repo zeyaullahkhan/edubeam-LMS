@@ -8,6 +8,13 @@ import { useAuth } from '../auth';
 import { exportCsv } from '../export';
 import { parseCsv, readFileText } from '../csv';
 import { ScopeBar, type Scope } from '../components/ScopeBar';
+import { Attendance } from './Attendance';
+
+type SubPage = 'list' | 'attendance';
+const SUB_TABS: { id: SubPage; label: string; icon: string }[] = [
+  { id: 'list',       label: 'Staff List',  icon: 'fas fa-list' },
+  { id: 'attendance', label: 'Attendance',  icon: 'fas fa-user-check' },
+];
 
 const WRITE_ROLES = ['ADMIN', 'STATE_OFFICIAL', 'DISTRICT_OFFICIAL', 'PRINCIPAL'];
 const inputCls =
@@ -28,6 +35,7 @@ const emptyStaff: Partial<StaffMember> = {
 export function Staff() {
   const { user } = useAuth();
   const canWrite = WRITE_ROLES.includes(user?.role ?? '');
+  const [subPage, setSubPage] = useState<SubPage>('list');
   const needsSchool = user?.role === 'ADMIN' || user?.role === 'STATE_OFFICIAL' || user?.role === 'DISTRICT_OFFICIAL';
 
   const [scope, setScope] = useState<Scope>({});
@@ -115,6 +123,21 @@ export function Staff() {
 
   return (
     <div className="space-y-5">
+      {/* Sub-page tab bar */}
+      <div className="flex gap-1 border-b border-slate-200">
+        {SUB_TABS.map(t => (
+          <button key={t.id} onClick={() => setSubPage(t.id)}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              subPage === t.id ? 'border-sky-500 text-sky-600' : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}>
+            <i className={t.icon} />{t.label}
+          </button>
+        ))}
+      </div>
+
+      {subPage === 'attendance' && <Attendance />}
+
+      {subPage === 'list' && <>
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <div className="section-tag mb-2"><i className="fas fa-chalkboard-teacher" />Staff Registry</div>
@@ -331,6 +354,7 @@ export function Staff() {
           <div className="px-4 py-3 text-xs text-slate-400 border-t border-slate-100 bg-slate-50/50">Showing {rows.length} staff members</div>
         )}
       </div>
+      </>}
     </div>
   );
 }

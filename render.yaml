@@ -13,7 +13,7 @@ services:
     plan: free
     # Build: install (incl. dev tooling), switch Prisma to Postgres, generate
     # client, push schema, then build the web SPA.
-    buildCommand: npm install --include=dev && npm run render:build
+    buildCommand: npm install --include=dev && SEED_FORCE=1 npm run render:build
     # Start: seed the DB on first run only (idempotent), then run the API which
     # also serves the built SPA.
     startCommand: npm run render:start

@@ -55,6 +55,7 @@ export interface BlockSummary {
   virtualClassroomSchools: number;
   ictLabSchools: number;
   totalStudents: number;
+  teachers: number;
 }
 
 export interface SchoolRow {
@@ -64,14 +65,38 @@ export interface SchoolRow {
   siteCode: string | null;
   type: string | null;
   district: string;
+  districtId: string;
   block: string;
+  blockId: string;
   hasVirtualClassroom: boolean;
   hasIctLab: boolean;
+  address: string | null;
+  principalName: string | null;
+  phone: string | null;
   teachers: number | null;
   students: number | null;
   enrolledStudents: number | null;
   avgPass10th: number | null;
   avgPass12th: number | null;
+}
+
+export interface DistrictMeta {
+  id: string;
+  name: string;
+  blocks: { id: string; name: string }[];
+}
+
+export interface SchoolFormData {
+  name: string;
+  udiseCode: string;
+  siteCode?: string;
+  blockId: string;
+  type?: string;
+  hasVirtualClassroom: boolean;
+  hasIctLab: boolean;
+  address?: string;
+  principalName?: string;
+  phone?: string;
 }
 
 export const api = {
@@ -95,12 +120,17 @@ export const api = {
     if (year !== undefined) qs.set('year', String(year));
     return req<AttendanceSeries>(`/analytics/attendance?${qs}`);
   },
-  schools: (params: { districtId?: string; blockId?: string; q?: string }) => {
+  schools: (params: { districtId?: string; blockId?: string; q?: string } = {}) => {
     const qs = new URLSearchParams(
       Object.entries(params).filter(([, v]) => v) as [string, string][],
     ).toString();
     return req<SchoolRow[]>(`/schools${qs ? `?${qs}` : ''}`);
   },
+  schoolDistricts: () => req<DistrictMeta[]>('/schools/meta/districts'),
+  createSchool: (body: SchoolFormData) =>
+    req<SchoolRow>('/schools', { method: 'POST', body: JSON.stringify(body) }),
+  updateSchool: (id: string, body: Partial<SchoolFormData>) =>
+    req<SchoolRow>(`/schools/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   kpis: (params: { districtId?: string; blockId?: string; schoolId?: string }) => {
     const qs = new URLSearchParams(
       Object.entries(params).filter(([, v]) => v) as [string, string][],

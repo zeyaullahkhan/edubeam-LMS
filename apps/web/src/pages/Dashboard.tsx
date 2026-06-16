@@ -181,47 +181,48 @@ export function Dashboard() {
 
       {/* ── Today's attendance summary ───────────────────────── */}
       {todayAtt && (todayAtt.students.present > 0 || todayAtt.staff.present > 0 || todayAtt.students.absent > 0) && (
-        <div className="grid grid-cols-2 gap-4 no-print">
-          {/* Student today */}
-          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Today — Students</span>
-              <span className="ml-auto text-xs text-slate-400">{todayAtt.date}</span>
-            </div>
-            <div className="grid grid-cols-4 gap-2">
-              {[
-                { label: 'Present', val: todayAtt.students.present, cls: 'text-emerald-600 bg-emerald-50' },
-                { label: 'Absent',  val: todayAtt.students.absent,  cls: 'text-red-600 bg-red-50' },
-                { label: 'Late',    val: todayAtt.students.late,    cls: 'text-amber-600 bg-amber-50' },
-                { label: 'Not Marked', val: todayAtt.students.notMarked, cls: 'text-slate-400 bg-slate-50' },
-              ].map(item => (
-                <div key={item.label} className={`rounded-lg p-2 text-center ${item.cls}`}>
-                  <div className="text-xl font-bold">{item.val}</div>
-                  <div className="text-[10px] font-medium">{item.label}</div>
-                </div>
-              ))}
-            </div>
+        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 no-print">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Today's Attendance</span>
+            <span className="ml-auto text-xs text-slate-400">{todayAtt.date}</span>
           </div>
-          {/* Staff today */}
-          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="w-2 h-2 rounded-full bg-sky-400 animate-pulse" />
-              <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Today — Staff</span>
-              <span className="ml-auto text-xs text-slate-400">{todayAtt.date}</span>
+          <div className="grid grid-cols-2 gap-6">
+            {/* Students */}
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-1.5">
+                <i className="fas fa-user-graduate text-emerald-500" />Students
+              </p>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { label: 'Present', val: todayAtt.students.present, cls: 'text-emerald-600 bg-emerald-50' },
+                  { label: 'Absent',  val: todayAtt.students.absent,  cls: 'text-red-600 bg-red-50' },
+                  { label: 'Late',    val: todayAtt.students.late,    cls: 'text-amber-600 bg-amber-50' },
+                ].map(item => (
+                  <div key={item.label} className={`rounded-lg p-2 text-center ${item.cls}`}>
+                    <div className="text-xl font-bold">{item.val}</div>
+                    <div className="text-[10px] font-medium">{item.label}</div>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="grid grid-cols-4 gap-2">
-              {[
-                { label: 'Present', val: todayAtt.staff.present, cls: 'text-emerald-600 bg-emerald-50' },
-                { label: 'Absent',  val: todayAtt.staff.absent,  cls: 'text-red-600 bg-red-50' },
-                { label: 'On Duty', val: todayAtt.staff.onDuty,  cls: 'text-blue-600 bg-blue-50' },
-                { label: 'Not Marked', val: todayAtt.staff.notMarked, cls: 'text-slate-400 bg-slate-50' },
-              ].map(item => (
-                <div key={item.label} className={`rounded-lg p-2 text-center ${item.cls}`}>
-                  <div className="text-xl font-bold">{item.val}</div>
-                  <div className="text-[10px] font-medium">{item.label}</div>
-                </div>
-              ))}
+            {/* Staff */}
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-1.5">
+                <i className="fas fa-chalkboard-teacher text-sky-500" />Staff
+              </p>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { label: 'Present', val: todayAtt.staff.present, cls: 'text-emerald-600 bg-emerald-50' },
+                  { label: 'Absent',  val: todayAtt.staff.absent,  cls: 'text-red-600 bg-red-50' },
+                  { label: 'On Duty', val: todayAtt.staff.onDuty,  cls: 'text-blue-600 bg-blue-50' },
+                ].map(item => (
+                  <div key={item.label} className={`rounded-lg p-2 text-center ${item.cls}`}>
+                    <div className="text-xl font-bold">{item.val}</div>
+                    <div className="text-[10px] font-medium">{item.label}</div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -465,7 +466,7 @@ function DrillPanel({
               <th className="text-left">District</th>
               <th className="text-right">Schools</th>
               {showStudentCols && <><th className="text-right">Students</th><th className="text-right">Pass 10th</th><th className="text-right">Pass 12th</th></>}
-              {showTeacherCols && <><th className="text-right">Teachers</th><th className="text-right">ICT Students</th></>}
+              {showTeacherCols && <th className="text-right">Teachers</th>}
               {type === 'blocks'  && <th className="text-right">Students</th>}
             </tr>
           </thead>
@@ -475,19 +476,19 @@ function DrillPanel({
               type Row = {
                 districtId: string; district: string; schools: number;
                 totalStudents: number | null; avgPass10th: number | null; avgPass12th: number | null;
-                teachers: number | null; ictStudents: number | null;
+                teachers: number | null;
               };
               const rows: Row[] = type === 'teachers'
                 ? (teacherStats?.byDistrict ?? [])
                     .sort((a, b) => a.district.localeCompare(b.district))
                     .map((d) => ({ districtId: d.districtId, district: d.district, schools: d.schools,
                       totalStudents: null, avgPass10th: null, avgPass12th: null,
-                      teachers: d.teachers, ictStudents: d.students }))
+                      teachers: d.teachers }))
                 : [...districts]
                     .sort((a, b) => a.district.localeCompare(b.district))
                     .map((d) => ({ districtId: d.districtId, district: d.district, schools: d.schools,
                       totalStudents: d.totalStudents, avgPass10th: d.avgPass10th, avgPass12th: d.avgPass12th,
-                      teachers: null, ictStudents: null }));
+                      teachers: null }));
 
               return rows.map((row) => (
                 <tr key={row.districtId} className="cursor-pointer hover:bg-sky-50/60 transition-colors" onClick={() => onSelectDistrict(row.districtId)}>
@@ -506,10 +507,7 @@ function DrillPanel({
                     </>
                   )}
                   {showTeacherCols && (
-                    <>
-                      <td className="text-right font-semibold">{row.teachers?.toLocaleString() ?? '—'}</td>
-                      <td className="text-right">{row.ictStudents?.toLocaleString() ?? '—'}</td>
-                    </>
+                    <td className="text-right font-semibold">{row.teachers?.toLocaleString() ?? '—'}</td>
                   )}
                   {type === 'blocks' && (
                     <td className="text-right">{row.totalStudents?.toLocaleString() ?? '—'}</td>
@@ -576,62 +574,76 @@ function DrillPanel({
       )}
 
       {/* ── Level 2: Block list for selected district ── */}
-      {selectedDistrict && !selectedBlock && (
-        <>
-          <div className="px-5 py-2.5 bg-sky-50 border-b border-sky-100 flex items-center gap-3 flex-wrap text-sm">
-            <i className="fas fa-map text-sky-500 text-xs" />
-            <span className="font-bold text-navy-700">{selectedDistrict.district}</span>
-            <span className="text-slate-300">|</span>
-            <span className="text-slate-600 text-xs"><strong>{selectedDistrict.schools}</strong> schools</span>
-            <span className="text-slate-300">|</span>
-            <span className="text-slate-600 text-xs"><strong>{selectedDistrict.totalStudents.toLocaleString()}</strong> students</span>
-            <span className="text-slate-300">|</span>
-            <span className="text-xs font-semibold" style={{ color: passColor(selectedDistrict.avgPass10th ?? 0) }}>10th: {pct(selectedDistrict.avgPass10th)}</span>
-            <span className="text-xs font-semibold" style={{ color: passColor(selectedDistrict.avgPass12th ?? 0) }}>12th: {pct(selectedDistrict.avgPass12th)}</span>
-          </div>
-          <table className="w-full text-sm data-table" style={{ tableLayout: 'fixed' }}>
-            <colgroup>
-              <col style={{ width: 'auto' }} />
-              <col style={{ width: '80px' }} />
-              <col style={{ width: '90px' }} />
-              <col style={{ width: '110px' }} />
-            </colgroup>
-            <thead>
-              <tr>
-                <th className="text-left">Block — <span className="font-normal text-slate-400">{selectedDistrict.district}</span></th>
-                <th className="text-right">Schools</th>
-                <th className="text-right">Virtual</th>
-                <th className="text-right">Students</th>
-              </tr>
-            </thead>
-            <tbody>
-              {drillBlocks.length === 0 ? (
-                <tr><td colSpan={4} className="py-6 text-center text-slate-400 text-xs"><i className="fas fa-circle-notch fa-spin mr-1.5" />Loading blocks…</td></tr>
-              ) : [...drillBlocks].sort((a, b) => a.block.localeCompare(b.block)).map((b) => (
-                <tr
-                  key={b.blockId}
-                  className={type === 'schools' ? 'cursor-pointer hover:bg-sky-50/60 transition-colors' : ''}
-                  onClick={type === 'schools' ? () => onSelectBlock(b.blockId) : undefined}
-                >
-                  <td className="text-slate-700">
-                    {type === 'schools' && (
-                      <span className="inline-flex items-center justify-center w-4 h-4 rounded mr-1.5 bg-slate-100 text-slate-400 text-[9px]">
-                        <i className="fas fa-chevron-right" />
-                      </span>
-                    )}
-                    <i className="fas fa-map-pin text-sky-400 mr-1.5 text-xs" />
-                    <span className="font-medium">{b.block}</span>
-                    <span className="ml-1.5 text-xs text-slate-400">{selectedDistrict.district}</span>
-                  </td>
-                  <td className="text-right">{b.schools}</td>
-                  <td className="text-right">{b.virtualClassroomSchools}</td>
-                  <td className="text-right font-semibold">{b.totalStudents.toLocaleString()}</td>
+      {selectedDistrict && !selectedBlock && (() => {
+        const isTeacherDrill = type === 'teachers';
+        const districtTeachers = isTeacherDrill
+          ? teacherStats?.byDistrict.find(d => d.districtId === drillDistrictId)?.teachers
+          : null;
+        return (
+          <>
+            <div className="px-5 py-2.5 bg-sky-50 border-b border-sky-100 flex items-center gap-3 flex-wrap text-sm">
+              <i className="fas fa-map text-sky-500 text-xs" />
+              <span className="font-bold text-navy-700">{selectedDistrict.district}</span>
+              <span className="text-slate-300">|</span>
+              <span className="text-slate-600 text-xs"><strong>{selectedDistrict.schools}</strong> schools</span>
+              <span className="text-slate-300">|</span>
+              {isTeacherDrill ? (
+                <span className="text-slate-600 text-xs"><strong>{districtTeachers?.toLocaleString() ?? '—'}</strong> teachers</span>
+              ) : (
+                <>
+                  <span className="text-slate-600 text-xs"><strong>{selectedDistrict.totalStudents.toLocaleString()}</strong> students</span>
+                  <span className="text-slate-300">|</span>
+                  <span className="text-xs font-semibold" style={{ color: passColor(selectedDistrict.avgPass10th ?? 0) }}>10th: {pct(selectedDistrict.avgPass10th)}</span>
+                  <span className="text-xs font-semibold" style={{ color: passColor(selectedDistrict.avgPass12th ?? 0) }}>12th: {pct(selectedDistrict.avgPass12th)}</span>
+                </>
+              )}
+            </div>
+            <table className="w-full text-sm data-table" style={{ tableLayout: 'fixed' }}>
+              <colgroup>
+                <col style={{ width: 'auto' }} />
+                <col style={{ width: '80px' }} />
+                {!isTeacherDrill && <col style={{ width: '90px' }} />}
+                <col style={{ width: '110px' }} />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th className="text-left">Block — <span className="font-normal text-slate-400">{selectedDistrict.district}</span></th>
+                  <th className="text-right">Schools</th>
+                  {!isTeacherDrill && <th className="text-right">Virtual</th>}
+                  <th className="text-right">{isTeacherDrill ? 'Teachers' : 'Students'}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </>
-      )}
+              </thead>
+              <tbody>
+                {drillBlocks.length === 0 ? (
+                  <tr><td colSpan={isTeacherDrill ? 3 : 4} className="py-6 text-center text-slate-400 text-xs"><i className="fas fa-circle-notch fa-spin mr-1.5" />Loading blocks…</td></tr>
+                ) : [...drillBlocks].sort((a, b) => a.block.localeCompare(b.block)).map((b) => (
+                  <tr
+                    key={b.blockId}
+                    className={type === 'schools' ? 'cursor-pointer hover:bg-sky-50/60 transition-colors' : ''}
+                    onClick={type === 'schools' ? () => onSelectBlock(b.blockId) : undefined}
+                  >
+                    <td className="text-slate-700">
+                      {type === 'schools' && (
+                        <span className="inline-flex items-center justify-center w-4 h-4 rounded mr-1.5 bg-slate-100 text-slate-400 text-[9px]">
+                          <i className="fas fa-chevron-right" />
+                        </span>
+                      )}
+                      <i className="fas fa-map-pin text-sky-400 mr-1.5 text-xs" />
+                      <span className="font-medium">{b.block}</span>
+                      <span className="ml-1.5 text-xs text-slate-400">{selectedDistrict.district}</span>
+                    </td>
+                    <td className="text-right">{b.schools}</td>
+                    {!isTeacherDrill && <td className="text-right">{b.virtualClassroomSchools}</td>}
+                    <td className="text-right font-semibold">
+                      {isTeacherDrill ? (b.teachers ?? 0).toLocaleString() : b.totalStudents.toLocaleString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        );
+      })()}
     </div>
   );
 }

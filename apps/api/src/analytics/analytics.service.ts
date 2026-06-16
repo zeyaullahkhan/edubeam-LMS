@@ -232,11 +232,12 @@ export class AnalyticsService {
     return Promise.all(
       blocks.map(async (b) => {
         const where = { ...schoolWhere, blockId: b.id };
-        const [schools, vc, ict, students] = await Promise.all([
+        const [schools, vc, ict, students, teachers] = await Promise.all([
           prisma.school.count({ where }),
           prisma.school.count({ where: { ...where, hasVirtualClassroom: true } }),
           prisma.school.count({ where: { ...where, hasIctLab: true } }),
           prisma.enrollment.aggregate({ _sum: { total: true }, where: { school: where } }),
+          prisma.staff.count({ where: { school: where } }),
         ]);
         return {
           blockId: b.id,
@@ -245,6 +246,7 @@ export class AnalyticsService {
           virtualClassroomSchools: vc,
           ictLabSchools: ict,
           totalStudents: students._sum.total ?? 0,
+          teachers,
         };
       }),
     );

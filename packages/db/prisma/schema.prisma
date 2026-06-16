@@ -52,9 +52,12 @@ model School {
   name                String
   udiseCode           String         @unique
   siteCode            String? // Virtual Classroom install code, e.g. VVEAMO352
-  type                String? // GIC | GGIC | GGIC | other (derived from name)
+  type                String? // GIC | GGIC | other (derived from name)
   hasVirtualClassroom Boolean        @default(false)
   hasIctLab           Boolean        @default(false)
+  address             String?
+  principalName       String?
+  phone               String?
   enrollments         Enrollment[]
   boardResults        BoardResult[]
   yearlyResults       YearlyResult[]
@@ -105,12 +108,22 @@ model YearlyResult {
 }
 
 model IctDeployment {
-  id           String @id @default(cuid())
-  schoolId     String @unique
-  school       School @relation(fields: [schoolId], references: [id])
-  teacherCount Int    @default(0)
-  studentCount Int    @default(0)
-  academicYear String
+  id              String  @id @default(cuid())
+  schoolId        String  @unique
+  school          School  @relation(fields: [schoolId], references: [id])
+  teacherCount    Int     @default(0)
+  studentCount    Int     @default(0)
+  academicYear    String
+  lanIp           String?
+  subnetMask      String?
+  iduSerialNo     String?
+  newIduSerialNo  String?
+  iduModel        String?
+  materialStatus  String?
+  installRemark   String?
+  engineerName    String?
+  scheduledDate   String?
+  certUpdate      String?
 }
 
 // ── Student & Staff registry (tender §6.2.6.5/6, §6.2.8.2-9) ─────────────────

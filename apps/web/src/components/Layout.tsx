@@ -16,10 +16,7 @@ const ADMIN_NAV = [
   { to: '/',             label: 'Dashboard',  icon: 'fas fa-chart-bar' },
   { to: '/analytics',    label: 'Analytics',  icon: 'fas fa-chart-line' },
   { to: '/schools',      label: 'Schools',    icon: 'fas fa-school' },
-  { to: '/students',     label: 'Students',   icon: 'fas fa-user-graduate' },
-  { to: '/staff',        label: 'Staff',      icon: 'fas fa-chalkboard-teacher' },
-  { to: '/attendance',   label: 'Attendance', icon: 'fas fa-user-check' },
-  { to: '/report-card',  label: 'Report Card',icon: 'fas fa-file-alt' },
+  { to: '/people',       label: 'People',     icon: 'fas fa-users' },
   { to: '/content',      label: 'Content',    icon: 'fas fa-play-circle' },
   { to: '/planner',      label: 'Planner',    icon: 'fas fa-calendar-alt' },
 ];

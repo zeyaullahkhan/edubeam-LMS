@@ -397,14 +397,14 @@ export class AttendanceService {
     const where = schoolId ? { schoolId, date } : { date };
 
     const [studAtt, staffAtt, totalStudents, totalStaff] = await prisma.$transaction([
-      prisma.attendance.groupBy({ by: ['status'], where, _count: { status: true } }),
-      prisma.staffAttendance.groupBy({ by: ['status'], where, _count: { status: true } }),
+      prisma.attendance.groupBy({ by: ['status'], orderBy: [], where, _count: { status: true } }),
+      prisma.staffAttendance.groupBy({ by: ['status'], orderBy: [], where, _count: { status: true } }),
       prisma.student.count({ where: schoolId ? { schoolId, active: true } : { active: true } }),
       prisma.staff.count({ where: schoolId ? { schoolId, active: true } : { active: true } }),
     ]);
 
-    const studMap = Object.fromEntries(studAtt.map(r => [r.status, r._count.status]));
-    const staffMap = Object.fromEntries(staffAtt.map(r => [r.status, r._count.status]));
+    const studMap = Object.fromEntries(studAtt.map(r => [r.status, (r._count as any).status]));
+    const staffMap = Object.fromEntries(staffAtt.map(r => [r.status, (r._count as any).status]));
 
     return {
       date,
