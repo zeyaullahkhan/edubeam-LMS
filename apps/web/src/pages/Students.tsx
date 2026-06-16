@@ -62,7 +62,11 @@ export function Students() {
     [scope, grade, gender, q],
   );
 
+  // Only load list when a scope is actively selected OR the user has a fixed scope (principal/district)
+  const hasScope = !!(scope.districtId || scope.blockId || scope.schoolId || user?.schoolId || user?.districtId);
+
   const load = () => {
+    if (!hasScope) { setRows([]); setSummary(null); setLoading(false); return; }
     setLoading(true);
     Promise.all([api.students.list(filter), api.students.summary(scope)])
       .then(([r, s]) => { setRows(r); setSummary(s); })
@@ -73,7 +77,7 @@ export function Students() {
   useEffect(() => { api.enrollment().then(setEnrollment).catch(() => {}); }, []);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { load(); }, [JSON.stringify(filter)]);
+  useEffect(() => { load(); }, [JSON.stringify(filter), hasScope]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -342,7 +346,14 @@ export function Students() {
           </tbody>
         </table>
         {loading && <div className="flex items-center gap-2 p-5 text-slate-400 text-sm"><i className="fas fa-circle-notch fa-spin" />Loading…</div>}
-        {!loading && rows.length === 0 && (
+        {!loading && !hasScope && (
+          <div className="py-12 text-center text-slate-400 text-sm">
+            <i className="fas fa-filter text-3xl mb-3 block text-slate-300" />
+            <p className="font-medium text-slate-500 mb-1">Select a scope to view students</p>
+            <p className="text-xs">Use the District / Block / School filter above to load student data.</p>
+          </div>
+        )}
+        {!loading && hasScope && rows.length === 0 && (
           <div className="py-10 text-center text-slate-400 text-sm"><i className="fas fa-user-graduate text-2xl mb-2 block" />No students match the current filters.</div>
         )}
         {!loading && rows.length > 0 && (
