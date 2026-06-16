@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { ROLES, type DistrictSummary, type Role } from '@edubeam/shared';
-import { api, type ManagedUser, type SchoolRow } from '../api';
+import { api, type BlockSummary, type ManagedUser, type SchoolRow } from '../api';
 
 const ROLE_LABELS: Record<string, string> = {
   ADMIN: 'Administrator',
   STATE_OFFICIAL: 'State Official',
   DISTRICT_OFFICIAL: 'District Official',
+  BLOCK_OFFICIAL: 'Block Official',
   PRINCIPAL: 'Principal',
   TEACHER: 'Teacher',
   STUDENT: 'Student',
@@ -16,48 +17,58 @@ const ROLE_ICONS: Record<string, string> = {
   ADMIN: 'fas fa-shield-alt',
   STATE_OFFICIAL: 'fas fa-landmark',
   DISTRICT_OFFICIAL: 'fas fa-map-marker-alt',
+  BLOCK_OFFICIAL: 'fas fa-map',
   PRINCIPAL: 'fas fa-user-tie',
   TEACHER: 'fas fa-chalkboard-teacher',
   STUDENT: 'fas fa-user-graduate',
   PARENT: 'fas fa-user-friends',
 };
 
-const needsDistrict = (r: Role) => r === 'DISTRICT_OFFICIAL';
-const needsSchool = (r: Role) => ['PRINCIPAL', 'TEACHER', 'STUDENT', 'PARENT'].includes(r);
+const needsDistrict = (r: Role) => r === 'DISTRICT_OFFICIAL' || r === 'BLOCK_OFFICIAL';
+const needsBlock    = (r: Role) => r === 'BLOCK_OFFICIAL';
+const needsSchool   = (r: Role) => ['PRINCIPAL', 'TEACHER', 'STUDENT', 'PARENT'].includes(r);
 
 const inputCls =
   'w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm bg-white ' +
   'focus:outline-none focus:ring-2 focus:ring-sky-300/50 focus:border-sky-300 transition-colors';
 
 export function AdminUsers() {
-  const [users, setUsers] = useState<ManagedUser[]>([]);
+  const [users, setUsers]       = useState<ManagedUser[]>([]);
   const [districts, setDistricts] = useState<DistrictSummary[]>([]);
-  const [schools, setSchools] = useState<SchoolRow[]>([]);
+  const [blocks, setBlocks]     = useState<BlockSummary[]>([]);
+  const [schools, setSchools]   = useState<SchoolRow[]>([]);
   const [showForm, setShowForm] = useState(false);
-  const [msg, setMsg] = useState('');
-  const [err, setErr] = useState('');
+  const [msg, setMsg]           = useState('');
+  const [err, setErr]           = useState('');
 
-  const empty = { email: '', name: '', password: '', role: 'TEACHER' as Role, districtId: '', schoolId: '' };
+  const empty = { email: '', name: '', password: '', role: 'TEACHER' as Role, districtId: '', blockId: '', schoolId: '' };
   const [form, setForm] = useState(empty);
 
   const load = () => api.users.list().then(setUsers).catch((e) => setErr((e as Error).message));
   useEffect(() => { load(); api.districts().then(setDistricts); }, []);
+
   useEffect(() => {
-    if (form.districtId) api.schools({ districtId: form.districtId }).then(setSchools);
-    else setSchools([]);
-  }, [form.districtId]);
+    if (form.districtId) {
+      api.blocks(form.districtId).then(setBlocks);
+      if (!needsBlock(form.role)) api.schools({ districtId: form.districtId }).then(setSchools);
+    } else {
+      setBlocks([]);
+      setSchools([]);
+    }
+  }, [form.districtId, form.role]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr(''); setMsg('');
     try {
       await api.users.create({
-        email: form.email,
-        name: form.name,
-        password: form.password,
-        role: form.role,
+        email:      form.email,
+        name:       form.name,
+        password:   form.password,
+        role:       form.role,
         districtId: needsDistrict(form.role) || needsSchool(form.role) ? form.districtId || null : null,
-        schoolId: needsSchool(form.role) ? form.schoolId || null : null,
+        blockId:    needsBlock(form.role) ? form.blockId || null : null,
+        schoolId:   needsSchool(form.role) ? form.schoolId || null : null,
       });
       setMsg(`User ${form.email} created successfully.`);
       setForm(empty);
@@ -142,7 +153,7 @@ export function AdminUsers() {
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1.5">Role</label>
-              <select className={inputCls} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as Role, schoolId: '' })}>
+              <select className={inputCls} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as Role, blockId: '', schoolId: '' })}>
                 {ROLES.map((r) => (
                   <option key={r} value={r}>{ROLE_LABELS[r]}</option>
                 ))}
@@ -151,9 +162,18 @@ export function AdminUsers() {
             {(needsDistrict(form.role) || needsSchool(form.role)) && (
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1.5">District</label>
-                <select required className={inputCls} value={form.districtId} onChange={(e) => setForm({ ...form, districtId: e.target.value, schoolId: '' })}>
+                <select required className={inputCls} value={form.districtId} onChange={(e) => setForm({ ...form, districtId: e.target.value, blockId: '', schoolId: '' })}>
                   <option value="">Select district…</option>
                   {districts.map((d) => <option key={d.districtId} value={d.districtId}>{d.district}</option>)}
+                </select>
+              </div>
+            )}
+            {needsBlock(form.role) && form.districtId && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Block</label>
+                <select required className={inputCls} value={form.blockId} onChange={(e) => setForm({ ...form, blockId: e.target.value })}>
+                  <option value="">Select block…</option>
+                  {blocks.map((b) => <option key={b.blockId} value={b.blockId}>{b.block}</option>)}
                 </select>
               </div>
             )}
@@ -206,7 +226,7 @@ export function AdminUsers() {
                     {ROLE_LABELS[u.role] ?? u.role}
                   </span>
                 </td>
-                <td className="text-slate-500">{u.school ?? u.district ?? 'Statewide'}</td>
+                <td className="text-slate-500">{u.school ?? u.block ?? u.district ?? 'Statewide'}</td>
                 <td>
                   <span className={`text-xs font-semibold rounded px-2 py-0.5 border ${
                     u.active

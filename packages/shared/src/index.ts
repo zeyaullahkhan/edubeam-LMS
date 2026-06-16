@@ -4,6 +4,7 @@ export const ROLES = [
   'ADMIN',
   'STATE_OFFICIAL',
   'DISTRICT_OFFICIAL',
+  'BLOCK_OFFICIAL',
   'PRINCIPAL',
   'TEACHER',
   'STUDENT',
@@ -20,6 +21,7 @@ export interface AuthUser {
   role: Role;
   tenantId?: string | null;
   districtId?: string | null;
+  blockId?: string | null;
   schoolId?: string | null;
   studentId?: string | null;        // STUDENT role: linked Student.id
   linkedStudentIds?: string | null; // PARENT role: comma-separated Student ids
@@ -241,10 +243,11 @@ export interface TeacherStats {
   source: 'real';
 }
 
-/** Roles that can see the whole tenant vs. a single district vs. a single school. */
-export function scopeOf(user: Pick<AuthUser, 'role' | 'districtId' | 'schoolId'>): {
-  level: 'tenant' | 'district' | 'school';
+/** Roles that can see the whole tenant vs. a single district/block vs. a single school. */
+export function scopeOf(user: Pick<AuthUser, 'role' | 'districtId' | 'blockId' | 'schoolId'>): {
+  level: 'tenant' | 'district' | 'block' | 'school';
   districtId?: string | null;
+  blockId?: string | null;
   schoolId?: string | null;
 } {
   switch (user.role) {
@@ -253,6 +256,8 @@ export function scopeOf(user: Pick<AuthUser, 'role' | 'districtId' | 'schoolId'>
       return { level: 'tenant' };
     case 'DISTRICT_OFFICIAL':
       return { level: 'district', districtId: user.districtId };
+    case 'BLOCK_OFFICIAL':
+      return { level: 'block', blockId: user.blockId, districtId: user.districtId };
     default:
       return { level: 'school', schoolId: user.schoolId, districtId: user.districtId };
   }

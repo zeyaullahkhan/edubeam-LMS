@@ -18,7 +18,7 @@ export class UsersController {
   @Post()
   create(
     @CurrentUser() admin: AuthUser,
-    @Body() body: { email: string; name: string; password: string; role: Role; districtId?: string; schoolId?: string },
+    @Body() body: { email: string; name: string; password: string; role: Role; districtId?: string; blockId?: string; schoolId?: string },
   ) {
     return this.users.create(admin, body);
   }
@@ -27,7 +27,7 @@ export class UsersController {
   update(
     @CurrentUser() admin: AuthUser,
     @Param('id') id: string,
-    @Body() body: { name?: string; role?: Role; active?: boolean; districtId?: string | null; schoolId?: string | null; password?: string; studentId?: string | null; linkedStudentIds?: string | null },
+    @Body() body: { name?: string; role?: Role; active?: boolean; districtId?: string | null; blockId?: string | null; schoolId?: string | null; password?: string; studentId?: string | null; linkedStudentIds?: string | null },
   ) {
     return this.users.update(admin, id, body);
   }

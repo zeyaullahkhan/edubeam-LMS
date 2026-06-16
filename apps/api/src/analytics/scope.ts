@@ -10,7 +10,7 @@ import { scopeOf, type AuthUser, type KpiScope } from '@edubeam/shared';
 export function schoolScope(
   user: AuthUser,
   requestedDistrictId?: string,
-): { schoolWhere: Prisma.SchoolWhereInput; districtId?: string; schoolId?: string } {
+): { schoolWhere: Prisma.SchoolWhereInput; districtId?: string; blockId?: string; schoolId?: string } {
   const scope = scopeOf(user);
 
   if (scope.level === 'tenant') {
@@ -25,6 +25,14 @@ export function schoolScope(
       throw new ForbiddenException('Outside your district');
     }
     return { schoolWhere: { block: { districtId: scope.districtId } }, districtId: scope.districtId };
+  }
+
+  if (scope.level === 'block') {
+    if (!scope.blockId) throw new ForbiddenException('No block assigned');
+    if (requestedDistrictId && requestedDistrictId !== scope.districtId) {
+      throw new ForbiddenException('Outside your district');
+    }
+    return { schoolWhere: { blockId: scope.blockId }, blockId: scope.blockId, districtId: scope.districtId ?? undefined };
   }
 
   // school-level
@@ -51,6 +59,11 @@ export async function resolveScope(
   if (ceiling.level === 'district') {
     if (districtId && districtId !== ceiling.districtId) throw new ForbiddenException('Outside your district');
     districtId = ceiling.districtId ?? undefined;
+  } else if (ceiling.level === 'block') {
+    if (districtId && districtId !== ceiling.districtId) throw new ForbiddenException('Outside your district');
+    if (blockId && blockId !== ceiling.blockId) throw new ForbiddenException('Outside your block');
+    districtId = ceiling.districtId ?? undefined;
+    blockId = ceiling.blockId ?? undefined;
   } else if (ceiling.level === 'school') {
     schoolId = ceiling.schoolId ?? undefined;
     districtId = user.districtId ?? undefined;

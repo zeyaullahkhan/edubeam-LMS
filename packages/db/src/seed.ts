@@ -293,7 +293,6 @@ async function persist() {
 }
 
 async function seedDemoUsers(tenantId: string) {
-  const hash = await bcrypt.hash('password123', 10);
   const almora = await prisma.district.findFirst({ where: { name: { contains: 'ALMORA' } } });
   const aSchool = await prisma.school.findUnique({ where: { udiseCode: '5090104505' } }); // GIC BARECHHINA
   const users = [
@@ -316,8 +315,9 @@ async function seedDemoUsers(tenantId: string) {
     },
   ];
   for (const u of users) {
-    // Stable id from the email local-part so demo sessions survive a re-seed.
-    await prisma.user.create({ data: { id: `u_${u.email.split('@')[0]}`, ...u, passwordHash: hash } });
+    const pw = u.email.split('@')[0];
+    const passwordHash = await bcrypt.hash(pw, 10);
+    await prisma.user.create({ data: { id: `u_${pw}`, ...u, passwordHash } });
   }
   return users.length;
 }

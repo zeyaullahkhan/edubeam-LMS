@@ -6,6 +6,7 @@ const ROLE_LABELS: Record<string, string> = {
   ADMIN: 'Administrator',
   STATE_OFFICIAL: 'State Official',
   DISTRICT_OFFICIAL: 'District Official',
+  BLOCK_OFFICIAL: 'Block Official',
   PRINCIPAL: 'Principal',
   TEACHER: 'Teacher',
   STUDENT: 'Student',

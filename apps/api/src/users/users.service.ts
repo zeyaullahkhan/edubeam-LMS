@@ -9,6 +9,7 @@ interface CreateUserDto {
   password: string;
   role: Role;
   districtId?: string | null;
+  blockId?: string | null;
   schoolId?: string | null;
   studentId?: string | null;
   linkedStudentIds?: string | null;
@@ -28,7 +29,7 @@ export class UsersService {
         ...(opts.q ? { OR: [{ name: { contains: opts.q } }, { email: { contains: opts.q } }] } : {}),
       },
       orderBy: { createdAt: 'asc' },
-      include: { district: true, school: true },
+      include: { district: true, block: true, school: true },
     });
     return users.map((u) => ({
       id: u.id,
@@ -38,16 +39,20 @@ export class UsersService {
       active: u.active,
       districtId: u.districtId,
       district: u.district?.name ?? null,
+      blockId: u.blockId,
+      block: u.block?.name ?? null,
       schoolId: u.schoolId,
       school: u.school?.name ?? null,
       createdAt: u.createdAt,
     }));
   }
 
-  private validateScope(role: Role, districtId?: string | null, schoolId?: string | null) {
+  private validateScope(role: Role, districtId?: string | null, blockId?: string | null, schoolId?: string | null) {
     if (!ROLES.includes(role)) throw new BadRequestException('Invalid role');
     if (role === 'DISTRICT_OFFICIAL' && !districtId)
       throw new BadRequestException('District officials require a district');
+    if (role === 'BLOCK_OFFICIAL' && !blockId)
+      throw new BadRequestException('Block officials require a block');
     if (SCHOOL_ROLES.includes(role) && !schoolId)
       throw new BadRequestException(`${role} requires a school`);
   }
@@ -57,8 +62,9 @@ export class UsersService {
     if (!email || !dto.password || !dto.name) throw new BadRequestException('Missing fields');
     if (await prisma.user.findUnique({ where: { email } }))
       throw new BadRequestException('Email already in use');
-    this.validateScope(dto.role, dto.districtId, dto.schoolId);
+    this.validateScope(dto.role, dto.districtId, dto.blockId, dto.schoolId);
 
+    const isUpperRole = dto.role === 'STATE_OFFICIAL' || dto.role === 'ADMIN';
     const user = await prisma.user.create({
       data: {
         email,
@@ -66,7 +72,8 @@ export class UsersService {
         passwordHash: await bcrypt.hash(dto.password, 10),
         role: dto.role,
         tenantId: admin.tenantId,
-        districtId: dto.role === 'STATE_OFFICIAL' || dto.role === 'ADMIN' ? null : dto.districtId ?? null,
+        districtId: isUpperRole ? null : dto.districtId ?? null,
+        blockId: dto.role === 'BLOCK_OFFICIAL' ? dto.blockId ?? null : null,
         schoolId: SCHOOL_ROLES.includes(dto.role) ? dto.schoolId ?? null : null,
         studentId: dto.role === 'STUDENT' ? (dto.studentId ?? null) : null,
         linkedStudentIds: dto.role === 'PARENT' ? (dto.linkedStudentIds ?? null) : null,
@@ -79,16 +86,18 @@ export class UsersService {
     const user = await prisma.user.findFirst({ where: { id, tenantId: admin.tenantId } });
     if (!user) throw new NotFoundException('User not found');
     const role = (dto.role ?? user.role) as Role;
-    if (dto.role || dto.districtId !== undefined || dto.schoolId !== undefined) {
-      this.validateScope(role, dto.districtId ?? user.districtId, dto.schoolId ?? user.schoolId);
+    if (dto.role || dto.districtId !== undefined || dto.blockId !== undefined || dto.schoolId !== undefined) {
+      this.validateScope(role, dto.districtId ?? user.districtId, dto.blockId ?? user.blockId, dto.schoolId ?? user.schoolId);
     }
+    const isUpperRole = role === 'STATE_OFFICIAL' || role === 'ADMIN';
     await prisma.user.update({
       where: { id },
       data: {
         name: dto.name?.trim(),
         role: dto.role,
         active: dto.active,
-        districtId: dto.role && (role === 'STATE_OFFICIAL' || role === 'ADMIN') ? null : dto.districtId,
+        districtId: dto.role && isUpperRole ? null : dto.districtId,
+        blockId: dto.role && role !== 'BLOCK_OFFICIAL' ? null : dto.blockId,
         schoolId: dto.role && !SCHOOL_ROLES.includes(role) ? null : dto.schoolId,
         studentId: dto.studentId !== undefined ? dto.studentId : undefined,
         linkedStudentIds: dto.linkedStudentIds !== undefined ? dto.linkedStudentIds : undefined,

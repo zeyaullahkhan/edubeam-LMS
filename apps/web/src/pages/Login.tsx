@@ -1,22 +1,43 @@
 import { useState } from 'react';
 import { useAuth } from '../auth';
 
-const DEMO = [
-  { email: 'admin@edubeam.in',      label: 'Platform Admin',               icon: 'fas fa-shield-alt' },
-  { email: 'state@edubeam.in',      label: 'State Official (Uttarakhand)', icon: 'fas fa-landmark' },
-  { email: 'almora@edubeam.in',     label: 'District Official — Almora',   icon: 'fas fa-map-marker-alt' },
-  { email: 'principal@edubeam.in',  label: 'Principal — GIC Barechhina',   icon: 'fas fa-user-tie' },
+const DEMO_GROUPS = [
+  {
+    group: 'Administration',
+    items: [
+      { email: 'admin@edubeam.in',  label: 'Platform Admin',               icon: 'fas fa-shield-alt' },
+      { email: 'state@edubeam.in',  label: 'State Official — Uttarakhand', icon: 'fas fa-landmark' },
+    ],
+  },
+  {
+    group: 'District / Block',
+    items: [
+      { email: 'almora@edubeam.in', label: 'District Official — Almora',   icon: 'fas fa-map-marker-alt' },
+    ],
+  },
+  {
+    group: 'School',
+    items: [
+      { email: 'principal@edubeam.in', label: 'Principal — GIC Barechhina', icon: 'fas fa-user-tie' },
+    ],
+  },
 ];
 
 export function Login() {
   const { login } = useAuth();
-  const [email, setEmail] = useState('state@edubeam.in');
-  const [password, setPassword] = useState('password123');
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [email, setEmail]       = useState('state@edubeam.in');
+  const [password, setPassword] = useState('state');
+  const [showPw, setShowPw]     = useState(false);
+  const [error, setError]       = useState('');
+  const [busy, setBusy]         = useState(false);
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const fillDemo = (e: string) => {
+    setEmail(e);
+    setPassword(e.split('@')[0]);
+  };
+
+  const submit = async (ev: React.FormEvent) => {
+    ev.preventDefault();
     setBusy(true);
     setError('');
     try {
@@ -35,13 +56,11 @@ export function Login() {
         className="hidden lg:flex flex-col w-[52%] relative overflow-hidden"
         style={{ background: 'linear-gradient(135deg, #001240 0%, #003087 55%, #005BAA 100%)' }}
       >
-        {/* Decorative circles */}
         <div className="absolute -top-24 -left-24 w-72 h-72 rounded-full bg-sky-300/10 blur-3xl" />
         <div className="absolute bottom-0 -right-16 w-80 h-80 rounded-full bg-navy-600/40 blur-2xl" />
         <div className="absolute top-1/3 left-1/2 w-48 h-48 rounded-full bg-sky-400/8 blur-2xl" />
 
         <div className="relative z-10 flex flex-col h-full p-12">
-          {/* Top logos */}
           <div className="flex items-center gap-4">
             <div className="bg-white rounded-xl p-2 shadow-lg">
               <img src="/vepl-logo.png" alt="Edubeam" className="h-12 w-auto" />
@@ -52,7 +71,6 @@ export function Login() {
             </div>
           </div>
 
-          {/* Main hero content */}
           <div className="flex-1 flex flex-col justify-center mt-12">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-sky-400/30 bg-sky-400/10 text-sky-300 text-xs font-semibold uppercase tracking-widest mb-6 self-start">
               <i className="fas fa-satellite-dish" />
@@ -67,7 +85,6 @@ export function Login() {
               of Uttarakhand — Virtual Classrooms, ICT Labs, and board results in one platform.
             </p>
 
-            {/* Stats strip */}
             <div className="grid grid-cols-3 gap-4 mt-10">
               {[
                 { value: '500', label: 'Schools' },
@@ -82,7 +99,6 @@ export function Login() {
             </div>
           </div>
 
-          {/* Bottom — Valuable Group + UK logos */}
           <div className="flex items-center justify-between mt-auto pt-8 border-t border-white/10">
             <div className="flex items-center gap-3">
               <img src="/valuable-group-logo.png" alt="Valuable Group" className="h-8 w-auto bg-white rounded p-1" />
@@ -98,7 +114,6 @@ export function Login() {
 
       {/* ── Right panel — login form ─────────────────────────── */}
       <div className="flex-1 flex flex-col items-center justify-center bg-slate-50 p-8">
-        {/* Mobile logo (hidden on lg) */}
         <div className="lg:hidden flex items-center gap-3 mb-10">
           <div className="bg-navy-600 rounded-xl p-2 shadow">
             <img src="/vepl-logo.png" alt="Edubeam" className="h-10 w-auto" />
@@ -120,9 +135,7 @@ export function Login() {
 
             <form onSubmit={submit} className="space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-navy-700 mb-1.5">
-                  Email address
-                </label>
+                <label className="block text-sm font-semibold text-navy-700 mb-1.5">Email address</label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
                     <i className="fas fa-envelope text-xs" />
@@ -146,15 +159,26 @@ export function Login() {
                     <i className="fas fa-lock text-xs" />
                   </span>
                   <input
-                    type="password"
+                    type={showPw ? 'text' : 'password'}
                     required
-                    className="w-full border border-slate-200 rounded-lg pl-9 pr-4 py-2.5 text-sm
+                    className="w-full border border-slate-200 rounded-lg pl-9 pr-10 py-2.5 text-sm
                                focus:outline-none focus:ring-2 focus:ring-sky-300/50 focus:border-sky-300
                                transition-colors bg-slate-50"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPw((v) => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                    tabIndex={-1}
+                  >
+                    <i className={`fas ${showPw ? 'fa-eye-slash' : 'fa-eye'} text-xs`} />
+                  </button>
                 </div>
+                <p className="text-xs text-slate-400 mt-1">
+                  Default password = username before @&nbsp;(e.g. <span className="font-mono">almora</span>)
+                </p>
               </div>
 
               {error && (
@@ -170,45 +194,42 @@ export function Login() {
                 className="btn-primary w-full justify-center py-3 text-base mt-2"
               >
                 {busy ? (
-                  <>
-                    <i className="fas fa-circle-notch fa-spin" />
-                    Signing in…
-                  </>
+                  <><i className="fas fa-circle-notch fa-spin" />Signing in…</>
                 ) : (
-                  <>
-                    <i className="fas fa-sign-in-alt" />
-                    Sign in to Dashboard
-                  </>
+                  <><i className="fas fa-sign-in-alt" />Sign in to Dashboard</>
                 )}
               </button>
             </form>
 
-            {/* Demo accounts */}
-            <div className="mt-7 pt-5 border-t border-slate-100">
-              <div className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3">
-                Demo accounts — password: password123
-              </div>
-              <div className="space-y-1.5">
-                {DEMO.map(({ email: e, label, icon }) => (
-                  <button
-                    key={e}
-                    onClick={() => setEmail(e)}
-                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left text-sm transition-all duration-150 ${
-                      email === e
-                        ? 'bg-sky-50 border border-sky-200 text-sky-700'
-                        : 'hover:bg-slate-50 text-slate-600 border border-transparent'
-                    }`}
-                  >
-                    <i className={`${icon} w-4 text-center ${email === e ? 'text-sky-500' : 'text-slate-400'}`} />
-                    <span className="flex-1 font-medium">{label}</span>
-                    <span className="text-xs text-slate-400 font-mono">{e.split('@')[0]}</span>
-                  </button>
-                ))}
-              </div>
+            {/* Demo accounts — grouped */}
+            <div className="mt-7 pt-5 border-t border-slate-100 space-y-4">
+              {DEMO_GROUPS.map(({ group, items }) => (
+                <div key={group}>
+                  <div className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-1.5">
+                    {group}
+                  </div>
+                  <div className="space-y-1">
+                    {items.map(({ email: e, label, icon }) => (
+                      <button
+                        key={e}
+                        onClick={() => fillDemo(e)}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left text-sm transition-all duration-150 ${
+                          email === e
+                            ? 'bg-sky-50 border border-sky-200 text-sky-700'
+                            : 'hover:bg-slate-50 text-slate-600 border border-transparent'
+                        }`}
+                      >
+                        <i className={`${icon} w-4 text-center ${email === e ? 'text-sky-500' : 'text-slate-400'}`} />
+                        <span className="flex-1 font-medium">{label}</span>
+                        <span className="text-xs text-slate-400 font-mono">{e.split('@')[0]}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
-          {/* Footer note */}
           <p className="text-center text-xs text-slate-400 mt-6">
             © {new Date().getFullYear()} Valuable E-Solutions Pvt. Ltd. · Edubeam LMS
           </p>

@@ -245,6 +245,8 @@ export interface ManagedUser {
   active: boolean;
   districtId: string | null;
   district: string | null;
+  blockId: string | null;
+  block: string | null;
   schoolId: string | null;
   school: string | null;
   createdAt: string;
@@ -256,5 +258,6 @@ export interface NewUser {
   password: string;
   role: string;
   districtId?: string | null;
+  blockId?: string | null;
   schoolId?: string | null;
 }

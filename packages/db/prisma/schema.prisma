@@ -41,6 +41,7 @@ model Block {
   district   District @relation(fields: [districtId], references: [id])
   name       String
   schools    School[]
+  users      User[]
 
   @@unique([districtId, name])
 }
@@ -190,9 +191,9 @@ model Staff {
 
 // ── Users & RBAC ────────────────────────────────────────────────────────────
 
-// role: ADMIN | STATE_OFFICIAL | DISTRICT_OFFICIAL | PRINCIPAL | TEACHER | STUDENT | PARENT
+// role: ADMIN | STATE_OFFICIAL | DISTRICT_OFFICIAL | BLOCK_OFFICIAL | PRINCIPAL | TEACHER | STUDENT | PARENT
 // Scope is enforced in app code: STATE_OFFICIAL -> tenant-wide, DISTRICT_OFFICIAL -> districtId,
-// PRINCIPAL/TEACHER/STUDENT -> schoolId.
+// BLOCK_OFFICIAL -> blockId, PRINCIPAL/TEACHER/STUDENT -> schoolId.
 model User {
   id           String    @id @default(cuid())
   email        String    @unique
@@ -203,6 +204,8 @@ model User {
   tenant       Tenant?   @relation(fields: [tenantId], references: [id])
   districtId   String?
   district     District? @relation(fields: [districtId], references: [id])
+  blockId      String?
+  block        Block?    @relation(fields: [blockId], references: [id])
   schoolId     String?
   school       School?   @relation(fields: [schoolId], references: [id])
   studentId         String?   // for STUDENT role: links to Student.id
