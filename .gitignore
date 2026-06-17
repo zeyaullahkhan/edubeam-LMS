@@ -8,4 +8,12 @@ build/
 packages/db/prisma/*.db
 packages/db/prisma/*.db-journal
 .DS_Store
+# Generated credential exports — contain plaintext passwords, never commit
 login-credentials-all.xlsx
+login-credentials*.csv
+login-credentials*.xlsx
+# local diagnostic scripts
+check-schema.py
+diag-insert.py
+find-dupes.py
+check-collisions.py

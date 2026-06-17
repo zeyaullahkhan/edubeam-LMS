@@ -24,6 +24,7 @@ export class JwtGuard implements CanActivate {
         role: payload.role,
         tenantId: payload.tenantId ?? null,
         districtId: payload.districtId ?? null,
+        blockId: payload.blockId ?? null,
         schoolId: payload.schoolId ?? null,
         studentId: payload.studentId ?? null,
         linkedStudentIds: payload.linkedStudentIds ?? null,
