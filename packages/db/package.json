@@ -11,6 +11,7 @@
     "seed": "tsx src/seed.ts",
     "seed:force": "tsx src/seed.ts --force",
     "migrate-blocks": "tsx src/migrate-blocks.ts",
+    "bulk-logins": "tsx src/bulk-logins.ts",
     "use-postgres": "node scripts/use-postgres.mjs",
     "studio": "prisma studio"
   },

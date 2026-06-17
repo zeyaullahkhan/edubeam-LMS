@@ -8,3 +8,4 @@ build/
 packages/db/prisma/*.db
 packages/db/prisma/*.db-journal
 .DS_Store
+login-credentials-all.xlsx
