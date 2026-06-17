@@ -1,40 +1,13 @@
 import { useState } from 'react';
 import { useAuth } from '../auth';
 
-const DEMO_GROUPS = [
-  {
-    group: 'Administration',
-    items: [
-      { email: 'admin@edubeam.com',  label: 'Platform Admin',               icon: 'fas fa-shield-alt' },
-      { email: 'state@edubeam.com',  label: 'State Official — Uttarakhand', icon: 'fas fa-landmark' },
-    ],
-  },
-  {
-    group: 'District / Block',
-    items: [
-      { email: 'almora@edubeam.com', label: 'District Official — Almora',   icon: 'fas fa-map-marker-alt' },
-    ],
-  },
-  {
-    group: 'School',
-    items: [
-      { email: 'principal@edubeam.com', label: 'Principal — GIC Barechhina', icon: 'fas fa-user-tie' },
-    ],
-  },
-];
-
 export function Login() {
   const { login } = useAuth();
-  const [email, setEmail]       = useState('state@edubeam.com');
-  const [password, setPassword] = useState('state');
+  const [email, setEmail]       = useState('');
+  const [password, setPassword] = useState('');
   const [showPw, setShowPw]     = useState(false);
   const [error, setError]       = useState('');
   const [busy, setBusy]         = useState(false);
-
-  const fillDemo = (e: string) => {
-    setEmail(e);
-    setPassword(e.split('@')[0]);
-  };
 
   const submit = async (ev: React.FormEvent) => {
     ev.preventDefault();
@@ -176,9 +149,6 @@ export function Login() {
                     <i className={`fas ${showPw ? 'fa-eye-slash' : 'fa-eye'} text-xs`} />
                   </button>
                 </div>
-                <p className="text-xs text-slate-400 mt-1">
-                  Default password = username before @&nbsp;(e.g. <span className="font-mono">almora</span>)
-                </p>
               </div>
 
               {error && (
@@ -201,33 +171,6 @@ export function Login() {
               </button>
             </form>
 
-            {/* Demo accounts — grouped */}
-            <div className="mt-7 pt-5 border-t border-slate-100 space-y-4">
-              {DEMO_GROUPS.map(({ group, items }) => (
-                <div key={group}>
-                  <div className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-1.5">
-                    {group}
-                  </div>
-                  <div className="space-y-1">
-                    {items.map(({ email: e, label, icon }) => (
-                      <button
-                        key={e}
-                        onClick={() => fillDemo(e)}
-                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left text-sm transition-all duration-150 ${
-                          email === e
-                            ? 'bg-sky-50 border border-sky-200 text-sky-700'
-                            : 'hover:bg-slate-50 text-slate-600 border border-transparent'
-                        }`}
-                      >
-                        <i className={`${icon} w-4 text-center ${email === e ? 'text-sky-500' : 'text-slate-400'}`} />
-                        <span className="flex-1 font-medium">{label}</span>
-                        <span className="text-xs text-slate-400 font-mono">{e.split('@')[0]}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
 
           <p className="text-center text-xs text-slate-400 mt-6">
