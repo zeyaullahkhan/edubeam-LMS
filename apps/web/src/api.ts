@@ -138,11 +138,11 @@ export const api = {
     return req<KpiResponse>(`/analytics/kpis${qs ? `?${qs}` : ''}`);
   },
   users: {
-    list: (params: { q?: string; role?: string } = {}) => {
+    list: (params: { q?: string; role?: string; districtId?: string; blockId?: string; schoolId?: string; page?: number } = {}) => {
       const qs = new URLSearchParams(
-        Object.entries(params).filter(([, v]) => v) as [string, string][],
+        Object.entries(params).filter(([, v]) => v != null && v !== '') as [string, string][],
       ).toString();
-      return req<ManagedUser[]>(`/users${qs ? `?${qs}` : ''}`);
+      return req<{ total: number; page: number; pages: number; users: ManagedUser[] }>(`/users${qs ? `?${qs}` : ''}`);
     },
     create: (body: NewUser) => req<{ id: string }>('/users', { method: 'POST', body: JSON.stringify(body) }),
     update: (id: string, body: Partial<NewUser> & { active?: boolean }) =>

@@ -11,8 +11,16 @@ export class UsersController {
   constructor(private readonly users: UsersService) {}
 
   @Get()
-  list(@CurrentUser() admin: AuthUser, @Query('q') q?: string, @Query('role') role?: string) {
-    return this.users.list(admin, { q, role });
+  list(
+    @CurrentUser() admin: AuthUser,
+    @Query('q') q?: string,
+    @Query('role') role?: string,
+    @Query('districtId') districtId?: string,
+    @Query('blockId') blockId?: string,
+    @Query('schoolId') schoolId?: string,
+    @Query('page') page?: string,
+  ) {
+    return this.users.list(admin, { q, role, districtId, blockId, schoolId, page: page ? Number(page) : 1 });
   }
 
   @Post()

@@ -5,27 +5,27 @@ const DEMO_GROUPS = [
   {
     group: 'Administration',
     items: [
-      { email: 'admin@edubeam.in',  label: 'Platform Admin',               icon: 'fas fa-shield-alt' },
-      { email: 'state@edubeam.in',  label: 'State Official — Uttarakhand', icon: 'fas fa-landmark' },
+      { email: 'admin@edubeam.com',  label: 'Platform Admin',               icon: 'fas fa-shield-alt' },
+      { email: 'state@edubeam.com',  label: 'State Official — Uttarakhand', icon: 'fas fa-landmark' },
     ],
   },
   {
     group: 'District / Block',
     items: [
-      { email: 'almora@edubeam.in', label: 'District Official — Almora',   icon: 'fas fa-map-marker-alt' },
+      { email: 'almora@edubeam.com', label: 'District Official — Almora',   icon: 'fas fa-map-marker-alt' },
     ],
   },
   {
     group: 'School',
     items: [
-      { email: 'principal@edubeam.in', label: 'Principal — GIC Barechhina', icon: 'fas fa-user-tie' },
+      { email: 'principal@edubeam.com', label: 'Principal — GIC Barechhina', icon: 'fas fa-user-tie' },
     ],
   },
 ];
 
 export function Login() {
   const { login } = useAuth();
-  const [email, setEmail]       = useState('state@edubeam.in');
+  const [email, setEmail]       = useState('state@edubeam.com');
   const [password, setPassword] = useState('state');
   const [showPw, setShowPw]     = useState(false);
   const [error, setError]       = useState('');

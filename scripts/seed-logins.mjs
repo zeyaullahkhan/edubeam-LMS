@@ -77,7 +77,7 @@ async function main() {
     console.log(`\nCreating ${districts.length} district officials…`);
     for (const d of districts) {
       const username = slugify(d.name);
-      const email    = `${username}@edubeam.in`;
+      const email    = `${username}@edubeam.com`;
       const pw       = username;
       await upsertUser(client, {
         id: `ud_${username}`,
@@ -97,7 +97,7 @@ async function main() {
     for (const b of blocks) {
       const blockSlug = slugify(b.name);
       const distSlug  = slugify(b.district_name);
-      const email     = `${blockSlug}@${distSlug}.edubeam.in`;
+      const email     = `${blockSlug}@${distSlug}.edubeam.com`;
       const pw        = blockSlug;
       await upsertUser(client, {
         id: `ub_${distSlug}_${blockSlug}`,
@@ -117,7 +117,7 @@ async function main() {
     for (const s of schools) {
       // Prefer siteCode (e.g. WVEAMO376 → wveamo376), fall back to s + udiseCode
       const localPart = s.siteCode ? s.siteCode.toLowerCase() : `s${s.udiseCode}`;
-      const email     = `${localPart}@edubeam.in`;
+      const email     = `${localPart}@edubeam.com`;
       const pw        = localPart;
       await upsertUser(client, {
         id: `us_${localPart}`,

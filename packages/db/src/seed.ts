@@ -297,17 +297,17 @@ async function seedDemoUsers(tenantId: string) {
   const almora = await prisma.district.findFirst({ where: { name: { contains: 'ALMORA' } } });
   const aSchool = await prisma.school.findUnique({ where: { udiseCode: '5090104505' } }); // GIC BARECHHINA
   const users = [
-    { email: 'admin@edubeam.in', name: 'Platform Admin', role: 'ADMIN', tenantId },
-    { email: 'state@edubeam.in', name: 'State Official (UK)', role: 'STATE_OFFICIAL', tenantId },
+    { email: 'admin@edubeam.com', name: 'Platform Admin', role: 'ADMIN', tenantId },
+    { email: 'state@edubeam.com', name: 'State Official (UK)', role: 'STATE_OFFICIAL', tenantId },
     {
-      email: 'almora@edubeam.in',
+      email: 'almora@edubeam.com',
       name: 'Almora District Official',
       role: 'DISTRICT_OFFICIAL',
       tenantId,
       districtId: almora?.id,
     },
     {
-      email: 'principal@edubeam.in',
+      email: 'principal@edubeam.com',
       name: 'Principal (GIC Barechhina)',
       role: 'PRINCIPAL',
       tenantId,

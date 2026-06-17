@@ -21,30 +21,46 @@ const SCHOOL_ROLES: Role[] = ['PRINCIPAL', 'TEACHER', 'STUDENT', 'PARENT'];
 
 @Injectable()
 export class UsersService {
-  async list(admin: AuthUser, opts: { q?: string; role?: string }) {
-    const users = await prisma.user.findMany({
-      where: {
-        tenantId: admin.tenantId,
-        ...(opts.role ? { role: opts.role } : {}),
-        ...(opts.q ? { OR: [{ name: { contains: opts.q } }, { email: { contains: opts.q } }] } : {}),
-      },
-      orderBy: { createdAt: 'asc' },
-      include: { district: true, block: true, school: true },
-    });
-    return users.map((u) => ({
-      id: u.id,
-      email: u.email,
-      name: u.name,
-      role: u.role,
-      active: u.active,
-      districtId: u.districtId,
-      district: u.district?.name ?? null,
-      blockId: u.blockId,
-      block: u.block?.name ?? null,
-      schoolId: u.schoolId,
-      school: u.school?.name ?? null,
-      createdAt: u.createdAt,
-    }));
+  async list(admin: AuthUser, opts: { q?: string; role?: string; districtId?: string; blockId?: string; schoolId?: string; page?: number }) {
+    const PAGE_SIZE = 50;
+    const page = Math.max(1, opts.page ?? 1);
+    const where = {
+      tenantId: admin.tenantId,
+      ...(opts.role ? { role: opts.role } : {}),
+      ...(opts.districtId ? { districtId: opts.districtId } : {}),
+      ...(opts.blockId ? { blockId: opts.blockId } : {}),
+      ...(opts.schoolId ? { schoolId: opts.schoolId } : {}),
+      ...(opts.q ? { OR: [{ name: { contains: opts.q } }, { email: { contains: opts.q } }] } : {}),
+    };
+    const [total, rows] = await Promise.all([
+      prisma.user.count({ where }),
+      prisma.user.findMany({
+        where,
+        orderBy: { createdAt: 'asc' },
+        skip: (page - 1) * PAGE_SIZE,
+        take: PAGE_SIZE,
+        include: { district: true, block: true, school: true },
+      }),
+    ]);
+    return {
+      total,
+      page,
+      pages: Math.ceil(total / PAGE_SIZE),
+      users: rows.map((u) => ({
+        id: u.id,
+        email: u.email,
+        name: u.name,
+        role: u.role,
+        active: u.active,
+        districtId: u.districtId,
+        district: u.district?.name ?? null,
+        blockId: u.blockId,
+        block: u.block?.name ?? null,
+        schoolId: u.schoolId,
+        school: u.school?.name ?? null,
+        createdAt: u.createdAt,
+      })),
+    };
   }
 
   private validateScope(role: Role, districtId?: string | null, blockId?: string | null, schoolId?: string | null) {
