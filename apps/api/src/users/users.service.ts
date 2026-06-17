@@ -130,4 +130,80 @@ export class UsersService {
     await prisma.user.delete({ where: { id } });
     return { ok: true };
   }
+
+  async upsertSchoolLogin(admin: AuthUser, schoolId: string) {
+    const school = await prisma.school.findUnique({ where: { id: schoolId }, include: { block: { include: { district: true } } } });
+    if (!school) throw new NotFoundException('School not found');
+    const localPart = school.siteCode ? school.siteCode.toLowerCase() : `s${school.udiseCode}`;
+    const email = `${localPart}@edubeam.com`;
+    const passwordHash = await bcrypt.hash(localPart, 10);
+    await prisma.user.upsert({
+      where: { email },
+      create: {
+        id: `us_${localPart}`,
+        email,
+        name: `Principal — ${school.name}`,
+        role: 'PRINCIPAL',
+        tenantId: admin.tenantId!,
+        districtId: school.block?.districtId ?? null,
+        schoolId: school.id,
+        passwordHash,
+      },
+      update: { passwordHash, schoolId: school.id },
+    });
+    return { email, password: localPart };
+  }
+
+  async getSchoolLogin(schoolId: string) {
+    const user = await prisma.user.findFirst({ where: { schoolId, role: 'PRINCIPAL' } });
+    return { hasLogin: !!user, email: user?.email ?? null };
+  }
+
+  async upsertStudentLogin(admin: AuthUser, studentId: string) {
+    const student = await prisma.student.findUnique({ where: { id: studentId }, include: { school: true } });
+    if (!student) throw new NotFoundException('Student not found');
+    const key = (student.admissionNo || student.rollNo || studentId).replace(/\s+/g, '').toLowerCase();
+    const localPart = `st${key}`;
+    const email = `${localPart}@edubeam.com`;
+    const passwordHash = await bcrypt.hash(localPart, 10);
+    await prisma.user.upsert({
+      where: { email },
+      create: {
+        id: `ustu_${key}`,
+        email,
+        name: student.name,
+        role: 'STUDENT',
+        tenantId: admin.tenantId!,
+        schoolId: student.schoolId,
+        studentId: student.id,
+        passwordHash,
+      },
+      update: { passwordHash, studentId: student.id },
+    });
+    return { email, password: localPart };
+  }
+
+  async upsertParentLogin(admin: AuthUser, studentId: string) {
+    const student = await prisma.student.findUnique({ where: { id: studentId } });
+    if (!student) throw new NotFoundException('Student not found');
+    const key = (student.admissionNo || student.rollNo || studentId).replace(/\s+/g, '').toLowerCase();
+    const localPart = `pr${key}`;
+    const email = `${localPart}@edubeam.com`;
+    const passwordHash = await bcrypt.hash(localPart, 10);
+    await prisma.user.upsert({
+      where: { email },
+      create: {
+        id: `upar_${key}`,
+        email,
+        name: `Parent — ${student.name}`,
+        role: 'PARENT',
+        tenantId: admin.tenantId!,
+        schoolId: student.schoolId,
+        linkedStudentIds: student.id,
+        passwordHash,
+      },
+      update: { passwordHash, linkedStudentIds: student.id },
+    });
+    return { email, password: localPart };
+  }
 }

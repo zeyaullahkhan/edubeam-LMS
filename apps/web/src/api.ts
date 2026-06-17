@@ -148,6 +148,10 @@ export const api = {
     update: (id: string, body: Partial<NewUser> & { active?: boolean }) =>
       req<{ ok: boolean }>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
     remove: (id: string) => req<{ ok: boolean }>(`/users/${id}`, { method: 'DELETE' }),
+    schoolLogin: (schoolId: string) => req<{ hasLogin: boolean; email: string | null }>(`/users/school-login/${schoolId}`),
+    upsertSchoolLogin: (schoolId: string) => req<{ email: string; password: string }>(`/users/school-login/${schoolId}`, { method: 'POST' }),
+    upsertStudentLogin: (studentId: string) => req<{ email: string; password: string }>(`/users/student-login/${studentId}`, { method: 'POST' }),
+    upsertParentLogin: (studentId: string) => req<{ email: string; password: string }>(`/users/parent-login/${studentId}`, { method: 'POST' }),
   },
   students: {
     list: (params: PeopleFilter & { grade?: number; gender?: string; q?: string; rte?: boolean; dropout?: boolean } = {}) =>

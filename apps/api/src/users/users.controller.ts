@@ -44,4 +44,24 @@ export class UsersController {
   remove(@CurrentUser() admin: AuthUser, @Param('id') id: string) {
     return this.users.remove(admin, id);
   }
+
+  @Get('school-login/:schoolId')
+  getSchoolLogin(@Param('schoolId') schoolId: string) {
+    return this.users.getSchoolLogin(schoolId);
+  }
+
+  @Post('school-login/:schoolId')
+  upsertSchoolLogin(@CurrentUser() admin: AuthUser, @Param('schoolId') schoolId: string) {
+    return this.users.upsertSchoolLogin(admin, schoolId);
+  }
+
+  @Post('student-login/:studentId')
+  upsertStudentLogin(@CurrentUser() admin: AuthUser, @Param('studentId') studentId: string) {
+    return this.users.upsertStudentLogin(admin, studentId);
+  }
+
+  @Post('parent-login/:studentId')
+  upsertParentLogin(@CurrentUser() admin: AuthUser, @Param('studentId') studentId: string) {
+    return this.users.upsertParentLogin(admin, studentId);
+  }
 }

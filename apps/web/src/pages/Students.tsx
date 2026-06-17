@@ -12,6 +12,75 @@ import { ScopeBar, type Scope } from '../components/ScopeBar';
 import { Attendance } from './Attendance';
 import { ReportCard } from './ReportCard';
 
+// ── Login credential popover ──────────────────────────────────────────────────
+
+function CredPopover({ email, password, onClose }: { email: string; password: string; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => { navigator.clipboard.writeText(`Email: ${email}\nPassword: ${password}`); setCopied(true); setTimeout(() => setCopied(false), 2000); };
+  return (
+    <div className="absolute right-0 top-8 z-50 w-68 bg-white rounded-xl shadow-xl border border-slate-200 p-3 text-sm" onClick={e => e.stopPropagation()}>
+      <div className="flex items-center justify-between mb-2">
+        <span className="font-semibold text-navy-700 text-xs uppercase tracking-wide">Credentials</span>
+        <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xs"><i className="fas fa-times" /></button>
+      </div>
+      <div className="space-y-1.5 text-xs font-mono">
+        <div className="bg-slate-50 rounded px-2 py-1.5 break-all">{email}</div>
+        <div className="bg-slate-50 rounded px-2 py-1.5">{password}</div>
+      </div>
+      <button onClick={copy} className="mt-2 w-full text-xs py-1 rounded border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">
+        <i className={`fas ${copied ? 'fa-check text-emerald-500' : 'fa-copy'} mr-1`} />{copied ? 'Copied!' : 'Copy'}
+      </button>
+    </div>
+  );
+}
+
+function StudentLoginBtn({ studentId, type }: { studentId: string; type: 'student' | 'parent' }) {
+  const [open, setOpen] = useState(false);
+  const [creds, setCreds] = useState<{ email: string; password: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const handle = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setBusy(true);
+    try {
+      const fn = type === 'student' ? api.users.upsertStudentLogin : api.users.upsertParentLogin;
+      const c = await fn(studentId);
+      setCreds(c); setOpen(true);
+    } finally { setBusy(false); }
+  };
+
+  useEffect(() => {
+    const close = () => setOpen(false);
+    if (open) document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, [open]);
+
+  const label = type === 'student' ? 'Student' : 'Parent';
+  const icon  = type === 'student' ? 'fas fa-user-graduate' : 'fas fa-user-friends';
+  const color = type === 'student' ? 'text-sky-600 hover:text-sky-800 hover:bg-sky-50' : 'text-purple-600 hover:text-purple-800 hover:bg-purple-50';
+  const resetColor = type === 'student' ? 'text-orange-500 hover:text-orange-700 hover:bg-orange-50' : 'text-orange-500 hover:text-orange-700 hover:bg-orange-50';
+
+  return (
+    <span className="relative inline-block">
+      {creds && open && <CredPopover email={creds.email} password={creds.password} onClose={() => setOpen(false)} />}
+      <button
+        onClick={creds ? (e => { e.stopPropagation(); setOpen(o => !o); }) : handle}
+        disabled={busy}
+        className={`text-xs font-medium px-2 py-1 rounded transition-colors disabled:opacity-50 ${creds ? `text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50` : color}`}
+      >
+        {busy ? <i className="fas fa-circle-notch fa-spin mr-1" /> : <i className={`${icon} mr-1`} />}
+        {creds ? `${label} ✓` : label}
+      </button>
+      {creds && (
+        <button onClick={handle} disabled={busy} title={`Reset ${label} password`}
+          className={`text-xs font-medium px-1 py-1 rounded transition-colors disabled:opacity-50 ${resetColor}`}>
+          <i className="fas fa-redo" />
+        </button>
+      )}
+    </span>
+  );
+}
+
 type SubPage = 'list' | 'attendance' | 'report-card';
 const SUB_TABS: { id: SubPage; label: string; icon: string }[] = [
   { id: 'list',        label: 'Students List', icon: 'fas fa-list' },
@@ -314,7 +383,9 @@ export function Students() {
           <thead>
             <tr>
               <th>Student</th><th>Class</th><th>Gender</th><th>Category</th>
-              <th>Guardian</th><th>Status</th>{canWrite && <th className="text-right">Actions</th>}
+              <th>Guardian</th><th>Status</th>
+              {canWrite && <th className="text-right">Logins</th>}
+              {canWrite && <th className="text-right">Actions</th>}
             </tr>
           </thead>
           <tbody>
@@ -339,6 +410,12 @@ export function Students() {
                     ? <span className="text-xs font-semibold rounded px-2 py-0.5 border bg-red-50 text-red-600 border-red-200">Dropout</span>
                     : <span className="text-xs font-semibold rounded px-2 py-0.5 border bg-emerald-50 text-emerald-700 border-emerald-200">Active</span>}
                 </td>
+                {canWrite && (
+                  <td className="text-right whitespace-nowrap">
+                    <StudentLoginBtn studentId={s.id} type="student" />
+                    <StudentLoginBtn studentId={s.id} type="parent" />
+                  </td>
+                )}
                 {canWrite && (
                   <td className="text-right whitespace-nowrap">
                     <button onClick={() => openEdit(s)} className="text-xs text-sky-600 hover:text-sky-800 font-medium px-2 py-1 rounded hover:bg-sky-50 mr-1">

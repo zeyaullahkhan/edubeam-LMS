@@ -3,6 +3,98 @@ import { api, type DistrictMeta, type SchoolFormData, type SchoolRow } from '../
 import { exportCsv } from '../export';
 import { useAuth } from '../auth';
 
+// ── Login credential popover ──────────────────────────────────────────────────
+
+function LoginPopover({ onClose, email, password }: { onClose: () => void; email: string; password: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = (text: string) => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); };
+  return (
+    <div className="absolute right-0 top-8 z-50 w-72 bg-white rounded-xl shadow-xl border border-slate-200 p-4 text-sm" onClick={e => e.stopPropagation()}>
+      <div className="flex items-center justify-between mb-3">
+        <span className="font-semibold text-navy-700 text-xs uppercase tracking-wide">Login Credentials</span>
+        <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><i className="fas fa-times" /></button>
+      </div>
+      <div className="space-y-2">
+        <div className="bg-slate-50 rounded-lg p-2.5">
+          <div className="text-xs text-slate-500 mb-0.5">Username (Email)</div>
+          <div className="font-mono text-xs text-navy-700 break-all">{email}</div>
+        </div>
+        <div className="bg-slate-50 rounded-lg p-2.5">
+          <div className="text-xs text-slate-500 mb-0.5">Password</div>
+          <div className="font-mono text-xs text-navy-700">{password}</div>
+        </div>
+      </div>
+      <button
+        onClick={() => copy(`Email: ${email}\nPassword: ${password}`)}
+        className="mt-3 w-full text-xs py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+      >
+        <i className={`fas ${copied ? 'fa-check text-emerald-500' : 'fa-copy'} mr-1.5`} />
+        {copied ? 'Copied!' : 'Copy credentials'}
+      </button>
+    </div>
+  );
+}
+
+interface SchoolLoginBtnProps { schoolId: string }
+
+function SchoolLoginBtn({ schoolId }: SchoolLoginBtnProps) {
+  const [open, setOpen] = useState(false);
+  const [creds, setCreds] = useState<{ email: string; password: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const handleCreate = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setBusy(true);
+    try {
+      const c = await api.users.upsertSchoolLogin(schoolId);
+      setCreds(c);
+      setOpen(true);
+    } finally { setBusy(false); }
+  };
+
+  useEffect(() => {
+    const close = () => setOpen(false);
+    if (open) document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, [open]);
+
+  return (
+    <div className="relative inline-block">
+      {creds && open
+        ? <LoginPopover email={creds.email} password={creds.password} onClose={() => setOpen(false)} />
+        : null}
+      {creds
+        ? (
+          <button
+            onClick={e => { e.stopPropagation(); setOpen(o => !o); }}
+            className="text-xs text-emerald-600 hover:text-emerald-800 font-medium px-2 py-1 rounded hover:bg-emerald-50 transition-colors"
+          >
+            <i className="fas fa-key mr-1" />Login
+          </button>
+        ) : (
+          <button
+            onClick={handleCreate}
+            disabled={busy}
+            className="text-xs text-sky-600 hover:text-sky-800 font-medium px-2 py-1 rounded hover:bg-sky-50 transition-colors disabled:opacity-50"
+          >
+            {busy ? <i className="fas fa-circle-notch fa-spin mr-1" /> : <i className="fas fa-user-plus mr-1" />}
+            Set Login
+          </button>
+        )}
+      {creds && (
+        <button
+          onClick={handleCreate}
+          disabled={busy}
+          className="text-xs text-orange-500 hover:text-orange-700 font-medium px-2 py-1 rounded hover:bg-orange-50 transition-colors disabled:opacity-50"
+          title="Reset password to username"
+        >
+          <i className="fas fa-redo mr-1" />Reset
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ── School form modal ─────────────────────────────────────────────────────────
 
 interface SchoolModalProps {
@@ -398,6 +490,7 @@ export function Schools() {
               <th>Facilities</th>
               <th className="text-right">Teachers</th>
               <th className="text-right">Students</th>
+              {isAdmin && <th className="text-right">Login</th>}
               {isAdmin && <th className="text-right">Actions</th>}
             </tr>
           </thead>
@@ -446,6 +539,11 @@ export function Schools() {
                 </td>
                 <td className="text-right font-medium">{s.teachers ?? '—'}</td>
                 <td className="text-right font-medium">{s.students ?? '—'}</td>
+                {isAdmin && (
+                  <td className="text-right">
+                    <SchoolLoginBtn schoolId={s.id} />
+                  </td>
+                )}
                 {isAdmin && (
                   <td className="text-right">
                     <button
