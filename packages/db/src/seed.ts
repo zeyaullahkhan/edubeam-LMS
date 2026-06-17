@@ -12,6 +12,7 @@
  * All three join on the UDISE code. Run with: npm run db:seed
  */
 import { join } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
 import * as XLSX from 'xlsx';
 import bcrypt from 'bcryptjs';
 import { prisma } from './client';
@@ -640,6 +641,25 @@ async function seedLectures(): Promise<number> {
   return inserted;
 }
 
+async function restoreYoutubeUrls(): Promise<number> {
+  const urlsFile = join(DATA_DIR, 'youtube-urls.json');
+  if (!existsSync(urlsFile)) return 0;
+  const map: Record<string, string> = JSON.parse(readFileSync(urlsFile, 'utf8'));
+  const entries = Object.entries(map);
+  if (!entries.length) return 0;
+  const CHUNK = 200;
+  let restored = 0;
+  for (let i = 0; i < entries.length; i += CHUNK) {
+    await Promise.all(
+      entries.slice(i, i + CHUNK).map(([id, youtubeUrl]) =>
+        prisma.lecture.updateMany({ where: { id }, data: { youtubeUrl } }),
+      ),
+    );
+    restored += Math.min(CHUNK, entries.length - i);
+  }
+  return restored;
+}
+
 async function main() {
   // Idempotent first-run guard: on a deployed DB we only seed when it's empty, so
   // a redeploy never wipes data that reviewers/managers have added. Pass --force
@@ -686,6 +706,7 @@ async function main() {
   const yearly = await importYearlyResults();
   const people = await seedPeople();
   const lectureCount = await seedLectures();
+  const urlsRestored = await restoreYoutubeUrls();
 
   const [schoolCount, vc, il, enr, br, yr] = await Promise.all([
     prisma.school.count(),
@@ -705,7 +726,7 @@ async function main() {
       `${yearly.skippedUnknownSchools} rows for schools not in our 500 set skipped)`,
   );
   console.log(`  Students: ${people.students}   Staff: ${people.staff} (sample registry)`);
-  console.log(`  Lectures: ${lectureCount} (virtual classroom recordings 2019–2026)`);
+  console.log(`  Lectures: ${lectureCount} (virtual classroom recordings 2019–2026); YouTube URLs restored: ${urlsRestored}`);
   console.log(`  Content channels: ${STUDIO_CHANNELS.length} (Studio1–4 YouTube mappings)`);
 
   // Spot-check a known school from the plan's verification step.
