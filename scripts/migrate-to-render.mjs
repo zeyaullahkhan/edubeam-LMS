@@ -18,8 +18,11 @@ const pg = require('pg');
 const { Pool } = pg;
 
 // ── Connection strings ───────────────────────────────────────────────────────
+// Set RENDER_DATABASE_URL in your shell before running:
+//   export RENDER_DATABASE_URL="postgresql://user:pass@host/db"
 const SQLITE_URL = `file:${join(__dir, '..', 'packages', 'db', 'prisma', 'dev.db').replace(/\\/g, '/')}`;
-const PG_URL     = 'postgresql://edubeam:fPxEe6CYmCKj89uxdrvcRst5uKbw4r4h@dpg-d8m1caog4nts73fv22pg-a.oregon-postgres.render.com/edubeam';
+const PG_URL     = process.env.RENDER_DATABASE_URL;
+if (!PG_URL) { console.error('ERROR: RENDER_DATABASE_URL env var not set'); process.exit(1); }
 
 console.log('Source :', SQLITE_URL);
 console.log('Target : Render Postgres (oregon)\n');
