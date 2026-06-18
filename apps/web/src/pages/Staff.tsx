@@ -9,6 +9,7 @@ import { exportCsv } from '../export';
 import { parseCsv, readFileText } from '../csv';
 import { ScopeBar, type Scope } from '../components/ScopeBar';
 import { Attendance } from './Attendance';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 
 type SubPage = 'list' | 'attendance';
 const SUB_TABS: { id: SubPage; label: string; icon: string }[] = [
@@ -47,6 +48,7 @@ export function Staff() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<Partial<StaffMember>>(emptyStaff);
   const [msg, setMsg] = useState('');
+  const [confirmStaff, setConfirmStaff] = useState<StaffMember | null>(null);
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -120,7 +122,6 @@ export function Staff() {
   };
 
   const remove = async (s: StaffMember) => {
-    if (!window.confirm(`Remove ${s.name}?`)) return;
     try { await api.staff.remove(s.id); load(); }
     catch (e) { setErr((e as Error).message); }
   };
@@ -343,7 +344,7 @@ export function Staff() {
                     <button onClick={() => toggleClassTeacher(s)} className="text-xs text-slate-600 hover:text-sky-600 font-medium px-2 py-1 rounded hover:bg-sky-50">
                       {s.isClassTeacher ? 'Unassign CT' : 'Make CT'}
                     </button>
-                    <button onClick={() => remove(s)} className="text-xs text-red-500 hover:text-red-700 font-medium px-2 py-1 rounded hover:bg-red-50">Remove</button>
+                    <button onClick={() => setConfirmStaff(s)} className="text-xs text-red-500 hover:text-red-700 font-medium px-2 py-1 rounded hover:bg-red-50">Remove</button>
                   </td>
                 )}
               </tr>
@@ -366,6 +367,15 @@ export function Staff() {
         )}
       </div>
       </>}
+
+      <ConfirmDialog
+        open={!!confirmStaff}
+        title="Remove staff member"
+        message={confirmStaff ? `Remove ${confirmStaff.name}? This cannot be undone.` : ''}
+        confirmLabel="Remove"
+        onCancel={() => setConfirmStaff(null)}
+        onConfirm={() => { remove(confirmStaff!); setConfirmStaff(null); }}
+      />
     </div>
   );
 }

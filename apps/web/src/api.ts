@@ -210,6 +210,21 @@ export const api = {
       req<any>('/attendance/children'),
   },
 
+  quiz: {
+    list: (params: { schoolId?: string; grade?: number } = {}) =>
+      req<any[]>(`/quiz${qstr(params)}`),
+    get: (id: string) => req<any>(`/quiz/${id}`),
+    create: (body: { schoolId?: string; title: string; description?: string; subject: string; grade: number; section?: string; dueDate?: string }) =>
+      req<any>('/quiz', { method: 'POST', body: JSON.stringify(body) }),
+    setQuestions: (id: string, questions: { question: string; options: string[]; correct: number; marks?: number }[]) =>
+      req<any>(`/quiz/${id}/questions`, { method: 'POST', body: JSON.stringify({ questions }) }),
+    submitAttempt: (id: string, body: { answers: Record<string, number>; timeTaken?: number }) =>
+      req<any>(`/quiz/${id}/attempt`, { method: 'POST', body: JSON.stringify(body) }),
+    results: (id: string) => req<any>(`/quiz/${id}/results`),
+    toggle: (id: string) => req<any>(`/quiz/${id}/toggle`, { method: 'PATCH' }),
+    remove: (id: string) => req<any>(`/quiz/${id}`, { method: 'DELETE' }),
+  },
+
   content: {
     stats: () => req<any>('/content/stats'),
     channels: () => req<any>('/content/channels'),

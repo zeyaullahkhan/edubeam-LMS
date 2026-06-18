@@ -16,6 +16,8 @@ import {
 import type { DistrictSummary, EnrollmentDemographics, TeacherStats } from '@edubeam/shared';
 import { api, type BlockSummary, type Overview, type SchoolRow } from '../api';
 import { exportCsv, printPdf } from '../export';
+import { useAuth } from '../auth';
+import { stateFor } from '../config/states';
 
 const BOYS_COLOR = '#0076BC';
 const GIRLS_COLOR = '#EC4899';
@@ -64,6 +66,8 @@ function StatCard({ label, value, sub, icon, accent, onClick, active }: StatCard
 }
 
 export function Dashboard() {
+  const { user } = useAuth();
+  const state = user ? stateFor(user) : null;
   const [overview, setOverview] = useState<Overview | null>(null);
   const [districts, setDistricts] = useState<DistrictSummary[]>([]);
   const [enrollment, setEnrollment] = useState<EnrollmentDemographics | null>(null);
@@ -134,7 +138,7 @@ export function Dashboard() {
             Monitoring Dashboard
           </div>
           <h1 className="font-heading font-bold text-navy-700 text-2xl leading-tight">
-            Uttarakhand Government Schools
+            {state ? state.govLabel : 'All States — Platform Dashboard'}
           </h1>
           <p className="text-slate-500 text-sm mt-1">2025–26 Academic Year · Real-time data</p>
         </div>

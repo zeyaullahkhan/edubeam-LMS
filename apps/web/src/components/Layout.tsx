@@ -1,6 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { useAuth } from '../auth';
+import { stateFor } from '../config/states';
 
 const ROLE_LABELS: Record<string, string> = {
   ADMIN: 'Administrator',
@@ -18,12 +19,16 @@ const ADMIN_NAV = [
   { to: '/analytics',    label: 'Analytics',  icon: 'fas fa-chart-line' },
   { to: '/schools',      label: 'Schools',    icon: 'fas fa-school' },
   { to: '/people',       label: 'People',     icon: 'fas fa-users' },
+  { to: '/attendance',   label: 'Attendance', icon: 'fas fa-calendar-check' },
+  { to: '/report-card',  label: 'Results',    icon: 'fas fa-graduation-cap' },
+  { to: '/quiz',         label: 'Quiz',       icon: 'fas fa-question-circle' },
   { to: '/content',      label: 'Content',    icon: 'fas fa-play-circle' },
   { to: '/planner',      label: 'Planner',    icon: 'fas fa-calendar-alt' },
 ];
 
 const STUDENT_NAV = [
   { to: '/',        label: 'My Portal', icon: 'fas fa-id-card' },
+  { to: '/quiz',    label: 'Quiz',      icon: 'fas fa-question-circle' },
   { to: '/content', label: 'Content',   icon: 'fas fa-play-circle' },
 ];
 
@@ -35,6 +40,7 @@ export function Layout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const navItems = user?.role === 'STUDENT' ? STUDENT_NAV : user?.role === 'PARENT' ? PARENT_NAV : ADMIN_NAV;
+  const state = user ? stateFor(user) : null;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -46,10 +52,16 @@ export function Layout({ children }: { children: ReactNode }) {
             <span className="text-navy-200 text-xs">|</span>
             <span className="text-navy-300 text-xs tracking-wide">Valuable Group — EdTech Infrastructure</span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-navy-300 text-xs">Uttarakhand Government Schools</span>
-            <img src="/uk-logo.png" alt="Uttarakhand" className="h-6 w-auto" />
-          </div>
+          {state ? (
+            <div className="flex items-center gap-2">
+              <span className="text-navy-300 text-xs">{state.govLabel}</span>
+              <img src={state.logo} alt={state.name} className="h-6 w-auto" />
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="text-navy-300 text-xs">All States — Platform Admin</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -134,13 +146,17 @@ export function Layout({ children }: { children: ReactNode }) {
           <div className="flex items-center gap-3">
             <img src="/vepl-logo.png" alt="Edubeam" className="h-6 w-auto opacity-60" />
             <span className="text-xs text-slate-400">
-              © {new Date().getFullYear()} Valuable E-Solutions Pvt. Ltd. All rights reserved.
+              © {new Date().getFullYear()} Valuable Edutainment Pvt. Ltd. All rights reserved.
             </span>
           </div>
-          <div className="flex items-center gap-2">
-            <img src="/uk-logo.png" alt="Uttarakhand" className="h-6 w-auto opacity-50" />
-            <span className="text-xs text-slate-400">Uttarakhand Government Schools · 2025–26</span>
-          </div>
+          {state ? (
+            <div className="flex items-center gap-2">
+              <img src={state.logo} alt={state.name} className="h-6 w-auto opacity-50" />
+              <span className="text-xs text-slate-400">{state.govLabel} · 2025–26</span>
+            </div>
+          ) : (
+            <span className="text-xs text-slate-400">Edubeam LMS · All States · 2025–26</span>
+          )}
         </div>
       </footer>
     </div>

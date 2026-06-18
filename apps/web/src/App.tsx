@@ -11,6 +11,9 @@ import { Planner } from './pages/Planner';
 import { StudentPortal } from './pages/StudentPortal';
 import { ParentPortal } from './pages/ParentPortal';
 import { Content } from './pages/Content';
+import { Attendance } from './pages/Attendance';
+import { ReportCard } from './pages/ReportCard';
+import { Quiz } from './pages/Quiz';
 
 export function App() {
   const { user, loading } = useAuth();
@@ -25,6 +28,7 @@ export function App() {
         <Routes>
           <Route path="/" element={<StudentPortal />} />
           <Route path="/content" element={<Content />} />
+          <Route path="/quiz" element={<Quiz />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Layout>
@@ -52,6 +56,9 @@ export function App() {
         <Route path="/students" element={<Navigate to="/people" replace />} />
         <Route path="/staff" element={<Navigate to="/people" replace />} />
         {user.role === 'ADMIN' && <Route path="/admin/users" element={<AdminUsers />} />}
+        <Route path="/attendance" element={<Attendance />} />
+        <Route path="/report-card" element={<ReportCard />} />
+        <Route path="/quiz" element={<Quiz />} />
         <Route path="/planner" element={<Planner />} />
         <Route path="/content" element={<Content />} />
         <Route path="*" element={<Navigate to="/" replace />} />

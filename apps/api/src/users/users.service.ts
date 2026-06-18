@@ -8,6 +8,7 @@ interface CreateUserDto {
   name: string;
   password: string;
   role: Role;
+  tenantId?: string | null;
   districtId?: string | null;
   blockId?: string | null;
   schoolId?: string | null;
@@ -21,11 +22,15 @@ const SCHOOL_ROLES: Role[] = ['PRINCIPAL', 'TEACHER', 'STUDENT', 'PARENT'];
 
 @Injectable()
 export class UsersService {
-  async list(admin: AuthUser, opts: { q?: string; role?: string; districtId?: string; blockId?: string; schoolId?: string; page?: number }) {
+  async list(admin: AuthUser, opts: { q?: string; role?: string; tenantId?: string; districtId?: string; blockId?: string; schoolId?: string; page?: number }) {
     const PAGE_SIZE = 50;
     const page = Math.max(1, opts.page ?? 1);
+    // Platform ADMIN (tenantId=null) can span all tenants; optionally filter by a requested tenantId.
+    const tenantFilter = admin.role === 'ADMIN' && admin.tenantId == null
+      ? (opts.tenantId ? { tenantId: opts.tenantId } : {})
+      : { tenantId: admin.tenantId };
     const where = {
-      tenantId: admin.tenantId,
+      ...tenantFilter,
       ...(opts.role ? { role: opts.role } : {}),
       ...(opts.districtId ? { districtId: opts.districtId } : {}),
       ...(opts.blockId ? { blockId: opts.blockId } : {}),
@@ -81,13 +86,17 @@ export class UsersService {
     this.validateScope(dto.role, dto.districtId, dto.blockId, dto.schoolId);
 
     const isUpperRole = dto.role === 'STATE_OFFICIAL' || dto.role === 'ADMIN';
+    // Platform ADMIN can create users in any tenant (dto.tenantId takes precedence).
+    const assignedTenantId = (admin.role === 'ADMIN' && admin.tenantId == null)
+      ? (dto.tenantId ?? null)
+      : admin.tenantId;
     const user = await prisma.user.create({
       data: {
         email,
         name: dto.name.trim(),
         passwordHash: await bcrypt.hash(dto.password, 10),
         role: dto.role,
-        tenantId: admin.tenantId,
+        tenantId: assignedTenantId,
         districtId: isUpperRole ? null : dto.districtId ?? null,
         blockId: dto.role === 'BLOCK_OFFICIAL' ? dto.blockId ?? null : null,
         schoolId: SCHOOL_ROLES.includes(dto.role) ? dto.schoolId ?? null : null,
@@ -99,7 +108,8 @@ export class UsersService {
   }
 
   async update(admin: AuthUser, id: string, dto: UpdateUserDto) {
-    const user = await prisma.user.findFirst({ where: { id, tenantId: admin.tenantId } });
+    const tenantFilter = admin.role === 'ADMIN' && admin.tenantId == null ? {} : { tenantId: admin.tenantId };
+    const user = await prisma.user.findFirst({ where: { id, ...tenantFilter } });
     if (!user) throw new NotFoundException('User not found');
     const role = (dto.role ?? user.role) as Role;
     if (dto.role || dto.districtId !== undefined || dto.blockId !== undefined || dto.schoolId !== undefined) {
@@ -125,7 +135,8 @@ export class UsersService {
 
   async remove(admin: AuthUser, id: string) {
     if (id === admin.id) throw new BadRequestException('You cannot delete your own account');
-    const user = await prisma.user.findFirst({ where: { id, tenantId: admin.tenantId } });
+    const tenantFilter = admin.role === 'ADMIN' && admin.tenantId == null ? {} : { tenantId: admin.tenantId };
+    const user = await prisma.user.findFirst({ where: { id, ...tenantFilter } });
     if (!user) throw new NotFoundException('User not found');
     await prisma.user.delete({ where: { id } });
     return { ok: true };

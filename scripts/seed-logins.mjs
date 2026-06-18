@@ -106,18 +106,19 @@ async function main() {
   const client = await pool.connect();
   try {
     // ── reference data ──────────────────────────────────────────────────────
-    const { rows: tenants }   = await client.query('SELECT id FROM "Tenant" LIMIT 1');
-    const tenantId = tenants[0]?.id;
-    if (!tenantId) { console.error('ERROR: No tenant — run the main seed first.'); process.exit(1); }
+    const { rows: tenants } = await client.query('SELECT id, name FROM "Tenant" ORDER BY name');
+    if (!tenants.length) { console.error('ERROR: No tenants — run the main seed first.'); process.exit(1); }
+
+    console.log(`Found ${tenants.length} tenant(s): ${tenants.map(t => t.name).join(', ')}`);
 
     const { rows: districts } = await client.query(
-      'SELECT id, name FROM "District" WHERE "tenantId"=$1 ORDER BY name', [tenantId]);
+      'SELECT id, name, "tenantId" FROM "District" ORDER BY "tenantId", name');
     const { rows: blocks }    = await client.query(
-      `SELECT b.id, b.name, b."districtId", d.name AS district_name
-       FROM "Block" b JOIN "District" d ON d.id=b."districtId" ORDER BY d.name,b.name`);
+      `SELECT b.id, b.name, b."districtId", d.name AS district_name, d."tenantId"
+       FROM "Block" b JOIN "District" d ON d.id=b."districtId" ORDER BY d."tenantId",d.name,b.name`);
     const { rows: schools }   = await client.query(
-      `SELECT s.id, s.name, s."udiseCode", s."siteCode", b."districtId"
-       FROM "School" s JOIN "Block" b ON b.id=s."blockId" ORDER BY s.name`);
+      `SELECT s.id, s.name, s."udiseCode", s."siteCode", b."districtId", d."tenantId"
+       FROM "School" s JOIN "Block" b ON b.id=s."blockId" JOIN "District" d ON d.id=b."districtId" ORDER BY d."tenantId",s.name`);
 
     const csvRows = [];
     let created = 0;
@@ -130,7 +131,7 @@ async function main() {
         id: `ud_${u}`, email: `${u}@edubeam.com`,
         passwordHash: await bcrypt.hash(u, COST_HIGH),
         name: `${d.name} District Official`, role: 'DISTRICT_OFFICIAL',
-        tenantId, districtId: d.id,
+        tenantId: d.tenantId, districtId: d.id,
       });
       csvRows.push({ role:'DISTRICT_OFFICIAL', email:`${u}@edubeam.com`, password:u, scope:d.name });
       created++; process.stdout.write('.');
@@ -146,7 +147,7 @@ async function main() {
         id: `ub_${ds}_${bs}`, email,
         passwordHash: await bcrypt.hash(bs, COST_HIGH),
         name: `${b.name} Block Official`, role: 'BLOCK_OFFICIAL',
-        tenantId, districtId: b.districtId, blockId: b.id,
+        tenantId: b.tenantId, districtId: b.districtId, blockId: b.id,
       });
       csvRows.push({ role:'BLOCK_OFFICIAL', email, password:bs, scope:`${b.name} (${b.district_name})` });
       created++; process.stdout.write('.');
@@ -164,7 +165,7 @@ async function main() {
         id: `us_${local}`, email: `${local}@edubeam.com`,
         passwordHash: await bcrypt.hash(local, COST_HIGH),
         name: `Principal — ${s.name}`, role: 'PRINCIPAL',
-        tenantId, districtId: s.districtId, schoolId: s.id,
+        tenantId: s.tenantId, districtId: s.districtId, schoolId: s.id,
       });
       csvRows.push({ role:'PRINCIPAL', email:`${local}@edubeam.com`, password:local, scope:s.name });
       created++; process.stdout.write('.');
@@ -176,11 +177,12 @@ async function main() {
     const { rows: students } = await client.query(
       `SELECT st.id, st.name, st."admissionNo", st."rollNo",
               st.grade, st.section, st."schoolId", st."guardianName",
-              s.name AS school_name, b."districtId"
+              s.name AS school_name, b."districtId", d."tenantId"
        FROM "Student" st
        JOIN "School"   s ON s.id = st."schoolId"
        JOIN "Block"    b ON b.id = s."blockId"
-       ORDER BY s.name, st.grade`
+       JOIN "District" d ON d.id = b."districtId"
+       ORDER BY d."tenantId", s.name, st.grade`
     );
     console.log(`${students.length.toLocaleString()} students found`);
 
@@ -208,11 +210,11 @@ async function main() {
 
         stPws.push(`st${key}`);
         stMeta.push({ sid: s.id, name: s.name, schoolId: s.schoolId,
-                      districtId: s.districtId, school_name: s.school_name, grade });
+                      districtId: s.districtId, tenantId: s.tenantId, school_name: s.school_name, grade });
 
         prPws.push(`pr${key}`);
         prMeta.push({ sid: s.id, name: s.name, schoolId: s.schoolId,
-                      districtId: s.districtId, school_name: s.school_name,
+                      districtId: s.districtId, tenantId: s.tenantId, school_name: s.school_name,
                       guardian: s.guardianName || '' });
       }
 
@@ -225,13 +227,13 @@ async function main() {
       const stRows = stMeta.map((m, j) => ({
         id: `ustu_${stPws[j].slice(2)}`, email: `${stPws[j]}@edubeam.com`,
         passwordHash: stHashes[j], name: m.name, role: 'STUDENT',
-        tenantId, districtId: m.districtId, schoolId: m.schoolId,
+        tenantId: m.tenantId, districtId: m.districtId, schoolId: m.schoolId,
         studentId: m.sid, linkedStudentIds: null,
       }));
       const prRows = prMeta.map((m, j) => ({
         id: `upar_${prPws[j].slice(2)}`, email: `${prPws[j]}@edubeam.com`,
         passwordHash: prHashes[j], name: `Parent — ${m.name}`, role: 'PARENT',
-        tenantId, districtId: m.districtId, schoolId: m.schoolId,
+        tenantId: m.tenantId, districtId: m.districtId, schoolId: m.schoolId,
         studentId: null, linkedStudentIds: m.sid,
       }));
 

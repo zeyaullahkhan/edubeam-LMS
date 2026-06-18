@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ROLES, type DistrictSummary, type Role } from '@edubeam/shared';
 import { api, type BlockSummary, type ManagedUser, type SchoolRow } from '../api';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 
 const ROLE_LABELS: Record<string, string> = {
   ADMIN: 'Administrator',
@@ -57,6 +58,7 @@ export function AdminUsers() {
   const [showForm, setShowForm] = useState(false);
   const [msg, setMsg]           = useState('');
   const [err, setErr]           = useState('');
+  const [confirmUser, setConfirmUser] = useState<ManagedUser | null>(null);
   const empty = { email: '', name: '', password: '', role: 'TEACHER' as Role, districtId: '', blockId: '', schoolId: '' };
   const [form, setForm] = useState(empty);
 
@@ -126,7 +128,6 @@ export function AdminUsers() {
     setMsg(`Password reset for ${u.email}`);
   };
   const remove = async (u: ManagedUser) => {
-    if (!window.confirm(`Delete ${u.email}? This cannot be undone.`)) return;
     try { await api.users.remove(u.id); load(); }
     catch (e) { setErr((e as Error).message); }
   };
@@ -135,6 +136,7 @@ export function AdminUsers() {
   const end   = Math.min(page * 50, total);
 
   return (
+    <>
     <div className="space-y-5">
       {/* ── Page header ───────────────────────────────────────── */}
       <div className="flex items-start justify-between flex-wrap gap-3">
@@ -322,7 +324,7 @@ export function AdminUsers() {
                   <button onClick={() => resetPassword(u)} className="text-xs text-slate-600 hover:text-navy-600 font-medium px-2 py-1 rounded hover:bg-slate-50 transition-colors">
                     Reset PW
                   </button>
-                  <button onClick={() => remove(u)} className="text-xs text-red-500 hover:text-red-700 font-medium px-2 py-1 rounded hover:bg-red-50 transition-colors">
+                  <button onClick={() => setConfirmUser(u)} className="text-xs text-red-500 hover:text-red-700 font-medium px-2 py-1 rounded hover:bg-red-50 transition-colors">
                     Delete
                   </button>
                 </td>
@@ -378,5 +380,15 @@ export function AdminUsers() {
         )}
       </div>
     </div>
+
+    <ConfirmDialog
+      open={!!confirmUser}
+      title="Delete user"
+      message={confirmUser ? `Delete ${confirmUser.email}? This cannot be undone.` : ''}
+      confirmLabel="Delete"
+      onCancel={() => setConfirmUser(null)}
+      onConfirm={() => { remove(confirmUser!); setConfirmUser(null); }}
+    />
+    </>
   );
 }

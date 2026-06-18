@@ -66,6 +66,7 @@ model School {
   users               User[]
   students            Student[]
   staff               Staff[]
+  quizzes             Quiz[]
 }
 
 // ── Operational / analytics data (seeded from Excel) ────────────────────────
@@ -264,6 +265,61 @@ model ExamResult {
 
   @@unique([studentId, subject, examType, academicYear])
   @@index([schoolId, grade, academicYear])
+}
+
+// ── Quiz Engine ──────────────────────────────────────────────────────────────
+
+// A quiz/test created by a teacher or principal for a class.
+// isActive: false means it's archived. dueDate "YYYY-MM-DD" when submissions close.
+model Quiz {
+  id           String         @id @default(cuid())
+  schoolId     String
+  school       School         @relation(fields: [schoolId], references: [id])
+  title        String
+  description  String?
+  subject      String
+  grade        Int
+  section      String?
+  academicYear String
+  dueDate      String?
+  isActive     Boolean        @default(true)
+  createdBy    String?        // userId of creator
+  createdAt    DateTime       @default(now())
+  questions    QuizQuestion[]
+  attempts     StudentAttempt[]
+
+  @@index([schoolId, grade, academicYear])
+}
+
+// One MCQ question inside a quiz.
+// options is JSON-encoded string: ["Option A","Option B","Option C","Option D"]
+// correct is 0-based index into options.
+model QuizQuestion {
+  id       String @id @default(cuid())
+  quizId   String
+  quiz     Quiz   @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  question String
+  options  String // JSON array of 2–4 option strings
+  correct  Int
+  marks    Float  @default(1)
+  orderNo  Int    @default(0)
+}
+
+// A student's completed attempt at a quiz.
+// answers is JSON: { "<questionId>": <selectedIndex 0-3> }
+model StudentAttempt {
+  id          String   @id @default(cuid())
+  quizId      String
+  quiz        Quiz     @relation(fields: [quizId], references: [id])
+  studentId   String
+  answers     String   // JSON map questionId→selectedIndex
+  score       Float
+  maxScore    Float
+  timeTaken   Int?     // seconds
+  completedAt DateTime @default(now())
+
+  @@unique([quizId, studentId])
+  @@index([studentId])
 }
 
 // ── Content / Virtual Classroom recordings ───────────────────────────────────

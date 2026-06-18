@@ -13,10 +13,23 @@ export function schoolScope(
 ): { schoolWhere: Prisma.SchoolWhereInput; districtId?: string; blockId?: string; schoolId?: string } {
   const scope = scopeOf(user);
 
-  if (scope.level === 'tenant') {
+  if (scope.level === 'platform') {
     return requestedDistrictId
       ? { schoolWhere: { block: { districtId: requestedDistrictId } }, districtId: requestedDistrictId }
       : { schoolWhere: {} };
+  }
+
+  if (scope.level === 'tenant') {
+    const tenantFilter = scope.tenantId
+      ? { block: { district: { tenantId: scope.tenantId } } }
+      : {};
+    if (requestedDistrictId) {
+      return {
+        schoolWhere: { block: { districtId: requestedDistrictId } },
+        districtId: requestedDistrictId,
+      };
+    }
+    return { schoolWhere: tenantFilter };
   }
 
   if (scope.level === 'district') {
@@ -104,13 +117,24 @@ export async function resolveScope(
       schoolWhere: { block: { districtId: d.id } },
     };
   }
-  return { scope: { level: 'state', label: 'Uttarakhand (statewide)' }, schoolWhere: {} };
+  // Dynamic label — fetch tenant name for STATE_OFFICIAL; platform-wide for ADMIN.
+  if (ceiling.level === 'platform') {
+    return { scope: { level: 'state', label: 'All States (platform-wide)' }, schoolWhere: {} };
+  }
+  const tenantLabel = ceiling.tenantId
+    ? (await prisma.tenant.findUnique({ where: { id: ceiling.tenantId }, select: { name: true } }))?.name ?? 'State'
+    : 'State';
+  const tenantWhere = ceiling.tenantId
+    ? { block: { district: { tenantId: ceiling.tenantId } } }
+    : {};
+  return { scope: { level: 'state', label: `${tenantLabel} (statewide)` }, schoolWhere: tenantWhere };
 }
 
 /** District where-filter matching the user's scope (for listing districts). */
 export function districtScope(user: AuthUser): Prisma.DistrictWhereInput {
   const scope = scopeOf(user);
-  if (scope.level === 'tenant') return user.tenantId ? { tenantId: user.tenantId } : {};
+  if (scope.level === 'platform') return {};
+  if (scope.level === 'tenant') return scope.tenantId ? { tenantId: scope.tenantId } : {};
   if (scope.level === 'district') return { id: scope.districtId ?? '__none__' };
   return { id: user.districtId ?? '__none__' };
 }

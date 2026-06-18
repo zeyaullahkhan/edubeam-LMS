@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../auth';
+import { GLOBAL_STATS } from '../config/states';
 
 export function Login() {
   const { login } = useAuth();
@@ -54,16 +55,12 @@ export function Login() {
               <span style={{ color: '#5BBCD8' }}>Through Technology</span>
             </h1>
             <p className="text-white/60 text-base leading-relaxed max-w-sm">
-              Real-time monitoring and analytics for 500 government schools across 13 districts
-              of Uttarakhand — Virtual Classrooms, ICT Labs, and board results in one platform.
+              Real-time monitoring and analytics for government schools across multiple states —
+              Virtual Classrooms, ICT Labs, attendance, and board results in one platform.
             </p>
 
-            <div className="grid grid-cols-3 gap-4 mt-10">
-              {[
-                { value: '500', label: 'Schools' },
-                { value: '13', label: 'Districts' },
-                { value: '114,210', label: 'Students' },
-              ].map(({ value, label }) => (
+            <div className="grid grid-cols-2 gap-4 mt-10">
+              {GLOBAL_STATS.map(({ value, label }) => (
                 <div key={label} className="bg-white/8 rounded-xl p-4 border border-white/10 text-center">
                   <div className="font-heading font-bold text-white text-xl">{value}</div>
                   <div className="text-sky-300/80 text-xs mt-0.5">{label}</div>
@@ -78,8 +75,7 @@ export function Login() {
               <span className="text-white/40 text-xs">Valuable Group</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-white/40 text-xs">Govt. of Uttarakhand</span>
-              <img src="/uk-logo.png" alt="Uttarakhand" className="h-10 w-auto" />
+              <span className="text-white/40 text-xs">Government Schools Platform</span>
             </div>
           </div>
         </div>
@@ -102,7 +98,7 @@ export function Login() {
             <div className="mb-7">
               <h2 className="font-heading font-bold text-navy-700 text-2xl">Sign in</h2>
               <p className="text-slate-500 text-sm mt-1">
-                Access the Uttarakhand Government Schools monitoring portal.
+                Access the Government Schools monitoring portal.
               </p>
             </div>
 
@@ -174,7 +170,7 @@ export function Login() {
           </div>
 
           <p className="text-center text-xs text-slate-400 mt-6">
-            © {new Date().getFullYear()} Valuable E-Solutions Pvt. Ltd. · Edubeam LMS
+            © {new Date().getFullYear()} Valuable Edutainment Pvt. Ltd. · Edubeam LMS
           </p>
         </div>
       </div>

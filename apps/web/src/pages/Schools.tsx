@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api, type DistrictMeta, type SchoolFormData, type SchoolRow } from '../api';
 import { exportCsv } from '../export';
 import { useAuth } from '../auth';
+import { stateFor } from '../config/states';
 
 // ── Login credential popover ──────────────────────────────────────────────────
 
@@ -329,6 +330,7 @@ function SchoolModal({ school, onClose, onSaved }: SchoolModalProps) {
 export function Schools() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'ADMIN';
+  const state = user ? stateFor(user) : null;
 
   const [rows, setRows] = useState<SchoolRow[]>([]);
   const [q, setQ] = useState('');
@@ -382,7 +384,7 @@ export function Schools() {
           </div>
           <h1 className="font-heading font-bold text-navy-700 text-2xl">Schools</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Virtual Classroom &amp; ICT Lab schools · Uttarakhand 2025–26
+            Virtual Classroom &amp; ICT Lab schools · {state ? `${state.name} 2025–26` : 'All States 2025–26'}
           </p>
         </div>
         <div className="flex gap-2">

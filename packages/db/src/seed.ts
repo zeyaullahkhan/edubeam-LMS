@@ -202,6 +202,18 @@ function importResults(sheet: string, examType: string, subjects: Record<number,
 // ── persistence ───────────────────────────────────────────────────────────────
 
 async function wipe() {
+  // Save manually-curated school fields (principal, phone, address) keyed by
+  // UDISE code so they survive the wipe and are restored after re-seeding.
+  // These come from NEW INSTALLATION.xlsx and are NOT in the auto-import files.
+  const curated = await prisma.school.findMany({
+    where: { OR: [{ principalName: { not: null } }, { phone: { not: null } }, { address: { not: null } }] },
+    select: { udiseCode: true, principalName: true, phone: true, address: true },
+  });
+  const ictCurated = await prisma.ictDeployment.findMany({
+    where: { OR: [{ lanIp: { not: null } }, { iduSerialNo: { not: null } }, { engineerName: { not: null } }] },
+    include: { school: { select: { udiseCode: true } } },
+  });
+
   await prisma.lecture.deleteMany();
   await prisma.contentChannel.deleteMany();
   await prisma.student.deleteMany();
@@ -215,6 +227,9 @@ async function wipe() {
   await prisma.block.deleteMany();
   await prisma.district.deleteMany();
   await prisma.tenant.deleteMany();
+
+  // Return saved data so persist() can restore it after re-creating schools.
+  return { curated, ictCurated };
 }
 
 async function persist() {
@@ -296,8 +311,11 @@ async function persist() {
 async function seedDemoUsers(tenantId: string) {
   const almora = await prisma.district.findFirst({ where: { name: { contains: 'ALMORA' } } });
   const aSchool = await prisma.school.findUnique({ where: { udiseCode: '5090104505' } }); // GIC BARECHHINA
-  const users = [
-    { email: 'admin@edubeam.com', name: 'Platform Admin', role: 'ADMIN', tenantId },
+
+  // Platform Admin has tenantId=null so it can span all states.
+  const users: { email: string; name: string; role: string; tenantId: string | null; districtId?: string | null; schoolId?: string | null }[] = [
+    { email: 'admin@edubeam.com', name: 'Platform Admin', role: 'ADMIN', tenantId: null },
+    { email: 'state.uk@edubeam.com', name: 'State Official (UK)', role: 'STATE_OFFICIAL', tenantId },
     { email: 'state@edubeam.com', name: 'State Official (UK)', role: 'STATE_OFFICIAL', tenantId },
     {
       email: 'almora@edubeam.com',
@@ -320,8 +338,107 @@ async function seedDemoUsers(tenantId: string) {
     const passwordHash = await bcrypt.hash(pw, 10);
     await prisma.user.upsert({
       where: { email: u.email },
-      create: { id: `u_${pw}`, ...u, passwordHash },
-      update: { passwordHash, name: u.name, role: u.role, districtId: (u as any).districtId ?? null, schoolId: (u as any).schoolId ?? null },
+      create: { id: `u_${pw.replace(/\./g, '_')}`, ...u, passwordHash },
+      update: { passwordHash, name: u.name, role: u.role, tenantId: u.tenantId, districtId: u.districtId ?? null, schoolId: u.schoolId ?? null },
+    });
+  }
+  return users.length;
+}
+
+/**
+ * Seeds a demo state tenant with synthetic districts/blocks/schools + logins.
+ * Data is entirely deterministic (no random seed needed) so re-seeds are stable.
+ */
+async function seedDemoState(
+  id: string,
+  name: string,
+  code: string,
+  districts: { name: string; blocks: { name: string; schools: { name: string; udise: string; siteCode: string }[] }[] }[],
+) {
+  const tenant = await prisma.tenant.create({ data: { id, name, code } });
+
+  const districtIds: string[] = [];
+  for (const d of districts) {
+    const dId = `d_${id}_${slug(d.name)}`;
+    await prisma.district.create({ data: { id: dId, tenantId: tenant.id, name: d.name } });
+    districtIds.push(dId);
+
+    for (const b of d.blocks) {
+      const bId = `b_${id}_${slug(d.name)}_${slug(b.name)}`;
+      await prisma.block.create({ data: { id: bId, districtId: dId, name: b.name } });
+
+      for (const s of b.schools) {
+        const school = await prisma.school.create({
+          data: {
+            id: `s_${s.udise}`,
+            blockId: bId,
+            name: s.name,
+            udiseCode: s.udise,
+            siteCode: s.siteCode,
+            hasVirtualClassroom: true,
+            hasIctLab: false,
+          },
+        });
+        // Add some demo enrollment rows (grades 6-10, mixed gender)
+        const enrollRows = [6, 7, 8, 9, 10].map((grade) => ({
+          schoolId: school.id,
+          academicYear: ACADEMIC_YEAR,
+          grade,
+          boys: 18 + grade,
+          girls: 15 + grade,
+          total: 33 + grade * 2,
+        }));
+        await prisma.enrollment.createMany({ data: enrollRows });
+
+        // Two sample students and staff per school
+        const r = mulberry32(hashStr(s.udise));
+
+        // Synthetic board results so analytics don't show empty charts (deterministic via r())
+        const boardRows = ['Hindi', 'English', 'Mathematics', 'Science'].map((subject) => ({
+          schoolId: school.id, academicYear: ACADEMIC_YEAR, examType: '10TH', subject, passPct: 0.7 + r() * 0.25,
+        }));
+        await prisma.boardResult.createMany({ data: boardRows });
+        await prisma.student.createMany({
+          data: [
+            { ...makeStudent(s.udise + 'b', 0, school.id, 9, 'M'), admissionNo: `ADM${s.udise.slice(-4)}01`, rollNo: '1', academicYear: ACADEMIC_YEAR },
+            { ...makeStudent(s.udise + 'g', 1, school.id, 9, 'F'), admissionNo: `ADM${s.udise.slice(-4)}02`, rollNo: '2', academicYear: ACADEMIC_YEAR },
+          ],
+        });
+        await prisma.staff.createMany({
+          data: [
+            makeStaff(s.udise, 0, school.id, 'PRINCIPAL'),
+            makeStaff(s.udise, 1, school.id, 'TEACHER'),
+          ],
+        });
+      }
+    }
+  }
+
+  return { tenant, districtCount: districts.length };
+}
+
+async function seedDemoStateUsers() {
+  // Find the first district+school in each demo state for scoping demo logins
+  const mhDistrict = await prisma.district.findFirst({ where: { tenantId: 't_mh' } });
+  const mhSchool = await prisma.school.findFirst({ where: { block: { district: { tenantId: 't_mh' } } } });
+  const odDistrict = await prisma.district.findFirst({ where: { tenantId: 't_od' } });
+  const odSchool = await prisma.school.findFirst({ where: { block: { district: { tenantId: 't_od' } } } });
+
+  const users: { email: string; name: string; role: string; tenantId: string; districtId?: string | null; schoolId?: string | null }[] = [
+    { email: 'state.mh@edubeam.com', name: 'State Official (MH)', role: 'STATE_OFFICIAL', tenantId: 't_mh' },
+    { email: 'state.od@edubeam.com', name: 'State Official (OD)', role: 'STATE_OFFICIAL', tenantId: 't_od' },
+    { email: 'district.mh@edubeam.com', name: 'Pune District Official', role: 'DISTRICT_OFFICIAL', tenantId: 't_mh', districtId: mhDistrict?.id },
+    { email: 'district.od@edubeam.com', name: 'Bhubaneswar District Official', role: 'DISTRICT_OFFICIAL', tenantId: 't_od', districtId: odDistrict?.id },
+    { email: 'principal.mh@edubeam.com', name: 'Principal (MH Demo School)', role: 'PRINCIPAL', tenantId: 't_mh', districtId: mhDistrict?.id, schoolId: mhSchool?.id },
+    { email: 'principal.od@edubeam.com', name: 'Principal (OD Demo School)', role: 'PRINCIPAL', tenantId: 't_od', districtId: odDistrict?.id, schoolId: odSchool?.id },
+  ];
+  for (const u of users) {
+    const pw = u.email.split('@')[0];
+    const passwordHash = await bcrypt.hash(pw, 10);
+    await prisma.user.upsert({
+      where: { email: u.email },
+      create: { id: `u_${pw.replace(/\./g, '_')}`, ...u, passwordHash },
+      update: { passwordHash, name: u.name, tenantId: u.tenantId, districtId: u.districtId ?? null, schoolId: u.schoolId ?? null },
     });
   }
   return users.length;
@@ -674,7 +791,7 @@ async function main() {
   }
 
   console.log('Edubeam LMS — seeding from real Uttarakhand 2025-26 data\n');
-  await wipe();
+  const { curated, ictCurated } = await wipe();
 
   const virtual = importVirtual();
   const ict = importIct();
@@ -705,8 +822,85 @@ async function main() {
   const userCount = await seedDemoUsers(tenant.id);
   const yearly = await importYearlyResults();
   const people = await seedPeople();
+
+  // Seed Maharashtra and Odisha demo states
+  await seedDemoState('t_mh', 'Maharashtra', 'MH', [
+    { name: 'Pune', blocks: [
+      { name: 'Haveli', schools: [
+        { name: 'GR High School Haveli', udise: 'mh_001_1', siteCode: 'MHHAV01' },
+        { name: 'GR High School Khed', udise: 'mh_001_2', siteCode: 'MHKHE01' },
+      ]},
+      { name: 'Bhor', schools: [
+        { name: 'GR High School Bhor', udise: 'mh_001_3', siteCode: 'MHBHR01' },
+      ]},
+    ]},
+    { name: 'Nashik', blocks: [
+      { name: 'Niphad', schools: [
+        { name: 'GR High School Niphad', udise: 'mh_002_1', siteCode: 'MHNIP01' },
+        { name: 'GR High School Sinnar', udise: 'mh_002_2', siteCode: 'MHSIN01' },
+      ]},
+    ]},
+    { name: 'Aurangabad', blocks: [
+      { name: 'Paithan', schools: [
+        { name: 'GR High School Paithan', udise: 'mh_003_1', siteCode: 'MHPAI01' },
+      ]},
+    ]},
+  ]);
+  await seedDemoState('t_od', 'Odisha', 'OD', [
+    { name: 'Khurda', blocks: [
+      { name: 'Bhubaneswar', schools: [
+        { name: 'GR High School Bhubaneswar', udise: 'od_001_1', siteCode: 'ODBHU01' },
+        { name: 'GR High School Jatni', udise: 'od_001_2', siteCode: 'ODJAT01' },
+      ]},
+      { name: 'Tangi', schools: [
+        { name: 'GR High School Tangi', udise: 'od_001_3', siteCode: 'ODTAN01' },
+      ]},
+    ]},
+    { name: 'Cuttack', blocks: [
+      { name: 'Cuttack Sadar', schools: [
+        { name: 'GR High School Cuttack', udise: 'od_002_1', siteCode: 'ODCUT01' },
+        { name: 'GR High School Salepur', udise: 'od_002_2', siteCode: 'ODSAL01' },
+      ]},
+    ]},
+    { name: 'Puri', blocks: [
+      { name: 'Puri Sadar', schools: [
+        { name: 'GR High School Puri', udise: 'od_003_1', siteCode: 'ODPURI1' },
+      ]},
+    ]},
+  ]);
+  const demoStateUserCount = await seedDemoStateUsers();
   const lectureCount = await seedLectures();
   const urlsRestored = await restoreYoutubeUrls();
+
+  // Restore manually-curated school fields (principal, phone, address) saved before wipe
+  for (const s of curated) {
+    await prisma.school.updateMany({
+      where: { udiseCode: s.udiseCode },
+      data: { principalName: s.principalName, phone: s.phone, address: s.address },
+    });
+  }
+  // Restore ICT deployment fields saved before wipe
+  for (const ict of ictCurated) {
+    const school = await prisma.school.findFirst({ where: { udiseCode: ict.school.udiseCode } });
+    if (school) {
+      await prisma.ictDeployment.updateMany({
+        where: { schoolId: school.id },
+        data: {
+          lanIp: ict.lanIp,
+          subnetMask: ict.subnetMask,
+          iduSerialNo: ict.iduSerialNo,
+          newIduSerialNo: ict.newIduSerialNo,
+          iduModel: ict.iduModel,
+          materialStatus: ict.materialStatus,
+          installRemark: ict.installRemark,
+          engineerName: ict.engineerName,
+          scheduledDate: ict.scheduledDate,
+          certUpdate: ict.certUpdate,
+        },
+      });
+    }
+  }
+  console.log(`Restored curated data: ${curated.length} schools, ${ictCurated.length} ICT records`);
 
   const [schoolCount, vc, il, enr, br, yr] = await Promise.all([
     prisma.school.count(),
@@ -726,6 +920,7 @@ async function main() {
       `${yearly.skippedUnknownSchools} rows for schools not in our 500 set skipped)`,
   );
   console.log(`  Students: ${people.students}   Staff: ${people.staff} (sample registry)`);
+  console.log(`  Demo states (MH + OD): seeded, ${demoStateUserCount} state/district/principal logins added`);
   console.log(`  Lectures: ${lectureCount} (virtual classroom recordings 2019–2026); YouTube URLs restored: ${urlsRestored}`);
   console.log(`  Content channels: ${STUDIO_CHANNELS.length} (Studio1–4 YouTube mappings)`);
 

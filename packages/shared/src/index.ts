@@ -244,21 +244,23 @@ export interface TeacherStats {
 }
 
 /** Roles that can see the whole tenant vs. a single district/block vs. a single school. */
-export function scopeOf(user: Pick<AuthUser, 'role' | 'districtId' | 'blockId' | 'schoolId'>): {
-  level: 'tenant' | 'district' | 'block' | 'school';
+export function scopeOf(user: Pick<AuthUser, 'role' | 'tenantId' | 'districtId' | 'blockId' | 'schoolId'>): {
+  level: 'platform' | 'tenant' | 'district' | 'block' | 'school';
+  tenantId?: string | null;
   districtId?: string | null;
   blockId?: string | null;
   schoolId?: string | null;
 } {
   switch (user.role) {
     case 'ADMIN':
+      return { level: 'platform' };
     case 'STATE_OFFICIAL':
-      return { level: 'tenant' };
+      return { level: 'tenant', tenantId: user.tenantId };
     case 'DISTRICT_OFFICIAL':
-      return { level: 'district', districtId: user.districtId };
+      return { level: 'district', tenantId: user.tenantId, districtId: user.districtId };
     case 'BLOCK_OFFICIAL':
-      return { level: 'block', blockId: user.blockId, districtId: user.districtId };
+      return { level: 'block', tenantId: user.tenantId, blockId: user.blockId, districtId: user.districtId };
     default:
-      return { level: 'school', schoolId: user.schoolId, districtId: user.districtId };
+      return { level: 'school', tenantId: user.tenantId, schoolId: user.schoolId, districtId: user.districtId };
   }
 }

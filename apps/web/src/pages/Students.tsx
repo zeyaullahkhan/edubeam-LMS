@@ -11,6 +11,7 @@ import { parseCsv, readFileText } from '../csv';
 import { ScopeBar, type Scope } from '../components/ScopeBar';
 import { Attendance } from './Attendance';
 import { ReportCard } from './ReportCard';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 
 // ── Login credential popover ──────────────────────────────────────────────────
 
@@ -121,6 +122,8 @@ export function Students() {
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(true);
+  const [confirmStudent, setConfirmStudent] = useState<Student | null>(null);
+  const [confirmPromote, setConfirmPromote] = useState(false);
 
   const filter = useMemo(
     () => ({
@@ -195,7 +198,6 @@ export function Students() {
   };
 
   const promote = async () => {
-    if (!window.confirm('Promote all students one grade up? Class 12 students will graduate.')) return;
     try {
       const res = await api.students.promote(scope.schoolId);
       setMsg(`Promoted ${res.promoted} students, ${res.graduated} graduated.`);
@@ -206,7 +208,6 @@ export function Students() {
   };
 
   const remove = async (s: Student) => {
-    if (!window.confirm(`Remove ${s.name}?`)) return;
     try { await api.students.remove(s.id); load(); }
     catch (e) { setErr((e as Error).message); }
   };
@@ -263,7 +264,7 @@ export function Students() {
                 Bulk Upload
                 <input type="file" accept=".csv" className="hidden" onChange={(e) => e.target.files?.[0] && onBulk(e.target.files[0])} />
               </label>
-              <button onClick={promote} className="btn-outline"><i className="fas fa-level-up-alt" />Promote</button>
+              <button onClick={() => setConfirmPromote(true)} className="btn-outline"><i className="fas fa-level-up-alt" />Promote</button>
               <button onClick={() => setShowForm((s) => !s)} className={showForm ? 'btn-outline' : 'btn-navy'}>
                 {showForm ? <><i className="fas fa-times" />Cancel</> : <><i className="fas fa-user-plus" />Add Student</>}
               </button>
@@ -421,7 +422,7 @@ export function Students() {
                     <button onClick={() => openEdit(s)} className="text-xs text-sky-600 hover:text-sky-800 font-medium px-2 py-1 rounded hover:bg-sky-50 mr-1">
                       <i className="fas fa-edit mr-1" />Edit
                     </button>
-                    <button onClick={() => remove(s)} className="text-xs text-red-500 hover:text-red-700 font-medium px-2 py-1 rounded hover:bg-red-50">Remove</button>
+                    <button onClick={() => setConfirmStudent(s)} className="text-xs text-red-500 hover:text-red-700 font-medium px-2 py-1 rounded hover:bg-red-50">Remove</button>
                   </td>
                 )}
               </tr>
@@ -522,6 +523,23 @@ export function Students() {
         </div>
       )}
       </>}
+
+      <ConfirmDialog
+        open={!!confirmStudent}
+        title="Remove student"
+        message={confirmStudent ? `Remove ${confirmStudent.name}? This cannot be undone.` : ''}
+        confirmLabel="Remove"
+        onCancel={() => setConfirmStudent(null)}
+        onConfirm={() => { remove(confirmStudent!); setConfirmStudent(null); }}
+      />
+      <ConfirmDialog
+        open={confirmPromote}
+        title="Promote all students"
+        message="Move all students one grade up? Class 12 students will be marked as graduated."
+        confirmLabel="Promote"
+        onCancel={() => setConfirmPromote(false)}
+        onConfirm={() => { promote(); setConfirmPromote(false); }}
+      />
     </div>
   );
 }

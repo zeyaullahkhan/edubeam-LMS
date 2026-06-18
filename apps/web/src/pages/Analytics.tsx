@@ -14,11 +14,13 @@ import {
 import type { DistrictSummary, KpiResponse, Metric, MetricGroup } from '@edubeam/shared';
 import { api, type BlockSummary, type SchoolRow } from '../api';
 import { useAuth } from '../auth';
+import { stateFor } from '../config/states';
 import { formatMetric, trendLabel } from '../format';
 import { exportCsv, printPdf } from '../export';
 
 export function Analytics() {
   const { user } = useAuth();
+  const state = user ? stateFor(user) : null;
   const [districts, setDistricts] = useState<DistrictSummary[]>([]);
   const [blocks, setBlocks] = useState<BlockSummary[]>([]);
   const [schools, setSchools] = useState<SchoolRow[]>([]);
@@ -146,7 +148,7 @@ export function Analytics() {
             <span className="badge-real">Real</span>
           </div>
           <p className="text-xs text-slate-400 mb-4">
-            Enrollment from Virtual Classroom data · all 13 districts
+            Enrollment from Virtual Classroom data{state ? ` · all districts — ${state.name}` : ' · all states'}
           </p>
           <ResponsiveContainer width="100%" height={280}>
             <BarChart
