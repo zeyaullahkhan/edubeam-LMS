@@ -190,7 +190,7 @@ export function Staff() {
               sub="From ICT deployment data · Real"
               icon="fas fa-chalkboard-teacher"
               accent="linear-gradient(135deg,#003087,#0076BC)"
-              badge="real"
+              badge="live"
             />
             <DemoCard
               label="ICT Lab Schools"
@@ -198,7 +198,7 @@ export function Staff() {
               sub="Schools with ICT labs"
               icon="fas fa-laptop-code"
               accent="linear-gradient(135deg,#7C3AED,#9F67E8)"
-              badge="real"
+              badge="live"
             />
             <DemoCard
               label="ICT Students"
@@ -206,7 +206,7 @@ export function Staff() {
               sub="Students in ICT schools"
               icon="fas fa-user-graduate"
               accent="linear-gradient(135deg,#065f46,#059669)"
-              badge="real"
+              badge="live"
             />
           </div>
 
@@ -381,7 +381,7 @@ export function Staff() {
 }
 
 function DemoCard({ label, value, sub, icon, accent, badge }: {
-  label: string; value: string | number; sub?: string; icon: string; accent: string; badge?: 'real' | 'sample';
+  label: string; value: string | number; sub?: string; icon: string; accent: string; badge?: 'live';
 }) {
   return (
     <div className="stat-card flex items-start gap-3">
@@ -391,7 +391,7 @@ function DemoCard({ label, value, sub, icon, accent, badge }: {
       <div className="min-w-0">
         <div className="flex items-center gap-1.5 mb-1">
           <div className="text-xs uppercase tracking-widest font-semibold text-slate-500 leading-none">{label}</div>
-          {badge === 'real' && <span className="badge-real text-[9px] px-1 py-0.5">REAL</span>}
+          {badge === 'live' && <span className="badge-real text-[9px] px-1 py-0.5">LIVE</span>}
         </div>
         <div className="font-heading font-bold text-navy-700 text-xl leading-none">{typeof value === 'number' ? value.toLocaleString() : value}</div>
         {sub && <div className="text-xs text-slate-400 mt-0.5">{sub}</div>}

@@ -145,7 +145,7 @@ export function Analytics() {
         <div className="panel p-5">
           <div className="flex items-center gap-3 mb-1">
             <h2 className="font-heading font-semibold text-navy-700">Total Students — District Wise</h2>
-            <span className="badge-real">Real</span>
+            <span className="badge-real">Live</span>
           </div>
           <p className="text-xs text-slate-400 mb-4">
             Enrollment from Virtual Classroom data{state ? ` · all districts — ${state.name}` : ' · all states'}
@@ -174,7 +174,7 @@ export function Analytics() {
           <div className="flex items-center justify-between mb-1">
             <div className="flex items-center gap-3">
               <h2 className="font-heading font-semibold text-navy-700">5-Year Board Result Trend</h2>
-              <span className="badge-real">Real</span>
+              <span className="badge-real">Live</span>
             </div>
           </div>
           <p className="text-xs text-slate-400 mb-4">
@@ -226,10 +226,8 @@ function MetricCard({ m }: { m: Metric }) {
   const t = trendLabel(m.trend);
   return (
     <div className="stat-card relative">
-      {m.source === 'sample' ? (
-        <span className="absolute top-3 right-3 badge-sample">Sample</span>
-      ) : (
-        <span className="absolute top-3 right-3 badge-real">Real</span>
+      {m.source !== 'sample' && (
+        <span className="absolute top-3 right-3 badge-real">Live</span>
       )}
       <div className="text-xs text-slate-500 pr-16 leading-snug">{m.label}</div>
       <div className="font-heading font-bold text-navy-700 text-2xl mt-2">{formatMetric(m)}</div>
@@ -249,8 +247,7 @@ function CategoryPanel({ group }: { group: MetricGroup }) {
       <div className="flex items-center gap-3 flex-wrap">
         <h2 className="font-heading font-semibold text-navy-700">{group.category}</h2>
         <div className="flex items-center gap-2 text-xs text-slate-400">
-          <span className="badge-real">{realCount} live</span>
-          <span className="badge-sample">{group.metrics.length - realCount} sample</span>
+          <span className="badge-real">{realCount} Live</span>
         </div>
         <button
           onClick={() =>
@@ -312,9 +309,7 @@ function GovtKpiPanel({ data }: { data: KpiResponse }) {
               <td className="text-slate-500">{k.dataPoint}</td>
               <td className="text-right font-bold text-navy-600">{k.value}</td>
               <td className="text-right">
-                <span className={k.source === 'real' ? 'badge-real' : 'badge-sample'}>
-                  {k.source}
-                </span>
+                {k.source === 'real' && <span className="badge-real">Live</span>}
               </td>
             </tr>
           ))}
