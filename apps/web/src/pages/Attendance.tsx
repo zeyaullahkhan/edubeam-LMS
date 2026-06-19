@@ -561,9 +561,19 @@ const TABS = [
   { id: 'staff-monthly', label: 'Staff Monthly Report',    icon: 'fas fa-users' },
 ];
 
-export function Attendance() {
+// mode controls which tabs show: 'student' (People → Students), 'staff'
+// (People → Staff), or 'all' (standalone page).
+const STUDENT_TAB_IDS = ['mark-students', 'monthly', 'date-report'];
+const STAFF_TAB_IDS = ['mark-staff', 'staff-monthly'];
+
+export function Attendance({ mode = 'all' }: { mode?: 'student' | 'staff' | 'all' }) {
   const { user } = useAuth();
-  const [tab, setTab] = useState('mark-students');
+  const visibleTabs = TABS.filter(t =>
+    mode === 'student' ? STUDENT_TAB_IDS.includes(t.id)
+      : mode === 'staff' ? STAFF_TAB_IDS.includes(t.id)
+      : true,
+  );
+  const [tab, setTab] = useState(visibleTabs[0]?.id ?? 'mark-students');
   const [scope, setScope] = useState<Scope>({});
 
   const schoolId = user?.schoolId ?? scope.schoolId ?? '';
@@ -593,7 +603,7 @@ export function Attendance() {
           {/* Tabs */}
           <div className="border-b border-slate-100 px-4 overflow-x-auto">
             <div className="flex gap-1 min-w-max">
-              {TABS.map(t => (
+              {visibleTabs.map(t => (
                 <button key={t.id} onClick={() => setTab(t.id)}
                   className={`flex items-center gap-2 px-4 py-3.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                     tab === t.id

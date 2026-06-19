@@ -19,8 +19,6 @@ const ADMIN_NAV = [
   { to: '/analytics',    label: 'Analytics',  icon: 'fas fa-chart-line' },
   { to: '/schools',      label: 'Schools',    icon: 'fas fa-school' },
   { to: '/people',       label: 'People',     icon: 'fas fa-users' },
-  { to: '/attendance',   label: 'Attendance', icon: 'fas fa-calendar-check' },
-  { to: '/report-card',  label: 'Results',    icon: 'fas fa-graduation-cap' },
   { to: '/quiz',         label: 'Quiz',       icon: 'fas fa-question-circle' },
   { to: '/content',      label: 'Content',    icon: 'fas fa-play-circle' },
   { to: '/planner',      label: 'Planner',    icon: 'fas fa-calendar-alt' },

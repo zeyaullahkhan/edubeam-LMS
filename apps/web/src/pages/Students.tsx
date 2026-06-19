@@ -124,6 +124,7 @@ export function Students() {
   const [loading, setLoading] = useState(true);
   const [confirmStudent, setConfirmStudent] = useState<Student | null>(null);
   const [confirmPromote, setConfirmPromote] = useState(false);
+  const [newCreds, setNewCreds] = useState<{ name: string; studentLogin: { email: string; password: string }; parentLogin: { email: string; password: string } } | null>(null);
 
   const filter = useMemo(
     () => ({
@@ -161,8 +162,8 @@ export function Students() {
     e.preventDefault();
     setErr(''); setMsg('');
     try {
-      await api.students.create({ ...form, schoolId: scope.schoolId });
-      setMsg(`Student ${form.name} added.`);
+      const res = await api.students.create({ ...form, schoolId: scope.schoolId });
+      setNewCreds({ name: form.name ?? '', studentLogin: res.studentLogin, parentLogin: res.parentLogin });
       setForm(emptyStudent);
       setShowForm(false);
       load();
@@ -233,6 +234,46 @@ export function Students() {
 
   return (
     <div className="space-y-5">
+      {/* Auto-generated credentials modal shown immediately after adding a student */}
+      {newCreds && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
+                <i className="fas fa-check text-emerald-600" />
+              </div>
+              <div>
+                <p className="font-bold text-navy-700">Student Added</p>
+                <p className="text-xs text-slate-500">{newCreds.name} — credentials auto-generated</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl border border-sky-100 bg-sky-50 p-3 space-y-1">
+                <p className="text-xs font-semibold text-sky-700 uppercase tracking-wide"><i className="fas fa-user-graduate mr-1" />Student Login</p>
+                <p className="font-mono text-xs break-all text-slate-700">{newCreds.studentLogin.email}</p>
+                <p className="font-mono text-xs text-slate-700">{newCreds.studentLogin.password}</p>
+              </div>
+              <div className="rounded-xl border border-purple-100 bg-purple-50 p-3 space-y-1">
+                <p className="text-xs font-semibold text-purple-700 uppercase tracking-wide"><i className="fas fa-user-friends mr-1" />Parent Login</p>
+                <p className="font-mono text-xs break-all text-slate-700">{newCreds.parentLogin.email}</p>
+                <p className="font-mono text-xs text-slate-700">{newCreds.parentLogin.password}</p>
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => { navigator.clipboard.writeText(`Student: ${newCreds.studentLogin.email} / ${newCreds.studentLogin.password}\nParent: ${newCreds.parentLogin.email} / ${newCreds.parentLogin.password}`); }}
+                className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
+              >
+                <i className="fas fa-copy mr-1" />Copy All
+              </button>
+              <button onClick={() => setNewCreds(null)} className="text-xs px-4 py-1.5 rounded-lg bg-navy-700 text-white hover:bg-navy-800">
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Sub-page tab bar */}
       <div className="flex gap-1 border-b border-slate-200">
         {SUB_TABS.map(t => (
@@ -245,7 +286,7 @@ export function Students() {
         ))}
       </div>
 
-      {subPage === 'attendance' && <Attendance />}
+      {subPage === 'attendance' && <Attendance mode="student" />}
       {subPage === 'report-card' && <ReportCard />}
 
       {subPage === 'list' && <>

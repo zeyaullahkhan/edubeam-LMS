@@ -140,7 +140,7 @@ export function Staff() {
         ))}
       </div>
 
-      {subPage === 'attendance' && <Attendance />}
+      {subPage === 'attendance' && <Attendance mode="staff" />}
 
       {subPage === 'list' && <>
       <div className="flex items-start justify-between flex-wrap gap-3">
