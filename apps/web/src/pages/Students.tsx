@@ -6,6 +6,7 @@ import {
 } from '@edubeam/shared';
 import { api } from '../api';
 import { useAuth } from '../auth';
+import { FileUpload } from '../components/FileUpload';
 import { exportCsv } from '../export';
 import { parseCsv, readFileText } from '../csv';
 import { ScopeBar, type Scope } from '../components/ScopeBar';
@@ -510,58 +511,15 @@ export function Students() {
         )}
       </div>
 
-      {/* ── Edit student modal ─────────────────────────────── */}
+      {/* ── Edit student modal (7-tab) ─────────────────────── */}
       {editStudent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-              <h2 className="font-heading font-bold text-navy-700 text-lg">Edit Student</h2>
-              <button onClick={() => setEditStudent(null)} className="text-slate-400 hover:text-slate-600">
-                <i className="fas fa-times text-lg" />
-              </button>
-            </div>
-            <form onSubmit={submitEdit} className="p-6 space-y-4">
-              <div className="grid md:grid-cols-3 gap-4">
-                <Field label="Full name"><input required className={inputCls} value={editForm.name ?? ''} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} /></Field>
-                <Field label="Gender">
-                  <select className={inputCls} value={editForm.gender} onChange={e => setEditForm(f => ({ ...f, gender: e.target.value as Student['gender'] }))}>
-                    {GENDERS.map(g => <option key={g} value={g}>{GENDER_LABELS[g]}</option>)}
-                  </select>
-                </Field>
-                <Field label="Grade / Class">
-                  <select className={inputCls} value={editForm.grade} onChange={e => setEditForm(f => ({ ...f, grade: Number(e.target.value) }))}>
-                    {GRADES_6_12.map(g => <option key={g} value={g}>Class {g}</option>)}
-                  </select>
-                </Field>
-                <Field label="Section"><input className={inputCls} value={editForm.section ?? ''} onChange={e => setEditForm(f => ({ ...f, section: e.target.value }))} /></Field>
-                <Field label="Roll No"><input className={inputCls} value={editForm.rollNo ?? ''} onChange={e => setEditForm(f => ({ ...f, rollNo: e.target.value }))} /></Field>
-                <Field label="Admission No"><input className={inputCls} value={editForm.admissionNo ?? ''} onChange={e => setEditForm(f => ({ ...f, admissionNo: e.target.value }))} /></Field>
-                <Field label="Guardian name"><input className={inputCls} value={editForm.guardianName ?? ''} onChange={e => setEditForm(f => ({ ...f, guardianName: e.target.value }))} /></Field>
-                <Field label="Guardian phone"><input className={inputCls} value={editForm.guardianPhone ?? ''} onChange={e => setEditForm(f => ({ ...f, guardianPhone: e.target.value }))} /></Field>
-                <Field label="Relation">
-                  <select className={inputCls} value={editForm.guardianRelation ?? 'Father'} onChange={e => setEditForm(f => ({ ...f, guardianRelation: e.target.value }))}>
-                    {['Father', 'Mother', 'Guardian'].map(r => <option key={r}>{r}</option>)}
-                  </select>
-                </Field>
-                <Field label="Category">
-                  <select className={inputCls} value={editForm.category} onChange={e => setEditForm(f => ({ ...f, category: e.target.value as Student['category'] }))}>
-                    {CATEGORIES.map(c => <option key={c}>{c}</option>)}
-                  </select>
-                </Field>
-                <Field label="Status">
-                  <select className={inputCls} value={editForm.isDropout ? 'dropout' : 'active'} onChange={e => setEditForm(f => ({ ...f, isDropout: e.target.value === 'dropout' }))}>
-                    <option value="active">Active</option>
-                    <option value="dropout">Dropout</option>
-                  </select>
-                </Field>
-              </div>
-              <div className="flex gap-3 justify-end pt-2 border-t border-slate-100">
-                <button type="button" onClick={() => setEditStudent(null)} className="btn-outline px-5 py-2.5">Cancel</button>
-                <button type="submit" className="btn-navy px-6 py-2.5"><i className="fas fa-save mr-2" />Save Changes</button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <StudentModal
+          student={editStudent}
+          editForm={editForm}
+          setEditForm={setEditForm}
+          onSubmit={submitEdit}
+          onClose={() => setEditStudent(null)}
+        />
       )}
       </>}
 
@@ -610,6 +568,497 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div>
       <label className="block text-xs font-semibold text-slate-600 mb-1.5">{label}</label>
       {children}
+    </div>
+  );
+}
+
+// ── Document field: text note OR uploaded file ────────────────────────────────
+
+function DocField({ label, value, onChange, folder, accept }: {
+  label: string;
+  value: string | null | undefined;
+  onChange: (v: string | null) => void;
+  folder: string;
+  accept: string;
+}) {
+  const [uploadMode, setUploadMode] = useState(value?.startsWith('http') ?? false);
+
+  if (uploadMode || value?.startsWith('http')) {
+    return (
+      <Field label={label}>
+        <FileUpload
+          value={value?.startsWith('http') ? value : null}
+          onChange={url => { onChange(url); if (!url) setUploadMode(false); }}
+          folder={folder}
+          accept={accept}
+          imagePreview={accept.startsWith('image') && !accept.includes('pdf')}
+        />
+      </Field>
+    );
+  }
+
+  return (
+    <Field label={label}>
+      <div className="flex gap-1.5">
+        <input
+          className={inputCls + ' flex-1'}
+          placeholder="Reference note (file no., date…)"
+          value={value ?? ''}
+          onChange={e => onChange(e.target.value || null)}
+        />
+        <button
+          type="button"
+          onClick={() => setUploadMode(true)}
+          title="Upload file"
+          className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-sky-50 hover:border-sky-200 hover:text-sky-600 transition-colors flex-shrink-0"
+        >
+          <i className="fas fa-upload text-xs" />
+        </button>
+      </div>
+    </Field>
+  );
+}
+
+// ── Student Profile Modal (7 tabs) ────────────────────────────────────────────
+
+type StudentTabId = 'basic' | 'family' | 'address' | 'academic' | 'health' | 'hostel' | 'documents' | 'status';
+
+const STUDENT_TABS: { id: StudentTabId; label: string; icon: string }[] = [
+  { id: 'basic',     label: 'Basic Info',  icon: 'fas fa-id-card' },
+  { id: 'family',    label: 'Family',      icon: 'fas fa-users' },
+  { id: 'address',   label: 'Address',     icon: 'fas fa-map-marker-alt' },
+  { id: 'academic',  label: 'Academic',    icon: 'fas fa-graduation-cap' },
+  { id: 'health',    label: 'Health',      icon: 'fas fa-heartbeat' },
+  { id: 'hostel',    label: 'Hostel',      icon: 'fas fa-building' },
+  { id: 'documents', label: 'Documents',   icon: 'fas fa-file-alt' },
+  { id: 'status',    label: 'Status',      icon: 'fas fa-chart-pie' },
+];
+
+const STUDENT_COMPLETION_FIELDS: (keyof Student)[] = [
+  'firstName', 'lastName', 'gender', 'dateOfBirth', 'bloodGroup', 'aadhaarNo',
+  'category', 'nationality', 'motherTongue', 'admissionDate', 'house',
+  'fatherName', 'fatherPhone', 'fatherOccupation',
+  'motherName', 'motherPhone', 'motherOccupation',
+  'guardianName', 'guardianPhone',
+  'stateAddr', 'village', 'permanentAddress', 'pinCode',
+  'previousSchool', 'medium', 'subjectsOpted',
+  'height', 'weight', 'vaccinationStatus',
+  'hostelRequired', 'docAadhaar', 'docBirthCert',
+];
+
+function isFilledS(v: unknown): boolean {
+  return v !== null && v !== undefined && v !== '';
+}
+
+function TriToggle({ value, onChange }: { value: boolean | null | undefined; onChange: (v: boolean | null) => void }) {
+  const opts: { v: boolean | null; label: string; active: string }[] = [
+    { v: true,  label: 'Yes', active: 'bg-emerald-500 text-white' },
+    { v: null,  label: '—',   active: 'bg-slate-300 text-slate-600' },
+    { v: false, label: 'No',  active: 'bg-red-400 text-white' },
+  ];
+  const cur = value === undefined ? null : (value ?? null);
+  return (
+    <div className="flex rounded-lg overflow-hidden border border-slate-200">
+      {opts.map(o => (
+        <button key={String(o.v)} type="button"
+          onClick={() => onChange(o.v)}
+          className={`flex-1 py-1.5 text-xs font-semibold transition-colors ${cur === o.v ? o.active : 'bg-white text-slate-400 hover:bg-slate-50'}`}>
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function StudentModal({
+  student, editForm, setEditForm, onSubmit, onClose,
+}: {
+  student: Student;
+  editForm: Partial<Student>;
+  setEditForm: React.Dispatch<React.SetStateAction<Partial<Student>>>;
+  onSubmit: (e: React.FormEvent) => void;
+  onClose: () => void;
+}) {
+  const [tab, setTab] = useState<StudentTabId>('basic');
+  const upd = (patch: Partial<Student>) => setEditForm(f => ({ ...f, ...patch }));
+
+  const filled = STUDENT_COMPLETION_FIELDS.filter(k => isFilledS(editForm[k])).length;
+  const pct = Math.round((filled / STUDENT_COMPLETION_FIELDS.length) * 100);
+
+  const tabDot = (tid: StudentTabId): 'full' | 'partial' | 'empty' | 'none' => {
+    const fieldsByTab: Record<StudentTabId, (keyof Student)[]> = {
+      basic:     ['firstName', 'lastName', 'dateOfBirth', 'bloodGroup', 'aadhaarNo', 'nationality', 'motherTongue', 'admissionDate', 'house'],
+      family:    ['fatherName', 'fatherPhone', 'fatherOccupation', 'motherName', 'motherPhone', 'motherOccupation', 'guardianName', 'guardianPhone'],
+      address:   ['stateAddr', 'village', 'permanentAddress', 'pinCode'],
+      academic:  ['previousSchool', 'medium', 'subjectsOpted'],
+      health:    ['height', 'weight', 'vaccinationStatus'],
+      hostel:    ['hostelRequired'],
+      documents: ['docAadhaar', 'docBirthCert'],
+      status:    [],
+    };
+    const fields = fieldsByTab[tid];
+    if (!fields.length) return 'none';
+    const any = fields.some(k => isFilledS(editForm[k]));
+    const all = fields.every(k => isFilledS(editForm[k]));
+    return all ? 'full' : any ? 'partial' : 'empty';
+  };
+
+  const dotCls = (d: string, active: boolean) =>
+    `w-2.5 h-2.5 rounded-full border transition-all ${active ? 'scale-125 border-sky-400' : 'border-slate-200'} ${
+      d === 'full' ? 'bg-emerald-400' : d === 'partial' ? 'bg-amber-400' : d === 'empty' ? 'bg-slate-200' : 'bg-transparent border-transparent'
+    }`;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-sky-100 flex items-center justify-center">
+              <i className="fas fa-user-graduate text-sky-600" />
+            </div>
+            <div>
+              <h2 className="font-heading font-bold text-navy-700 text-lg leading-none">{student.name}</h2>
+              <p className="text-xs text-slate-400 mt-0.5">Class {student.grade} · {student.admissionNo ?? student.rollNo ?? student.id.slice(-6)}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="text-right">
+              <div className="text-xs text-slate-400 mb-0.5">Profile {pct}%</div>
+              <div className="w-28 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div className="h-full rounded-full transition-all"
+                  style={{ width: `${pct}%`, background: pct >= 80 ? '#10b981' : pct >= 50 ? '#f59e0b' : '#0076BC' }} />
+              </div>
+            </div>
+            <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><i className="fas fa-times text-lg" /></button>
+          </div>
+        </div>
+
+        {/* Tab strip */}
+        <div className="flex border-b border-slate-100 flex-shrink-0 overflow-x-auto">
+          {STUDENT_TABS.map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)} type="button"
+              className={`flex items-center gap-1.5 px-3 py-3 text-xs font-medium border-b-2 -mb-px whitespace-nowrap transition-colors ${
+                tab === t.id ? 'border-sky-500 text-sky-600' : 'border-transparent text-slate-500 hover:text-slate-700'
+              }`}>
+              <i className={t.icon} />{t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Body */}
+        <form onSubmit={onSubmit} className="flex-1 overflow-y-auto flex flex-col">
+          <div className="p-6 space-y-4 flex-1">
+
+            {/* TAB 1 — Basic Info */}
+            {tab === 'basic' && <>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Identification</p>
+              <div className="grid md:grid-cols-3 gap-4">
+                <Field label="Admission No"><input className={inputCls} value={editForm.admissionNo ?? ''} onChange={e => upd({ admissionNo: e.target.value })} /></Field>
+                <Field label="Roll No"><input className={inputCls} value={editForm.rollNo ?? ''} onChange={e => upd({ rollNo: e.target.value })} /></Field>
+                <Field label="Display Name (required)"><input required className={inputCls} value={editForm.name ?? ''} onChange={e => upd({ name: e.target.value })} /></Field>
+                <Field label="First Name"><input className={inputCls} value={editForm.firstName ?? ''} onChange={e => upd({ firstName: e.target.value || null })} /></Field>
+                <Field label="Middle Name"><input className={inputCls} value={editForm.middleName ?? ''} onChange={e => upd({ middleName: e.target.value || null })} /></Field>
+                <Field label="Last Name"><input className={inputCls} value={editForm.lastName ?? ''} onChange={e => upd({ lastName: e.target.value || null })} /></Field>
+              </div>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest pt-2">Personal Details</p>
+              <div className="grid md:grid-cols-3 gap-4">
+                <Field label="Gender">
+                  <select className={inputCls} value={editForm.gender} onChange={e => upd({ gender: e.target.value as Student['gender'] })}>
+                    {GENDERS.map(g => <option key={g} value={g}>{GENDER_LABELS[g]}</option>)}
+                  </select>
+                </Field>
+                <Field label="Date of Birth"><input type="date" className={inputCls} value={editForm.dateOfBirth?.slice(0, 10) ?? ''} onChange={e => upd({ dateOfBirth: e.target.value || null })} /></Field>
+                <Field label="Blood Group">
+                  <select className={inputCls} value={editForm.bloodGroup ?? ''} onChange={e => upd({ bloodGroup: e.target.value || null })}>
+                    <option value="">—</option>
+                    {['A+','A-','B+','B-','AB+','AB-','O+','O-'].map(b => <option key={b}>{b}</option>)}
+                  </select>
+                </Field>
+                <Field label="Aadhaar No"><input className={inputCls} value={editForm.aadhaarNo ?? ''} onChange={e => upd({ aadhaarNo: e.target.value || null })} /></Field>
+                <Field label="Category">
+                  <select className={inputCls} value={editForm.category} onChange={e => upd({ category: e.target.value as Student['category'] })}>
+                    {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                  </select>
+                </Field>
+                <Field label="Religion">
+                  <select className={inputCls} value={editForm.religion ?? ''} onChange={e => upd({ religion: e.target.value || null })}>
+                    <option value="">—</option>
+                    {['Hindu','Muslim','Sikh','Christian','Buddhist','Other'].map(r => <option key={r}>{r}</option>)}
+                  </select>
+                </Field>
+                <Field label="Nationality"><input className={inputCls} value={editForm.nationality ?? ''} onChange={e => upd({ nationality: e.target.value || null })} /></Field>
+                <Field label="Mother Tongue"><input className={inputCls} value={editForm.motherTongue ?? ''} onChange={e => upd({ motherTongue: e.target.value || null })} /></Field>
+                <Field label="Photo">
+                  <FileUpload
+                    value={editForm.photoUrl}
+                    onChange={url => upd({ photoUrl: url })}
+                    folder={`students/${student.id}/photo`}
+                    accept="image/*"
+                    imagePreview
+                  />
+                </Field>
+              </div>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest pt-2">Enrolment</p>
+              <div className="grid md:grid-cols-3 gap-4">
+                <Field label="Admission Date"><input type="date" className={inputCls} value={editForm.admissionDate?.slice(0, 10) ?? ''} onChange={e => upd({ admissionDate: e.target.value || null })} /></Field>
+                <Field label="Admission Class">
+                  <select className={inputCls} value={editForm.admissionClass ?? ''} onChange={e => upd({ admissionClass: e.target.value ? Number(e.target.value) : null })}>
+                    <option value="">—</option>
+                    {GRADES_6_12.map(g => <option key={g} value={g}>Class {g}</option>)}
+                  </select>
+                </Field>
+                <Field label="Admission Type">
+                  <select className={inputCls} value={editForm.admissionType ?? ''} onChange={e => upd({ admissionType: e.target.value || null })}>
+                    <option value="">—</option>
+                    <option>New</option>
+                    <option>Transfer</option>
+                  </select>
+                </Field>
+                <Field label="Current Grade">
+                  <select className={inputCls} value={editForm.grade} onChange={e => upd({ grade: Number(e.target.value) })}>
+                    {GRADES_6_12.map(g => <option key={g} value={g}>Class {g}</option>)}
+                  </select>
+                </Field>
+                <Field label="Section"><input className={inputCls} value={editForm.section ?? ''} onChange={e => upd({ section: e.target.value || null })} /></Field>
+                <Field label="House / Group"><input className={inputCls} value={editForm.house ?? ''} onChange={e => upd({ house: e.target.value || null })} /></Field>
+              </div>
+            </>}
+
+            {/* TAB 2 — Family */}
+            {tab === 'family' && <>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Father's Details</p>
+              <div className="grid md:grid-cols-2 gap-4">
+                <Field label="Father Name"><input className={inputCls} value={editForm.fatherName ?? ''} onChange={e => upd({ fatherName: e.target.value || null })} /></Field>
+                <Field label="Father Phone"><input className={inputCls} value={editForm.fatherPhone ?? ''} onChange={e => upd({ fatherPhone: e.target.value || null })} /></Field>
+                <Field label="Occupation"><input className={inputCls} value={editForm.fatherOccupation ?? ''} onChange={e => upd({ fatherOccupation: e.target.value || null })} /></Field>
+                <Field label="Education"><input className={inputCls} value={editForm.fatherEducation ?? ''} onChange={e => upd({ fatherEducation: e.target.value || null })} /></Field>
+              </div>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest pt-2">Mother's Details</p>
+              <div className="grid md:grid-cols-2 gap-4">
+                <Field label="Mother Name"><input className={inputCls} value={editForm.motherName ?? ''} onChange={e => upd({ motherName: e.target.value || null })} /></Field>
+                <Field label="Mother Phone"><input className={inputCls} value={editForm.motherPhone ?? ''} onChange={e => upd({ motherPhone: e.target.value || null })} /></Field>
+                <Field label="Occupation"><input className={inputCls} value={editForm.motherOccupation ?? ''} onChange={e => upd({ motherOccupation: e.target.value || null })} /></Field>
+                <Field label="Education"><input className={inputCls} value={editForm.motherEducation ?? ''} onChange={e => upd({ motherEducation: e.target.value || null })} /></Field>
+              </div>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest pt-2">Guardian / Emergency Contact</p>
+              <div className="grid md:grid-cols-3 gap-4">
+                <Field label="Guardian Name"><input className={inputCls} value={editForm.guardianName ?? ''} onChange={e => upd({ guardianName: e.target.value || null })} /></Field>
+                <Field label="Phone"><input className={inputCls} value={editForm.guardianPhone ?? ''} onChange={e => upd({ guardianPhone: e.target.value || null })} /></Field>
+                <Field label="Relation">
+                  <select className={inputCls} value={editForm.guardianRelation ?? ''} onChange={e => upd({ guardianRelation: e.target.value || null })}>
+                    <option value="">—</option>
+                    {['Father','Mother','Guardian','Uncle','Aunt','Grandparent','Other'].map(r => <option key={r}>{r}</option>)}
+                  </select>
+                </Field>
+              </div>
+            </>}
+
+            {/* TAB 3 — Address */}
+            {tab === 'address' && <>
+              <div className="grid md:grid-cols-3 gap-4">
+                <Field label="State"><input className={inputCls} value={editForm.stateAddr ?? ''} onChange={e => upd({ stateAddr: e.target.value || null })} /></Field>
+                <Field label="District"><input className={inputCls} value={editForm.districtAddr ?? ''} onChange={e => upd({ districtAddr: e.target.value || null })} /></Field>
+                <Field label="Block"><input className={inputCls} value={editForm.blockAddr ?? ''} onChange={e => upd({ blockAddr: e.target.value || null })} /></Field>
+                <Field label="Village / Town"><input className={inputCls} value={editForm.village ?? ''} onChange={e => upd({ village: e.target.value || null })} /></Field>
+                <Field label="PIN Code"><input className={inputCls} maxLength={6} value={editForm.pinCode ?? ''} onChange={e => upd({ pinCode: e.target.value || null })} /></Field>
+              </div>
+              <Field label="Permanent Address">
+                <textarea rows={3} className={inputCls} value={editForm.permanentAddress ?? ''} onChange={e => upd({ permanentAddress: e.target.value || null })} />
+              </Field>
+              <Field label="Correspondence Address">
+                <textarea rows={3} className={inputCls} value={editForm.correspondenceAddress ?? ''} onChange={e => upd({ correspondenceAddress: e.target.value || null })} />
+              </Field>
+            </>}
+
+            {/* TAB 4 — Academic */}
+            {tab === 'academic' && <>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Previous School</p>
+              <div className="grid md:grid-cols-3 gap-4">
+                <Field label="Previous School"><input className={inputCls} value={editForm.previousSchool ?? ''} onChange={e => upd({ previousSchool: e.target.value || null })} /></Field>
+                <Field label="Previous Class">
+                  <select className={inputCls} value={editForm.previousClass ?? ''} onChange={e => upd({ previousClass: e.target.value ? Number(e.target.value) : null })}>
+                    <option value="">—</option>
+                    {[...Array(12)].map((_, i) => <option key={i+1} value={i+1}>Class {i+1}</option>)}
+                  </select>
+                </Field>
+                <Field label="TC Number"><input className={inputCls} value={editForm.tcNumber ?? ''} onChange={e => upd({ tcNumber: e.target.value || null })} /></Field>
+              </div>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest pt-2">Current Academic</p>
+              <div className="grid md:grid-cols-2 gap-4">
+                <Field label="Medium of Instruction">
+                  <select className={inputCls} value={editForm.medium ?? ''} onChange={e => upd({ medium: e.target.value || null })}>
+                    <option value="">—</option>
+                    {['Hindi','English','Urdu','Sanskrit','Other'].map(m => <option key={m}>{m}</option>)}
+                  </select>
+                </Field>
+                <Field label="Subjects Opted (comma-separated)"><input className={inputCls} value={editForm.subjectsOpted ?? ''} onChange={e => upd({ subjectsOpted: e.target.value || null })} /></Field>
+                <Field label="Promotion Status">
+                  <select className={inputCls} value={editForm.promotionStatus ?? ''} onChange={e => upd({ promotionStatus: e.target.value || null })}>
+                    <option value="">—</option>
+                    <option>Promoted</option>
+                    <option>Detained</option>
+                    <option>Passed Out</option>
+                  </select>
+                </Field>
+                <Field label="CGPA"><input type="number" min="0" max="10" step="0.1" className={inputCls} value={editForm.cgpa ?? ''} onChange={e => upd({ cgpa: e.target.value ? parseFloat(e.target.value) : null })} /></Field>
+              </div>
+              <div className="grid md:grid-cols-2 gap-4">
+                <Field label="RTE (Right to Education)">
+                  <select className={inputCls} value={editForm.isRte ? 'yes' : 'no'} onChange={e => upd({ isRte: e.target.value === 'yes' })}>
+                    <option value="no">No</option>
+                    <option value="yes">Yes</option>
+                  </select>
+                </Field>
+                <Field label="Bank Account No"><input className={inputCls} value={editForm.bankAccount ?? ''} onChange={e => upd({ bankAccount: e.target.value || null })} /></Field>
+              </div>
+            </>}
+
+            {/* TAB 5 — Health */}
+            {tab === 'health' && <>
+              <div className="grid md:grid-cols-3 gap-4">
+                <Field label="Height (cm)"><input type="number" min="0" max="300" step="0.1" className={inputCls} value={editForm.height ?? ''} onChange={e => upd({ height: e.target.value ? parseFloat(e.target.value) : null })} /></Field>
+                <Field label="Weight (kg)"><input type="number" min="0" max="200" step="0.1" className={inputCls} value={editForm.weight ?? ''} onChange={e => upd({ weight: e.target.value ? parseFloat(e.target.value) : null })} /></Field>
+                <Field label="Blood Group">
+                  <select className={inputCls} value={editForm.bloodGroup ?? ''} onChange={e => upd({ bloodGroup: e.target.value || null })}>
+                    <option value="">—</option>
+                    {['A+','A-','B+','B-','AB+','AB-','O+','O-'].map(b => <option key={b}>{b}</option>)}
+                  </select>
+                </Field>
+              </div>
+              <div className="grid md:grid-cols-2 gap-4">
+                <Field label="CWSN / Disability Status"><TriToggle value={editForm.cwsnStatus} onChange={v => upd({ cwsnStatus: v })} /></Field>
+                <Field label="Vaccination Status">
+                  <select className={inputCls} value={editForm.vaccinationStatus ?? ''} onChange={e => upd({ vaccinationStatus: e.target.value || null })}>
+                    <option value="">—</option>
+                    <option>Complete</option>
+                    <option>Partial</option>
+                    <option>Not Done</option>
+                  </select>
+                </Field>
+              </div>
+              <Field label="Medical Conditions / Health Notes">
+                <textarea rows={3} className={inputCls} value={editForm.healthNotes ?? ''} onChange={e => upd({ healthNotes: e.target.value || null })} />
+              </Field>
+              <Field label="Last Health Checkup Date"><input type="date" className={inputCls} value={editForm.healthCheckupDate?.slice(0, 10) ?? ''} onChange={e => upd({ healthCheckupDate: e.target.value || null })} /></Field>
+            </>}
+
+            {/* TAB 6 — Hostel */}
+            {tab === 'hostel' && <>
+              <div className="grid md:grid-cols-2 gap-4">
+                <Field label="Hostel Required"><TriToggle value={editForm.hostelRequired} onChange={v => upd({ hostelRequired: v })} /></Field>
+                <Field label="Hostel Fee Status">
+                  <select className={inputCls} value={editForm.hostelFeeStatus ?? ''} onChange={e => upd({ hostelFeeStatus: e.target.value || null })}>
+                    <option value="">—</option>
+                    <option>Paid</option>
+                    <option>Pending</option>
+                    <option>Waived</option>
+                  </select>
+                </Field>
+                <Field label="Hostel Name"><input className={inputCls} value={editForm.hostelName ?? ''} onChange={e => upd({ hostelName: e.target.value || null })} /></Field>
+                <Field label="Room Number"><input className={inputCls} value={editForm.roomNumber ?? ''} onChange={e => upd({ roomNumber: e.target.value || null })} /></Field>
+              </div>
+            </>}
+
+            {/* TAB 7 — Documents */}
+            {tab === 'documents' && <>
+              <p className="text-xs text-slate-400">Upload files directly or type a reference note. Uploaded files are stored securely in S3.</p>
+              <div className="grid md:grid-cols-2 gap-5">
+                {([
+                  ['docAadhaar',   'Aadhaar Card',              'image/*,application/pdf'],
+                  ['docBirthCert', 'Birth Certificate',         'image/*,application/pdf'],
+                  ['docTc',        'Transfer Certificate (TC)', 'image/*,application/pdf'],
+                  ['docCaste',     'Caste Certificate',         'image/*,application/pdf'],
+                  ['docIncome',    'Income Certificate',        'image/*,application/pdf'],
+                  ['docResidence', 'Residence Certificate',     'image/*,application/pdf'],
+                  ['docPhoto',     'Passport Photo',            'image/*'],
+                  ['docMedical',   'Medical Certificate',       'image/*,application/pdf'],
+                  ['docOther',     'Other Document',            '*/*'],
+                ] as [keyof Student, string, string][]).map(([key, label, accept]) => (
+                  <DocField
+                    key={key}
+                    label={label}
+                    value={editForm[key] as string | null | undefined}
+                    onChange={val => upd({ [key]: val } as Partial<Student>)}
+                    folder={`students/${student.id}/docs`}
+                    accept={accept}
+                  />
+                ))}
+              </div>
+            </>}
+
+            {/* TAB 8 — Status */}
+            {tab === 'status' && <>
+              {/* Completion */}
+              <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-semibold text-navy-700">Profile Completion</span>
+                  <span className={`text-sm font-bold ${pct >= 80 ? 'text-emerald-600' : pct >= 50 ? 'text-amber-600' : 'text-sky-600'}`}>{pct}%</span>
+                </div>
+                <div className="w-full h-2 bg-white rounded-full border border-slate-200 overflow-hidden mb-3">
+                  <div className="h-full rounded-full transition-all"
+                    style={{ width: `${pct}%`, background: pct >= 80 ? '#10b981' : pct >= 50 ? '#f59e0b' : '#0076BC' }} />
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <p className="font-semibold text-slate-500 mb-1.5">Missing ({STUDENT_COMPLETION_FIELDS.filter(k => !isFilledS(editForm[k])).length})</p>
+                    <div className="flex flex-wrap gap-1">
+                      {STUDENT_COMPLETION_FIELDS.filter(k => !isFilledS(editForm[k])).map(k => (
+                        <span key={k} className="px-1.5 py-0.5 rounded bg-red-50 border border-red-100 text-red-600">{k}</span>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-slate-500 mb-1.5">Filled ({filled})</p>
+                    <div className="flex flex-wrap gap-1">
+                      {STUDENT_COMPLETION_FIELDS.filter(k => isFilledS(editForm[k])).map(k => (
+                        <span key={k} className="px-1.5 py-0.5 rounded bg-emerald-50 border border-emerald-100 text-emerald-700">{k}</span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {/* Status fields */}
+              <div className="grid md:grid-cols-2 gap-4">
+                <Field label="Student Status">
+                  <select className={inputCls} value={editForm.isDropout ? 'dropout' : 'active'} onChange={e => upd({ isDropout: e.target.value === 'dropout' })}>
+                    <option value="active">Active</option>
+                    <option value="dropout">Dropout</option>
+                  </select>
+                </Field>
+                <Field label="Dropout Reason">
+                  <input className={inputCls} disabled={!editForm.isDropout} value={editForm.dropoutReason ?? ''}
+                    onChange={e => upd({ dropoutReason: e.target.value || null })} />
+                </Field>
+              </div>
+              {/* Audit trail */}
+              {(editForm.profileUpdatedBy || editForm.profileUpdatedAt) && (
+                <div className="rounded-xl border border-slate-100 bg-slate-50 p-4 text-xs text-slate-500 space-y-0.5">
+                  <p className="font-semibold text-slate-600 mb-1">Last Updated</p>
+                  {editForm.profileUpdatedBy && <p>By: {editForm.profileUpdatedBy}</p>}
+                  {editForm.profileUpdatedAt && <p>At: {new Date(editForm.profileUpdatedAt).toLocaleString()}</p>}
+                </div>
+              )}
+            </>}
+
+          </div>
+
+          {/* Footer */}
+          <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between flex-shrink-0">
+            <div className="flex gap-1.5 items-center">
+              {STUDENT_TABS.map(t => (
+                <button key={t.id} type="button" onClick={() => setTab(t.id)} title={t.label}
+                  className={dotCls(tabDot(t.id), tab === t.id)} />
+              ))}
+            </div>
+            <div className="flex gap-3">
+              <button type="button" onClick={onClose} className="btn-outline px-4 py-2 text-sm">Cancel</button>
+              <button type="submit" className="btn-navy px-5 py-2 text-sm"><i className="fas fa-save mr-2" />Save Changes</button>
+            </div>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

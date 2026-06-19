@@ -120,6 +120,68 @@ export interface Student {
   dropoutReason: string | null;
   academicYear: string;
   active: boolean;
+  // Extended profile — Basic Info
+  firstName: string | null;
+  middleName: string | null;
+  lastName: string | null;
+  bloodGroup: string | null;
+  aadhaarNo: string | null;
+  nationality: string | null;
+  motherTongue: string | null;
+  photoUrl: string | null;
+  admissionDate: string | null;
+  admissionClass: number | null;
+  house: string | null;
+  admissionType: string | null;
+  // Family
+  fatherName: string | null;
+  fatherPhone: string | null;
+  fatherOccupation: string | null;
+  fatherEducation: string | null;
+  motherName: string | null;
+  motherPhone: string | null;
+  motherOccupation: string | null;
+  motherEducation: string | null;
+  // Address
+  stateAddr: string | null;
+  districtAddr: string | null;
+  blockAddr: string | null;
+  village: string | null;
+  permanentAddress: string | null;
+  correspondenceAddress: string | null;
+  pinCode: string | null;
+  // Academic
+  previousSchool: string | null;
+  previousClass: number | null;
+  tcNumber: string | null;
+  medium: string | null;
+  subjectsOpted: string | null;
+  promotionStatus: string | null;
+  cgpa: number | null;
+  // Health
+  height: number | null;
+  weight: number | null;
+  cwsnStatus: boolean | null;
+  vaccinationStatus: string | null;
+  healthCheckupDate: string | null;
+  // Hostel
+  hostelRequired: boolean | null;
+  hostelName: string | null;
+  roomNumber: string | null;
+  hostelFeeStatus: string | null;
+  // Documents
+  docAadhaar: string | null;
+  docBirthCert: string | null;
+  docTc: string | null;
+  docCaste: string | null;
+  docIncome: string | null;
+  docResidence: string | null;
+  docPhoto: string | null;
+  docMedical: string | null;
+  docOther: string | null;
+  // Profile tracking
+  profileUpdatedBy: string | null;
+  profileUpdatedAt: string | null;
 }
 
 export interface Staff {

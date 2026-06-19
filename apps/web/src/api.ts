@@ -314,6 +314,35 @@ export const api = {
     setUrl: (id: string, youtubeUrl: string | null) =>
       req<any>(`/content/lectures/${id}/url`, { method: 'PATCH', body: JSON.stringify({ youtubeUrl }) }),
   },
+
+  storage: {
+    presign: (folder: string, fileName: string, contentType: string) =>
+      req<{ uploadUrl: string; publicUrl: string; key: string }>('/storage/presign', {
+        method: 'POST',
+        body: JSON.stringify({ folder, fileName, contentType }),
+      }),
+
+    deleteFile: (key: string) =>
+      req<{ ok: boolean }>(`/storage/file?key=${encodeURIComponent(key)}`, { method: 'DELETE' }),
+
+    /** Presign then PUT the file directly to S3. Returns the public URL. */
+    upload: async (file: File, folder: string, onProgress?: (pct: number) => void): Promise<string> => {
+      const { uploadUrl, publicUrl } = await api.storage.presign(folder, file.name, file.type || 'application/octet-stream');
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', uploadUrl);
+        xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+        if (onProgress) {
+          xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(e.loaded / e.total); };
+        }
+        xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`Upload failed (${xhr.status})`)));
+        xhr.onerror = () => reject(new Error('Upload network error'));
+        xhr.send(file);
+      });
+      if (onProgress) onProgress(1);
+      return publicUrl;
+    },
+  },
 };
 
 interface PeopleFilter {

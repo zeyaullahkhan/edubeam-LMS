@@ -200,6 +200,77 @@ model Student {
   active         Boolean  @default(true)
   createdAt      DateTime @default(now())
 
+  // ── Extended profile ─────────────────────────────────────────────────────
+  // Basic Info extras
+  firstName        String?
+  middleName       String?
+  lastName         String?
+  bloodGroup       String?  // A+ | A- | B+ | B- | AB+ | AB- | O+ | O-
+  aadhaarNo        String?
+  nationality      String?
+  motherTongue     String?
+  photoUrl         String?
+  admissionDate    DateTime?
+  admissionClass   Int?
+  house            String?  // house / group
+  admissionType    String?  // New | Transfer
+
+  // Family Details
+  fatherName       String?
+  fatherPhone      String?
+  fatherOccupation String?
+  fatherEducation  String?
+  motherName       String?
+  motherPhone      String?
+  motherOccupation String?
+  motherEducation  String?
+
+  // Address
+  stateAddr          String?
+  districtAddr       String?
+  blockAddr          String?
+  village            String?
+  permanentAddress   String?
+  correspondenceAddress String?
+  pinCode            String?
+
+  // Academic
+  previousSchool   String?
+  previousClass    Int?
+  tcNumber         String?
+  medium           String?  // Medium of Instruction
+  subjectsOpted    String?  // comma-separated
+  promotionStatus  String?  // Promoted | Detained | Passed Out
+  cgpa             Float?
+
+  // Health
+  height           Float?   // cm
+  weight           Float?   // kg
+  cwsnStatus       Boolean?
+  vaccinationStatus String?
+  healthCheckupDate DateTime?
+
+  // Hostel
+  hostelRequired   Boolean?
+  hostelName       String?
+  roomNumber       String?
+  hostelFeeStatus  String?  // Paid | Pending | Waived
+
+  // Documents (store reference notes, not binary files)
+  docAadhaar       String?
+  docBirthCert     String?
+  docTc            String?
+  docCaste         String?
+  docIncome        String?
+  docResidence     String?
+  docPhoto         String?
+  docMedical       String?
+  docOther         String?
+
+  // Profile tracking
+  profileUpdatedBy String?
+  profileUpdatedAt DateTime?
+
   @@index([schoolId, grade])
 }
 

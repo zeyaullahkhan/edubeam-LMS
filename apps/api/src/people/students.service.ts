@@ -27,6 +27,59 @@ interface StudentInput {
   healthNotes?: string | null;
   isDropout?: boolean;
   dropoutReason?: string | null;
+  // Extended profile
+  firstName?: string | null;
+  middleName?: string | null;
+  lastName?: string | null;
+  bloodGroup?: string | null;
+  aadhaarNo?: string | null;
+  nationality?: string | null;
+  motherTongue?: string | null;
+  photoUrl?: string | null;
+  admissionDate?: string | null;
+  admissionClass?: number | null;
+  house?: string | null;
+  admissionType?: string | null;
+  fatherName?: string | null;
+  fatherPhone?: string | null;
+  fatherOccupation?: string | null;
+  fatherEducation?: string | null;
+  motherName?: string | null;
+  motherPhone?: string | null;
+  motherOccupation?: string | null;
+  motherEducation?: string | null;
+  stateAddr?: string | null;
+  districtAddr?: string | null;
+  blockAddr?: string | null;
+  village?: string | null;
+  permanentAddress?: string | null;
+  correspondenceAddress?: string | null;
+  pinCode?: string | null;
+  previousSchool?: string | null;
+  previousClass?: number | null;
+  tcNumber?: string | null;
+  medium?: string | null;
+  subjectsOpted?: string | null;
+  promotionStatus?: string | null;
+  cgpa?: number | null;
+  height?: number | null;
+  weight?: number | null;
+  cwsnStatus?: boolean | null;
+  vaccinationStatus?: string | null;
+  healthCheckupDate?: string | null;
+  hostelRequired?: boolean | null;
+  hostelName?: string | null;
+  roomNumber?: string | null;
+  hostelFeeStatus?: string | null;
+  docAadhaar?: string | null;
+  docBirthCert?: string | null;
+  docTc?: string | null;
+  docCaste?: string | null;
+  docIncome?: string | null;
+  docResidence?: string | null;
+  docPhoto?: string | null;
+  docMedical?: string | null;
+  docOther?: string | null;
 }
 
 const toDate = (v?: string | null) => (v ? new Date(v) : null);
@@ -222,9 +275,16 @@ export class StudentsService {
   async update(user: AuthUser, id: string, dto: Partial<StudentInput>) {
     assertCanWrite(user);
     await this.findInScope(user, id);
+
+    const nullBool = (v?: boolean | null) => v === undefined ? undefined : (v ?? null);
+    const nullInt  = (v?: number | null)  => v === undefined ? undefined : (v !== null ? Number(v) : null);
+    const nullFlt  = (v?: number | null)  => v === undefined ? undefined : (v !== null ? parseFloat(String(v)) : null);
+    const nullStr  = (v?: string | null)  => v === undefined ? undefined : (v?.trim() || null);
+
     const updated = await prisma.student.update({
       where: { id },
       data: {
+        // Core
         name: dto.name?.trim(),
         gender: dto.gender,
         dateOfBirth: dto.dateOfBirth !== undefined ? toDate(dto.dateOfBirth) : undefined,
@@ -243,9 +303,70 @@ export class StudentsService {
         healthNotes: dto.healthNotes,
         isDropout: dto.isDropout,
         dropoutReason: dto.dropoutReason,
+        // Basic Info extras
+        firstName:      nullStr(dto.firstName),
+        middleName:     nullStr(dto.middleName),
+        lastName:       nullStr(dto.lastName),
+        bloodGroup:     nullStr(dto.bloodGroup),
+        aadhaarNo:      nullStr(dto.aadhaarNo),
+        nationality:    nullStr(dto.nationality),
+        motherTongue:   nullStr(dto.motherTongue),
+        photoUrl:       nullStr(dto.photoUrl),
+        admissionDate:  dto.admissionDate  !== undefined ? toDate(dto.admissionDate)  : undefined,
+        admissionClass: nullInt(dto.admissionClass),
+        house:          nullStr(dto.house),
+        admissionType:  nullStr(dto.admissionType),
+        // Family
+        fatherName:       nullStr(dto.fatherName),
+        fatherPhone:      nullStr(dto.fatherPhone),
+        fatherOccupation: nullStr(dto.fatherOccupation),
+        fatherEducation:  nullStr(dto.fatherEducation),
+        motherName:       nullStr(dto.motherName),
+        motherPhone:      nullStr(dto.motherPhone),
+        motherOccupation: nullStr(dto.motherOccupation),
+        motherEducation:  nullStr(dto.motherEducation),
+        // Address
+        stateAddr:             nullStr(dto.stateAddr),
+        districtAddr:          nullStr(dto.districtAddr),
+        blockAddr:             nullStr(dto.blockAddr),
+        village:               nullStr(dto.village),
+        permanentAddress:      nullStr(dto.permanentAddress),
+        correspondenceAddress: nullStr(dto.correspondenceAddress),
+        pinCode:               nullStr(dto.pinCode),
+        // Academic
+        previousSchool:  nullStr(dto.previousSchool),
+        previousClass:   nullInt(dto.previousClass),
+        tcNumber:        nullStr(dto.tcNumber),
+        medium:          nullStr(dto.medium),
+        subjectsOpted:   nullStr(dto.subjectsOpted),
+        promotionStatus: nullStr(dto.promotionStatus),
+        cgpa:            nullFlt(dto.cgpa),
+        // Health
+        height:            nullFlt(dto.height),
+        weight:            nullFlt(dto.weight),
+        cwsnStatus:        nullBool(dto.cwsnStatus),
+        vaccinationStatus: nullStr(dto.vaccinationStatus),
+        healthCheckupDate: dto.healthCheckupDate !== undefined ? toDate(dto.healthCheckupDate) : undefined,
+        // Hostel
+        hostelRequired:  nullBool(dto.hostelRequired),
+        hostelName:      nullStr(dto.hostelName),
+        roomNumber:      nullStr(dto.roomNumber),
+        hostelFeeStatus: nullStr(dto.hostelFeeStatus),
+        // Documents
+        docAadhaar:   nullStr(dto.docAadhaar),
+        docBirthCert: nullStr(dto.docBirthCert),
+        docTc:        nullStr(dto.docTc),
+        docCaste:     nullStr(dto.docCaste),
+        docIncome:    nullStr(dto.docIncome),
+        docResidence: nullStr(dto.docResidence),
+        docPhoto:     nullStr(dto.docPhoto),
+        docMedical:   nullStr(dto.docMedical),
+        docOther:     nullStr(dto.docOther),
+        // Profile tracking
+        profileUpdatedAt: new Date(),
+        profileUpdatedBy: user.name,
       },
     });
-    // Keep linked User records in sync when the student's name changes
     if (dto.name?.trim()) {
       const newName = updated.name;
       await prisma.user.updateMany({ where: { studentId: id }, data: { name: newName } });
