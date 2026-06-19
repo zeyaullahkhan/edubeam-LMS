@@ -4,7 +4,7 @@ import { useAuth } from '../auth';
 import { ScopeBar, type Scope } from '../components/ScopeBar';
 
 const GRADES = [6, 7, 8, 9, 10, 11, 12];
-const EXAM_TYPES = ['FA1', 'FA2', 'SA1', 'SA2', 'ANNUAL', 'BOARD'];
+const EXAM_TYPES = ['UNIT TEST', 'HALF YEARLY', 'YEARLY'];
 const ACADEMIC_YEAR = '2025-26';
 
 const SUBJECTS_BY_GRADE: Record<number, string[]> = {
@@ -32,7 +32,7 @@ function gradeBadge(letter: string) {
 // ── TAB: Enter marks ──────────────────────────────────────────────────────────
 function EnterMarks({ schoolId }: { schoolId: string }) {
   const [grade, setGrade] = useState(6);
-  const [examType, setExamType] = useState('SA1');
+  const [examType, setExamType] = useState('UNIT TEST');
   const [students, setStudents] = useState<any[]>([]);
   const [marks, setMarks] = useState<Record<string, Record<string, string>>>({});
   const [maxMarks, setMaxMarks] = useState<Record<string, number>>({});
@@ -171,7 +171,7 @@ function EnterMarks({ schoolId }: { schoolId: string }) {
 // ── TAB: View Class Results ───────────────────────────────────────────────────
 function ClassResults({ schoolId }: { schoolId: string }) {
   const [grade, setGrade] = useState(10);
-  const [examType, setExamType] = useState('SA1');
+  const [examType, setExamType] = useState('UNIT TEST');
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 

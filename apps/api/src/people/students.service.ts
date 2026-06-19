@@ -1,8 +1,11 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import bcrypt from 'bcryptjs';
 import { prisma } from '@edubeam/db';
 import { ACADEMIC_YEAR, type AuthUser, type StudentDemographics } from '@edubeam/shared';
 import { schoolScope } from '../analytics/scope';
 import { assertCanWrite, resolveWritableSchool } from './people.scope';
+
+const IS_POSTGRES = process.env.DATABASE_URL?.startsWith('postgresql') ?? false;
 
 interface StudentInput {
   schoolId?: string;
@@ -54,7 +57,7 @@ export class StudentsService {
         ...(opts.gender ? { gender: opts.gender } : {}),
         ...(opts.rte !== undefined ? { isRte: opts.rte } : {}),
         ...(opts.dropout !== undefined ? { isDropout: opts.dropout } : {}),
-        ...(opts.q ? { name: { contains: opts.q } } : {}),
+        ...(opts.q ? { name: { contains: opts.q, ...(IS_POSTGRES ? { mode: 'insensitive' as const } : {}) } } : {}),
       },
       include: { school: { select: { name: true } } },
       orderBy: [{ grade: 'asc' }, { name: 'asc' }],
@@ -128,7 +131,56 @@ export class StudentsService {
         academicYear: ACADEMIC_YEAR,
       },
     });
-    return { id: s.id };
+    const credentials = await this.provisionLogins(user, s);
+    return { id: s.id, ...credentials };
+  }
+
+  /** Create or reset student + parent logins simultaneously. */
+  private async provisionLogins(
+    admin: AuthUser,
+    student: { id: string; name: string; schoolId: string; admissionNo: string | null; rollNo: string | null },
+  ) {
+    const key = (student.admissionNo || student.rollNo || student.id)
+      .replace(/\s+/g, '').toLowerCase();
+
+    const stuPass = `st${key}`;
+    const stuEmail = `${stuPass}@edubeam.com`;
+    await prisma.user.upsert({
+      where: { email: stuEmail },
+      create: {
+        id: `ustu_${key}`,
+        email: stuEmail,
+        name: student.name,
+        role: 'STUDENT',
+        tenantId: admin.tenantId!,
+        schoolId: student.schoolId,
+        studentId: student.id,
+        passwordHash: await bcrypt.hash(stuPass, 10),
+      },
+      update: { passwordHash: await bcrypt.hash(stuPass, 10), studentId: student.id, name: student.name },
+    });
+
+    const parPass = `pr${key}`;
+    const parEmail = `${parPass}@edubeam.com`;
+    await prisma.user.upsert({
+      where: { email: parEmail },
+      create: {
+        id: `upar_${key}`,
+        email: parEmail,
+        name: `Parent — ${student.name}`,
+        role: 'PARENT',
+        tenantId: admin.tenantId!,
+        schoolId: student.schoolId,
+        linkedStudentIds: student.id,
+        passwordHash: await bcrypt.hash(parPass, 10),
+      },
+      update: { passwordHash: await bcrypt.hash(parPass, 10), linkedStudentIds: student.id, name: `Parent — ${student.name}` },
+    });
+
+    return {
+      studentLogin: { email: stuEmail, password: stuPass },
+      parentLogin: { email: parEmail, password: parPass },
+    };
   }
 
   /** Bulk insert from a parsed upload (tender §6.2.8.3). Rows missing name/grade are skipped. */
@@ -170,7 +222,7 @@ export class StudentsService {
   async update(user: AuthUser, id: string, dto: Partial<StudentInput>) {
     assertCanWrite(user);
     await this.findInScope(user, id);
-    await prisma.student.update({
+    const updated = await prisma.student.update({
       where: { id },
       data: {
         name: dto.name?.trim(),
@@ -193,6 +245,12 @@ export class StudentsService {
         dropoutReason: dto.dropoutReason,
       },
     });
+    // Keep linked User records in sync when the student's name changes
+    if (dto.name?.trim()) {
+      const newName = updated.name;
+      await prisma.user.updateMany({ where: { studentId: id }, data: { name: newName } });
+      await prisma.user.updateMany({ where: { linkedStudentIds: id, role: 'PARENT' }, data: { name: `Parent — ${newName}` } });
+    }
     return { ok: true };
   }
 

@@ -3,6 +3,8 @@ import { prisma } from '@edubeam/db';
 import type { AuthUser } from '@edubeam/shared';
 import { schoolScope } from '../analytics/scope';
 
+const IS_POSTGRES = process.env.DATABASE_URL?.startsWith('postgresql') ?? false;
+
 @Injectable()
 export class SchoolsService {
   async list(user: AuthUser, opts: { districtId?: string; blockId?: string; q?: string }) {
@@ -11,7 +13,7 @@ export class SchoolsService {
       where: {
         ...schoolWhere,
         ...(opts.blockId ? { blockId: opts.blockId } : {}),
-        ...(opts.q ? { name: { contains: opts.q } } : {}),
+        ...(opts.q ? { name: { contains: opts.q, ...(IS_POSTGRES ? { mode: 'insensitive' as const } : {}) } } : {}),
       },
       orderBy: { name: 'asc' },
       take: 500,
@@ -27,7 +29,7 @@ export class SchoolsService {
       }),
       prisma.enrollment.groupBy({
         by: ['schoolId'],
-        _sum: { total: true },
+        _sum: { total: true, boys: true, girls: true },
         where: { schoolId: { in: schoolIds } },
       }),
     ]);
@@ -39,6 +41,8 @@ export class SchoolsService {
       boardResults.filter((r) => r.examType === '12TH').map((r) => [r.schoolId, r._avg.passPct]),
     );
     const enrollMap = new Map(enrollTotals.map((e) => [e.schoolId, e._sum.total]));
+    const boyMap = new Map(enrollTotals.map((e) => [e.schoolId, e._sum.boys]));
+    const girlMap = new Map(enrollTotals.map((e) => [e.schoolId, e._sum.girls]));
 
     return schools.map((s) => ({
       id: s.id,
@@ -58,8 +62,46 @@ export class SchoolsService {
       teachers: s.ictDeployment?.teacherCount ?? null,
       students: s.ictDeployment?.studentCount ?? null,
       enrolledStudents: enrollMap.get(s.id) ?? null,
+      boys: boyMap.get(s.id) ?? null,
+      girls: girlMap.get(s.id) ?? null,
       avgPass10th: pass10Map.get(s.id) ?? null,
       avgPass12th: pass12Map.get(s.id) ?? null,
+      // Infrastructure
+      campusArea: s.campusArea,
+      campusAreaUnit: s.campusAreaUnit,
+      builtUpArea: s.builtUpArea,
+      numBuildings: s.numBuildings,
+      numClassrooms: s.numClassrooms,
+      hasPlayground: s.hasPlayground,
+      hasBoundaryWall: s.hasBoundaryWall,
+      hasLibrary: s.hasLibrary,
+      hasLaboratory: s.hasLaboratory,
+      hasComputerLab: s.hasComputerLab,
+      hasSmartClassroom: s.hasSmartClassroom,
+      hasElectricity: s.hasElectricity,
+      hasInternet: s.hasInternet,
+      hasCctv: s.hasCctv,
+      // Water & Sanitation
+      hasDrinkingWater: s.hasDrinkingWater,
+      drinkingWaterSource: s.drinkingWaterSource,
+      numToilets: s.numToilets,
+      numBoysToilets: s.numBoysToilets,
+      numGirlsToilets: s.numGirlsToilets,
+      hasCwsnToilet: s.hasCwsnToilet,
+      hasHandwashing: s.hasHandwashing,
+      // Academic
+      classesFrom: s.classesFrom,
+      classesTo: s.classesTo,
+      streams: s.streams,
+      // Safety
+      hasFireSafety: s.hasFireSafety,
+      hasDisasterPlan: s.hasDisasterPlan,
+      hasFirstAid: s.hasFirstAid,
+      hasSecurityGuard: s.hasSecurityGuard,
+      emergencyContact: s.emergencyContact,
+      // Profile tracking
+      profileUpdatedBy: s.profileUpdatedBy,
+      profileUpdatedAt: s.profileUpdatedAt?.toISOString() ?? null,
     }));
   }
 
@@ -130,8 +172,22 @@ export class SchoolsService {
     const school = await prisma.school.findUnique({ where: { id } });
     if (!school) throw new NotFoundException('School not found');
 
-    const { name, udiseCode, siteCode, blockId, type, hasVirtualClassroom, hasIctLab,
-            address, principalName, phone } = body;
+    const {
+      name, udiseCode, siteCode, blockId, type, hasVirtualClassroom, hasIctLab,
+      address, principalName, phone,
+      campusArea, campusAreaUnit, builtUpArea, numBuildings, numClassrooms,
+      hasPlayground, hasBoundaryWall, hasLibrary, hasLaboratory, hasComputerLab,
+      hasSmartClassroom, hasElectricity, hasInternet, hasCctv,
+      hasDrinkingWater, drinkingWaterSource, numToilets, numBoysToilets, numGirlsToilets,
+      hasCwsnToilet, hasHandwashing,
+      classesFrom, classesTo, streams,
+      hasFireSafety, hasDisasterPlan, hasFirstAid, hasSecurityGuard, emergencyContact,
+    } = body;
+
+    const nullBool = (v: any) => v === null ? null : v !== undefined ? Boolean(v) : undefined;
+    const nullInt  = (v: any) => v === null ? null : v !== undefined ? parseInt(v, 10) : undefined;
+    const nullFlt  = (v: any) => v === null ? null : v !== undefined ? parseFloat(v) : undefined;
+    const nullStr  = (v: any) => v === null ? null : v !== undefined ? (String(v).trim() || null) : undefined;
 
     return prisma.school.update({
       where: { id },
@@ -143,9 +199,45 @@ export class SchoolsService {
         ...(type !== undefined && { type: type || null }),
         ...(hasVirtualClassroom !== undefined && { hasVirtualClassroom: Boolean(hasVirtualClassroom) }),
         ...(hasIctLab !== undefined && { hasIctLab: Boolean(hasIctLab) }),
-        ...(address !== undefined && { address: address ? String(address).trim() : null }),
-        ...(principalName !== undefined && { principalName: principalName ? String(principalName).trim() : null }),
-        ...(phone !== undefined && { phone: phone ? String(phone).trim() : null }),
+        ...(address !== undefined && { address: nullStr(address) }),
+        ...(principalName !== undefined && { principalName: nullStr(principalName) }),
+        ...(phone !== undefined && { phone: nullStr(phone) }),
+        // Infrastructure
+        ...(campusArea !== undefined && { campusArea: nullFlt(campusArea) }),
+        ...(campusAreaUnit !== undefined && { campusAreaUnit: nullStr(campusAreaUnit) }),
+        ...(builtUpArea !== undefined && { builtUpArea: nullFlt(builtUpArea) }),
+        ...(numBuildings !== undefined && { numBuildings: nullInt(numBuildings) }),
+        ...(numClassrooms !== undefined && { numClassrooms: nullInt(numClassrooms) }),
+        ...(hasPlayground !== undefined && { hasPlayground: nullBool(hasPlayground) }),
+        ...(hasBoundaryWall !== undefined && { hasBoundaryWall: nullBool(hasBoundaryWall) }),
+        ...(hasLibrary !== undefined && { hasLibrary: nullBool(hasLibrary) }),
+        ...(hasLaboratory !== undefined && { hasLaboratory: nullBool(hasLaboratory) }),
+        ...(hasComputerLab !== undefined && { hasComputerLab: nullBool(hasComputerLab) }),
+        ...(hasSmartClassroom !== undefined && { hasSmartClassroom: nullBool(hasSmartClassroom) }),
+        ...(hasElectricity !== undefined && { hasElectricity: nullBool(hasElectricity) }),
+        ...(hasInternet !== undefined && { hasInternet: nullBool(hasInternet) }),
+        ...(hasCctv !== undefined && { hasCctv: nullBool(hasCctv) }),
+        // Water & Sanitation
+        ...(hasDrinkingWater !== undefined && { hasDrinkingWater: nullBool(hasDrinkingWater) }),
+        ...(drinkingWaterSource !== undefined && { drinkingWaterSource: nullStr(drinkingWaterSource) }),
+        ...(numToilets !== undefined && { numToilets: nullInt(numToilets) }),
+        ...(numBoysToilets !== undefined && { numBoysToilets: nullInt(numBoysToilets) }),
+        ...(numGirlsToilets !== undefined && { numGirlsToilets: nullInt(numGirlsToilets) }),
+        ...(hasCwsnToilet !== undefined && { hasCwsnToilet: nullBool(hasCwsnToilet) }),
+        ...(hasHandwashing !== undefined && { hasHandwashing: nullBool(hasHandwashing) }),
+        // Academic
+        ...(classesFrom !== undefined && { classesFrom: nullInt(classesFrom) }),
+        ...(classesTo !== undefined && { classesTo: nullInt(classesTo) }),
+        ...(streams !== undefined && { streams: nullStr(streams) }),
+        // Safety
+        ...(hasFireSafety !== undefined && { hasFireSafety: nullBool(hasFireSafety) }),
+        ...(hasDisasterPlan !== undefined && { hasDisasterPlan: nullBool(hasDisasterPlan) }),
+        ...(hasFirstAid !== undefined && { hasFirstAid: nullBool(hasFirstAid) }),
+        ...(hasSecurityGuard !== undefined && { hasSecurityGuard: nullBool(hasSecurityGuard) }),
+        ...(emergencyContact !== undefined && { emergencyContact: nullStr(emergencyContact) }),
+        // Auto-track who updated profile
+        profileUpdatedBy: user.name,
+        profileUpdatedAt: new Date(),
       },
       include: { block: { include: { district: true } } },
     });

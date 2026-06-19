@@ -34,6 +34,9 @@ export interface DistrictSummary {
   virtualClassroomSchools: number;
   ictLabSchools: number;
   totalStudents: number;
+  boys: number;
+  girls: number;
+  teachers: number;
   avgPass10th: number | null;
   avgPass12th: number | null;
 }

@@ -59,6 +59,47 @@ model School {
   address             String?
   principalName       String?
   phone               String?
+  // ── Infrastructure ─────────────────────────────────────────────────────────
+  campusArea          Float?   // acres / sq-m (free text unit stored separately)
+  campusAreaUnit      String?  // "acres" | "sqm"
+  builtUpArea         Float?
+  numBuildings        Int?
+  numClassrooms       Int?
+  hasPlayground       Boolean?
+  hasBoundaryWall     Boolean?
+  hasLibrary          Boolean?
+  hasLaboratory       Boolean?
+  hasComputerLab      Boolean?
+  hasSmartClassroom   Boolean?
+  hasElectricity      Boolean?
+  hasInternet         Boolean?
+  hasCctv             Boolean?
+
+  // ── Water & Sanitation ───────────────────────────────────────────────────
+  hasDrinkingWater    Boolean?
+  drinkingWaterSource String?  // Tap | Hand-pump | Well | Tank | Other
+  numToilets          Int?
+  numBoysToilets      Int?
+  numGirlsToilets     Int?
+  hasCwsnToilet       Boolean?
+  hasHandwashing      Boolean?
+
+  // ── Academic ─────────────────────────────────────────────────────────────
+  classesFrom         Int?     // lowest grade e.g. 1 (Pre-Primary) or 6
+  classesTo           Int?     // highest grade e.g. 12
+  streams             String?  // comma-separated: Science,Arts,Commerce
+
+  // ── Safety & Security ────────────────────────────────────────────────────
+  hasFireSafety       Boolean?
+  hasDisasterPlan     Boolean?
+  hasFirstAid         Boolean?
+  hasSecurityGuard    Boolean?
+  emergencyContact    String?
+
+  // ── Profile tracking ─────────────────────────────────────────────────────
+  profileUpdatedBy    String?
+  profileUpdatedAt    DateTime?
+
   enrollments         Enrollment[]
   boardResults        BoardResult[]
   yearlyResults       YearlyResult[]

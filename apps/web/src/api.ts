@@ -55,7 +55,11 @@ export interface BlockSummary {
   virtualClassroomSchools: number;
   ictLabSchools: number;
   totalStudents: number;
+  boys: number;
+  girls: number;
   teachers: number;
+  avgPass10th: number | null;
+  avgPass12th: number | null;
 }
 
 export interface SchoolRow {
@@ -76,8 +80,46 @@ export interface SchoolRow {
   teachers: number | null;
   students: number | null;
   enrolledStudents: number | null;
+  boys: number | null;
+  girls: number | null;
   avgPass10th: number | null;
   avgPass12th: number | null;
+  // Infrastructure
+  campusArea: number | null;
+  campusAreaUnit: string | null;
+  builtUpArea: number | null;
+  numBuildings: number | null;
+  numClassrooms: number | null;
+  hasPlayground: boolean | null;
+  hasBoundaryWall: boolean | null;
+  hasLibrary: boolean | null;
+  hasLaboratory: boolean | null;
+  hasComputerLab: boolean | null;
+  hasSmartClassroom: boolean | null;
+  hasElectricity: boolean | null;
+  hasInternet: boolean | null;
+  hasCctv: boolean | null;
+  // Water & Sanitation
+  hasDrinkingWater: boolean | null;
+  drinkingWaterSource: string | null;
+  numToilets: number | null;
+  numBoysToilets: number | null;
+  numGirlsToilets: number | null;
+  hasCwsnToilet: boolean | null;
+  hasHandwashing: boolean | null;
+  // Academic
+  classesFrom: number | null;
+  classesTo: number | null;
+  streams: string | null;
+  // Safety
+  hasFireSafety: boolean | null;
+  hasDisasterPlan: boolean | null;
+  hasFirstAid: boolean | null;
+  hasSecurityGuard: boolean | null;
+  emergencyContact: string | null;
+  // Profile tracking
+  profileUpdatedBy: string | null;
+  profileUpdatedAt: string | null;
 }
 
 export interface DistrictMeta {
@@ -97,6 +139,39 @@ export interface SchoolFormData {
   address?: string;
   principalName?: string;
   phone?: string;
+  // Infrastructure
+  campusArea?: number | null;
+  campusAreaUnit?: string;
+  builtUpArea?: number | null;
+  numBuildings?: number | null;
+  numClassrooms?: number | null;
+  hasPlayground?: boolean | null;
+  hasBoundaryWall?: boolean | null;
+  hasLibrary?: boolean | null;
+  hasLaboratory?: boolean | null;
+  hasComputerLab?: boolean | null;
+  hasSmartClassroom?: boolean | null;
+  hasElectricity?: boolean | null;
+  hasInternet?: boolean | null;
+  hasCctv?: boolean | null;
+  // Water & Sanitation
+  hasDrinkingWater?: boolean | null;
+  drinkingWaterSource?: string;
+  numToilets?: number | null;
+  numBoysToilets?: number | null;
+  numGirlsToilets?: number | null;
+  hasCwsnToilet?: boolean | null;
+  hasHandwashing?: boolean | null;
+  // Academic
+  classesFrom?: number | null;
+  classesTo?: number | null;
+  streams?: string;
+  // Safety
+  hasFireSafety?: boolean | null;
+  hasDisasterPlan?: boolean | null;
+  hasFirstAid?: boolean | null;
+  hasSecurityGuard?: boolean | null;
+  emergencyContact?: string;
 }
 
 export const api = {
@@ -158,7 +233,7 @@ export const api = {
       req<Student[]>(`/students${qstr(params)}`),
     summary: (params: PeopleFilter = {}) => req<StudentDemographics>(`/students/summary${qstr(params)}`),
     create: (body: Partial<Student> & { schoolId?: string }) =>
-      req<{ id: string }>('/students', { method: 'POST', body: JSON.stringify(body) }),
+      req<{ id: string; studentLogin: { email: string; password: string }; parentLogin: { email: string; password: string } }>('/students', { method: 'POST', body: JSON.stringify(body) }),
     bulk: (schoolId: string | undefined, rows: Partial<Student>[]) =>
       req<{ inserted: number; skipped: number }>('/students/bulk', { method: 'POST', body: JSON.stringify({ schoolId, rows }) }),
     promote: (schoolId?: string) =>

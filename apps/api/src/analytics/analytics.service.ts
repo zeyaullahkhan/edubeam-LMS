@@ -72,13 +72,14 @@ export class AnalyticsService {
     return Promise.all(
       districts.map(async (d) => {
         const where = { block: { districtId: d.id } };
-        const [schools, vc, ict, students, p10, p12] = await Promise.all([
+        const [schools, vc, ict, students, p10, p12, ictTeachers] = await Promise.all([
           prisma.school.count({ where }),
           prisma.school.count({ where: { ...where, hasVirtualClassroom: true } }),
           prisma.school.count({ where: { ...where, hasIctLab: true } }),
-          prisma.enrollment.aggregate({ _sum: { total: true }, where: { school: where } }),
+          prisma.enrollment.aggregate({ _sum: { total: true, boys: true, girls: true }, where: { school: where } }),
           prisma.boardResult.aggregate({ _avg: { passPct: true }, where: { examType: '10TH', school: where } }),
           prisma.boardResult.aggregate({ _avg: { passPct: true }, where: { examType: '12TH', school: where } }),
+          prisma.ictDeployment.aggregate({ _sum: { teacherCount: true }, where: { school: where } }),
         ]);
         return {
           districtId: d.id,
@@ -87,6 +88,9 @@ export class AnalyticsService {
           virtualClassroomSchools: vc,
           ictLabSchools: ict,
           totalStudents: students._sum.total ?? 0,
+          boys: students._sum.boys ?? 0,
+          girls: students._sum.girls ?? 0,
+          teachers: ictTeachers._sum.teacherCount ?? 0,
           avgPass10th: p10._avg.passPct,
           avgPass12th: p12._avg.passPct,
         };
@@ -233,12 +237,14 @@ export class AnalyticsService {
     return Promise.all(
       blocks.map(async (b) => {
         const where = { ...schoolWhere, blockId: b.id };
-        const [schools, vc, ict, students, teachers] = await Promise.all([
+        const [schools, vc, ict, students, teachers, p10, p12] = await Promise.all([
           prisma.school.count({ where }),
           prisma.school.count({ where: { ...where, hasVirtualClassroom: true } }),
           prisma.school.count({ where: { ...where, hasIctLab: true } }),
-          prisma.enrollment.aggregate({ _sum: { total: true }, where: { school: where } }),
+          prisma.enrollment.aggregate({ _sum: { total: true, boys: true, girls: true }, where: { school: where } }),
           prisma.staff.count({ where: { school: where } }),
+          prisma.boardResult.aggregate({ _avg: { passPct: true }, where: { examType: '10TH', school: where } }),
+          prisma.boardResult.aggregate({ _avg: { passPct: true }, where: { examType: '12TH', school: where } }),
         ]);
         return {
           blockId: b.id,
@@ -247,7 +253,11 @@ export class AnalyticsService {
           virtualClassroomSchools: vc,
           ictLabSchools: ict,
           totalStudents: students._sum.total ?? 0,
+          boys: students._sum.boys ?? 0,
+          girls: students._sum.girls ?? 0,
           teachers,
+          avgPass10th: p10._avg.passPct,
+          avgPass12th: p12._avg.passPct,
         };
       }),
     );

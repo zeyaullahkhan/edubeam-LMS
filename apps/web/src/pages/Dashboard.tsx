@@ -321,7 +321,9 @@ export function Dashboard() {
                 districts.map((d) => ({
                   District: d.district,
                   Schools: d.schools,
-                  'Virtual Classroom': d.virtualClassroomSchools,
+                  Teachers: d.teachers,
+                  Boys: d.boys,
+                  Girls: d.girls,
                   Students: d.totalStudents,
                   'Avg Pass 10th': pct(d.avgPass10th),
                   'Avg Pass 12th': pct(d.avgPass12th),
@@ -337,17 +339,21 @@ export function Dashboard() {
         <table className="w-full text-sm data-table" style={{ tableLayout: 'fixed' }}>
           <colgroup>
             <col style={{ width: 'auto' }} />
+            <col style={{ width: '80px' }} />
+            <col style={{ width: '80px' }} />
             <col style={{ width: '90px' }} />
             <col style={{ width: '90px' }} />
-            <col style={{ width: '110px' }} />
-            <col style={{ width: '110px' }} />
-            <col style={{ width: '110px' }} />
+            <col style={{ width: '100px' }} />
+            <col style={{ width: '100px' }} />
+            <col style={{ width: '100px' }} />
           </colgroup>
           <thead>
             <tr>
               <th className="text-left">District / Block / School</th>
               <th className="text-right">Schools</th>
-              <th className="text-right">Virtual</th>
+              <th className="text-right">Teachers</th>
+              <th className="text-right">Boys</th>
+              <th className="text-right">Girls</th>
               <th className="text-right">Students</th>
               <th className="text-right">Pass 10th</th>
               <th className="text-right">Pass 12th</th>
@@ -792,7 +798,9 @@ function DistrictRow({
           {d.district}
         </td>
         <td className="text-right font-medium">{d.schools}</td>
-        <td className="text-right font-medium">{d.virtualClassroomSchools}</td>
+        <td className="text-right font-medium">{d.teachers > 0 ? d.teachers.toLocaleString() : '—'}</td>
+        <td className="text-right text-blue-600 font-medium">{d.boys > 0 ? d.boys.toLocaleString() : '—'}</td>
+        <td className="text-right text-pink-600 font-medium">{d.girls > 0 ? d.girls.toLocaleString() : '—'}</td>
         <td className="text-right">{d.totalStudents.toLocaleString()}</td>
         <td className="text-right font-semibold" style={{ color: passColor(d.avgPass10th ?? 0) }}>
           {pct(d.avgPass10th)}
@@ -821,17 +829,23 @@ function DistrictRow({
               <span className="ml-1.5 text-xs text-slate-400">{d.district}</span>
             </td>
             <td className="text-right text-slate-500 font-medium">{b.schools}</td>
-            <td className="text-right text-slate-500 font-medium">{b.virtualClassroomSchools}</td>
+            <td className="text-right text-slate-500 font-medium">{b.teachers > 0 ? b.teachers.toLocaleString() : '—'}</td>
+            <td className="text-right text-blue-500 font-medium">{b.boys > 0 ? b.boys.toLocaleString() : '—'}</td>
+            <td className="text-right text-pink-500 font-medium">{b.girls > 0 ? b.girls.toLocaleString() : '—'}</td>
             <td className="text-right text-slate-500">{b.totalStudents.toLocaleString()}</td>
-            <td className="text-right text-slate-400">—</td>
-            <td className="text-right text-slate-400">—</td>
+            <td className="text-right font-semibold" style={b.avgPass10th != null ? { color: passColor(b.avgPass10th) } : {}}>
+              {pct(b.avgPass10th)}
+            </td>
+            <td className="text-right font-semibold" style={b.avgPass12th != null ? { color: passColor(b.avgPass12th) } : {}}>
+              {pct(b.avgPass12th)}
+            </td>
           </tr>
 
           {/* School rows under this block */}
           {openBlock === b.blockId && (
             loadingBlock ? (
               <tr>
-                <td colSpan={6} className="pl-20 py-2 text-xs text-slate-400">
+                <td colSpan={8} className="pl-20 py-2 text-xs text-slate-400">
                   <i className="fas fa-circle-notch fa-spin mr-1" />Loading schools…
                 </td>
               </tr>
@@ -849,13 +863,11 @@ function DistrictRow({
                   )}
                 </td>
                 <td className="text-right text-slate-400">—</td>
-                <td className="text-right">
-                  {s.hasVirtualClassroom && (
-                    <span className="badge-virtual text-[10px] px-1.5 py-0.5">
-                      <i className="fas fa-video mr-1" />VC
-                    </span>
-                  )}
+                <td className="text-right text-slate-400 text-[11px]">
+                  {s.teachers != null ? s.teachers.toLocaleString() : '—'}
                 </td>
+                <td className="text-right text-blue-400 text-[11px]">{s.boys != null && s.boys > 0 ? s.boys.toLocaleString() : '—'}</td>
+                <td className="text-right text-pink-400 text-[11px]">{s.girls != null && s.girls > 0 ? s.girls.toLocaleString() : '—'}</td>
                 <td className="text-right text-slate-500">
                   {(s.enrolledStudents ?? s.students)?.toLocaleString() ?? '—'}
                 </td>

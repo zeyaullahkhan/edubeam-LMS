@@ -173,7 +173,7 @@ export function Analytics() {
         <div className="panel p-5">
           <div className="flex items-center justify-between mb-1">
             <div className="flex items-center gap-3">
-              <h2 className="font-heading font-semibold text-navy-700">5-Year Board Result Trend</h2>
+              <h2 className="font-heading font-semibold text-navy-700">6-Year Board Result Trend</h2>
               <span className="badge-real">Live</span>
             </div>
           </div>

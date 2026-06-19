@@ -96,7 +96,81 @@ function SchoolLoginBtn({ schoolId }: SchoolLoginBtnProps) {
   );
 }
 
-// ── School form modal ─────────────────────────────────────────────────────────
+// ── School form modal (tabbed) ────────────────────────────────────────────────
+
+type TabId = 'profile' | 'infra' | 'wash' | 'academic' | 'status';
+
+interface Tab { id: TabId; label: string; icon: string }
+const TABS: Tab[] = [
+  { id: 'profile',  label: 'School Profile',     icon: 'fa-school' },
+  { id: 'infra',    label: 'Infrastructure',      icon: 'fa-building' },
+  { id: 'wash',     label: 'Water & Sanitation',  icon: 'fa-tint' },
+  { id: 'academic', label: 'Academic & Safety',   icon: 'fa-graduation-cap' },
+  { id: 'status',   label: 'Completion Status',   icon: 'fa-chart-pie' },
+];
+
+// Fields counted for profile completion
+const COMPLETION_FIELDS: { key: keyof SchoolFormData | 'principalName' | 'phone' | 'address'; label: string }[] = [
+  { key: 'principalName',      label: 'Principal Name' },
+  { key: 'phone',              label: 'Contact Number' },
+  { key: 'address',            label: 'Address' },
+  { key: 'campusArea',         label: 'Campus Area' },
+  { key: 'numBuildings',       label: 'Number of Buildings' },
+  { key: 'numClassrooms',      label: 'Number of Classrooms' },
+  { key: 'hasPlayground',      label: 'Playground' },
+  { key: 'hasBoundaryWall',    label: 'Boundary Wall' },
+  { key: 'hasLibrary',         label: 'Library' },
+  { key: 'hasLaboratory',      label: 'Laboratory' },
+  { key: 'hasComputerLab',     label: 'Computer Lab' },
+  { key: 'hasSmartClassroom',  label: 'Smart Classroom' },
+  { key: 'hasElectricity',     label: 'Electricity' },
+  { key: 'hasInternet',        label: 'Internet Connectivity' },
+  { key: 'hasCctv',            label: 'CCTV' },
+  { key: 'hasDrinkingWater',   label: 'Drinking Water' },
+  { key: 'drinkingWaterSource',label: 'Water Source' },
+  { key: 'numToilets',         label: 'Total Toilets' },
+  { key: 'numBoysToilets',     label: 'Boys Toilets' },
+  { key: 'numGirlsToilets',    label: 'Girls Toilets' },
+  { key: 'hasCwsnToilet',      label: 'CWSN Toilet' },
+  { key: 'hasHandwashing',     label: 'Handwashing Facility' },
+  { key: 'classesFrom',        label: 'Classes (From)' },
+  { key: 'classesTo',          label: 'Classes (To)' },
+  { key: 'streams',            label: 'Streams' },
+  { key: 'hasFireSafety',      label: 'Fire Safety Equipment' },
+  { key: 'hasDisasterPlan',    label: 'Disaster Management Plan' },
+  { key: 'hasFirstAid',        label: 'First Aid Facility' },
+  { key: 'hasSecurityGuard',   label: 'Security Guard' },
+  { key: 'emergencyContact',   label: 'Emergency Contact' },
+];
+
+function isFilled(v: any): boolean {
+  if (v === null || v === undefined || v === '') return false;
+  return true;
+}
+
+// Three-state toggle: null = unknown, true = Yes, false = No
+function TriToggle({ label, value, onChange }: { label: string; value: boolean | null | undefined; onChange: (v: boolean | null) => void }) {
+  const base = 'px-3 py-1.5 text-xs font-medium rounded transition-colors border';
+  return (
+    <div>
+      <div className="form-label mb-1.5">{label}</div>
+      <div className="flex gap-1">
+        <button type="button" onClick={() => onChange(true)}
+          className={`${base} ${value === true ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-200 text-slate-500 hover:border-emerald-300'}`}>
+          Yes
+        </button>
+        <button type="button" onClick={() => onChange(false)}
+          className={`${base} ${value === false ? 'bg-red-400 border-red-400 text-white' : 'border-slate-200 text-slate-500 hover:border-red-300'}`}>
+          No
+        </button>
+        <button type="button" onClick={() => onChange(null)}
+          className={`${base} ${value == null ? 'bg-slate-200 border-slate-200 text-slate-600' : 'border-slate-200 text-slate-400 hover:bg-slate-50'}`}>
+          —
+        </button>
+      </div>
+    </div>
+  );
+}
 
 interface SchoolModalProps {
   school?: SchoolRow | null;
@@ -106,9 +180,10 @@ interface SchoolModalProps {
 
 function SchoolModal({ school, onClose, onSaved }: SchoolModalProps) {
   const isEdit = !!school;
+  const [tab, setTab] = useState<TabId>('profile');
   const [districts, setDistricts] = useState<DistrictMeta[]>([]);
   const [districtId, setDistrictId] = useState(school?.districtId ?? '');
-  const [form, setForm] = useState<SchoolFormData>({
+  const [form, setForm] = useState<SchoolFormData & { principalName?: string; phone?: string; address?: string }>({
     name: school?.name ?? '',
     udiseCode: school?.udiseCode ?? '',
     siteCode: school?.siteCode ?? '',
@@ -119,6 +194,39 @@ function SchoolModal({ school, onClose, onSaved }: SchoolModalProps) {
     address: school?.address ?? '',
     principalName: school?.principalName ?? '',
     phone: school?.phone ?? '',
+    // Infrastructure
+    campusArea: school?.campusArea ?? null,
+    campusAreaUnit: school?.campusAreaUnit ?? 'acres',
+    builtUpArea: school?.builtUpArea ?? null,
+    numBuildings: school?.numBuildings ?? null,
+    numClassrooms: school?.numClassrooms ?? null,
+    hasPlayground: school?.hasPlayground ?? null,
+    hasBoundaryWall: school?.hasBoundaryWall ?? null,
+    hasLibrary: school?.hasLibrary ?? null,
+    hasLaboratory: school?.hasLaboratory ?? null,
+    hasComputerLab: school?.hasComputerLab ?? null,
+    hasSmartClassroom: school?.hasSmartClassroom ?? null,
+    hasElectricity: school?.hasElectricity ?? null,
+    hasInternet: school?.hasInternet ?? null,
+    hasCctv: school?.hasCctv ?? null,
+    // Water & Sanitation
+    hasDrinkingWater: school?.hasDrinkingWater ?? null,
+    drinkingWaterSource: school?.drinkingWaterSource ?? '',
+    numToilets: school?.numToilets ?? null,
+    numBoysToilets: school?.numBoysToilets ?? null,
+    numGirlsToilets: school?.numGirlsToilets ?? null,
+    hasCwsnToilet: school?.hasCwsnToilet ?? null,
+    hasHandwashing: school?.hasHandwashing ?? null,
+    // Academic
+    classesFrom: school?.classesFrom ?? null,
+    classesTo: school?.classesTo ?? null,
+    streams: school?.streams ?? '',
+    // Safety
+    hasFireSafety: school?.hasFireSafety ?? null,
+    hasDisasterPlan: school?.hasDisasterPlan ?? null,
+    hasFirstAid: school?.hasFirstAid ?? null,
+    hasSecurityGuard: school?.hasSecurityGuard ?? null,
+    emergencyContact: school?.emergencyContact ?? '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -130,14 +238,19 @@ function SchoolModal({ school, onClose, onSaved }: SchoolModalProps) {
   }, []);
 
   const blocks = districts.find(d => d.id === districtId)?.blocks ?? [];
+  const set = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }));
 
-  const set = (k: keyof SchoolFormData, v: any) => setForm(f => ({ ...f, [k]: v }));
+  // Compute completion
+  const filledFields = COMPLETION_FIELDS.filter(f => isFilled((form as any)[f.key]));
+  const pendingFields = COMPLETION_FIELDS.filter(f => !isFilled((form as any)[f.key]));
+  const pct = Math.round((filledFields.length / COMPLETION_FIELDS.length) * 100);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
     if (!form.name.trim() || !form.udiseCode.trim() || !form.blockId) {
       setError('Name, UDISE code and Block are required.');
+      setTab('profile');
       return;
     }
     setSaving(true);
@@ -154,170 +267,389 @@ function SchoolModal({ school, onClose, onSaved }: SchoolModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col" style={{ maxHeight: '92vh' }} onClick={e => e.stopPropagation()}>
+
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-          <h2 className="font-heading font-bold text-navy-700 text-lg">
-            {isEdit ? 'Edit School' : 'Add School'}
-          </h2>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
+          <div>
+            <h2 className="font-heading font-bold text-navy-700 text-lg">
+              {isEdit ? school!.name : 'Add School'}
+            </h2>
+            {isEdit && <p className="text-xs text-slate-400 mt-0.5 font-mono">{school!.udiseCode}</p>}
+          </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
             <i className="fas fa-times text-lg" />
           </button>
         </div>
 
-        <form onSubmit={submit} className="p-6 space-y-5">
-          {error && (
-            <div className="bg-red-50 text-red-700 text-sm rounded-lg px-4 py-3 flex items-center gap-2">
-              <i className="fas fa-exclamation-circle" />
-              {error}
-            </div>
-          )}
-
-          {/* Row 1: Name */}
-          <div>
-            <label className="form-label">School Name *</label>
-            <input
-              ref={firstRef}
-              value={form.name}
-              onChange={e => set('name', e.target.value)}
-              placeholder="e.g. GGIC ALMORA"
-              className="form-input"
-              required
-            />
-          </div>
-
-          {/* Row 2: UDISE + Site Code */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="form-label">UDISE Code *</label>
-              <input
-                value={form.udiseCode}
-                onChange={e => set('udiseCode', e.target.value)}
-                placeholder="e.g. 5090615301"
-                className="form-input font-mono"
-                required
-              />
-            </div>
-            <div>
-              <label className="form-label">Site Code</label>
-              <input
-                value={form.siteCode ?? ''}
-                onChange={e => set('siteCode', e.target.value)}
-                placeholder="e.g. VVEAMO376"
-                className="form-input font-mono"
-              />
+        {/* Completion bar */}
+        {isEdit && (
+          <div className="px-6 pt-3 pb-0 shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${pct >= 80 ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-400' : 'bg-red-400'}`}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+              <span className={`text-xs font-semibold ${pct >= 80 ? 'text-emerald-600' : pct >= 50 ? 'text-amber-600' : 'text-red-500'}`}>
+                {pct}% complete
+              </span>
             </div>
           </div>
+        )}
 
-          {/* Row 3: District + Block */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="form-label">District *</label>
-              <select
-                value={districtId}
-                onChange={e => { setDistrictId(e.target.value); set('blockId', ''); }}
-                className="form-input"
-                required
-              >
-                <option value="">— Select district —</option>
-                {districts.map(d => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="form-label">Block *</label>
-              <select
-                value={form.blockId}
-                onChange={e => set('blockId', e.target.value)}
-                className="form-input"
-                required
-                disabled={!districtId}
-              >
-                <option value="">— Select block —</option>
-                {blocks.map(b => (
-                  <option key={b.id} value={b.id}>{b.name}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Row 4: Type + checkboxes */}
-          <div className="grid grid-cols-3 gap-4 items-end">
-            <div>
-              <label className="form-label">Type</label>
-              <select value={form.type ?? ''} onChange={e => set('type', e.target.value)} className="form-input">
-                <option value="">— Other —</option>
-                <option value="GIC">GIC</option>
-                <option value="GGIC">GGIC</option>
-              </select>
-            </div>
-            <label className="flex items-center gap-2 cursor-pointer py-2">
-              <input
-                type="checkbox"
-                checked={form.hasVirtualClassroom}
-                onChange={e => set('hasVirtualClassroom', e.target.checked)}
-                className="w-4 h-4 rounded accent-sky-600"
-              />
-              <span className="text-sm font-medium text-slate-700">Virtual Classroom</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer py-2">
-              <input
-                type="checkbox"
-                checked={form.hasIctLab}
-                onChange={e => set('hasIctLab', e.target.checked)}
-                className="w-4 h-4 rounded accent-sky-600"
-              />
-              <span className="text-sm font-medium text-slate-700">ICT Lab</span>
-            </label>
-          </div>
-
-          {/* Row 5: Principal + Phone */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="form-label">Principal / Head Master</label>
-              <input
-                value={form.principalName ?? ''}
-                onChange={e => set('principalName', e.target.value)}
-                placeholder="Name"
-                className="form-input"
-              />
-            </div>
-            <div>
-              <label className="form-label">Contact Number</label>
-              <input
-                value={form.phone ?? ''}
-                onChange={e => set('phone', e.target.value)}
-                placeholder="Mobile"
-                className="form-input"
-              />
-            </div>
-          </div>
-
-          {/* Row 6: Address */}
-          <div>
-            <label className="form-label">Address</label>
-            <textarea
-              value={form.address ?? ''}
-              onChange={e => set('address', e.target.value)}
-              placeholder="Full address"
-              rows={2}
-              className="form-input resize-none"
-            />
-          </div>
-
-          {/* Actions */}
-          <div className="flex gap-3 justify-end pt-2">
-            <button type="button" onClick={onClose} className="btn-outline px-5 py-2.5">
-              Cancel
+        {/* Tab strip */}
+        <div className="flex border-b border-slate-100 px-4 mt-3 shrink-0 overflow-x-auto">
+          {TABS.map(t => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id)}
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium whitespace-nowrap border-b-2 transition-colors ${
+                tab === t.id
+                  ? 'border-sky-500 text-sky-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <i className={`fas ${t.icon} text-[10px]`} />
+              {t.label}
             </button>
-            <button type="submit" disabled={saving} className="btn-navy px-6 py-2.5">
-              {saving
-                ? <><i className="fas fa-circle-notch fa-spin mr-2" />Saving…</>
-                : <><i className={`fas fa-${isEdit ? 'save' : 'plus'} mr-2`} />{isEdit ? 'Save Changes' : 'Add School'}</>
-              }
-            </button>
+          ))}
+        </div>
+
+        {/* Body */}
+        <form onSubmit={submit} className="flex flex-col flex-1 min-h-0">
+          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+            {error && (
+              <div className="bg-red-50 text-red-700 text-sm rounded-lg px-4 py-3 flex items-center gap-2">
+                <i className="fas fa-exclamation-circle" />{error}
+              </div>
+            )}
+
+            {/* ── Tab: School Profile ──────────────────────────────── */}
+            {tab === 'profile' && (
+              <div className="space-y-5">
+                <div>
+                  <label className="form-label">School Name *</label>
+                  <input ref={firstRef} value={form.name} onChange={e => set('name', e.target.value)}
+                    placeholder="e.g. GGIC ALMORA" className="form-input" required />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="form-label">UDISE Code *</label>
+                    <input value={form.udiseCode} onChange={e => set('udiseCode', e.target.value)}
+                      placeholder="e.g. 5090615301" className="form-input font-mono" required />
+                  </div>
+                  <div>
+                    <label className="form-label">Site Code</label>
+                    <input value={form.siteCode ?? ''} onChange={e => set('siteCode', e.target.value)}
+                      placeholder="e.g. VVEAMO376" className="form-input font-mono" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="form-label">District *</label>
+                    <select value={districtId} onChange={e => { setDistrictId(e.target.value); set('blockId', ''); }} className="form-input" required>
+                      <option value="">— Select district —</option>
+                      {districts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="form-label">Block *</label>
+                    <select value={form.blockId} onChange={e => set('blockId', e.target.value)} className="form-input" required disabled={!districtId}>
+                      <option value="">— Select block —</option>
+                      {blocks.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-4 items-end">
+                  <div>
+                    <label className="form-label">Type</label>
+                    <select value={form.type ?? ''} onChange={e => set('type', e.target.value)} className="form-input">
+                      <option value="">— Other —</option>
+                      <option value="GIC">GIC</option>
+                      <option value="GGIC">GGIC</option>
+                    </select>
+                  </div>
+                  <label className="flex items-center gap-2 cursor-pointer py-2">
+                    <input type="checkbox" checked={form.hasVirtualClassroom} onChange={e => set('hasVirtualClassroom', e.target.checked)} className="w-4 h-4 rounded accent-sky-600" />
+                    <span className="text-sm font-medium text-slate-700">Virtual Classroom</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer py-2">
+                    <input type="checkbox" checked={form.hasIctLab} onChange={e => set('hasIctLab', e.target.checked)} className="w-4 h-4 rounded accent-sky-600" />
+                    <span className="text-sm font-medium text-slate-700">ICT Lab</span>
+                  </label>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="form-label">Principal / Head Master</label>
+                    <input value={form.principalName ?? ''} onChange={e => set('principalName', e.target.value)} placeholder="Name" className="form-input" />
+                  </div>
+                  <div>
+                    <label className="form-label">Contact Number</label>
+                    <input value={form.phone ?? ''} onChange={e => set('phone', e.target.value)} placeholder="Mobile" className="form-input" />
+                  </div>
+                </div>
+                <div>
+                  <label className="form-label">Address</label>
+                  <textarea value={form.address ?? ''} onChange={e => set('address', e.target.value)} placeholder="Full address" rows={2} className="form-input resize-none" />
+                </div>
+              </div>
+            )}
+
+            {/* ── Tab: Infrastructure ──────────────────────────────── */}
+            {tab === 'infra' && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Area & Buildings</h3>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="col-span-2">
+                      <label className="form-label">Total Campus Area</label>
+                      <input type="number" min={0} step={0.01} value={form.campusArea ?? ''} onChange={e => set('campusArea', e.target.value ? +e.target.value : null)}
+                        placeholder="e.g. 2.5" className="form-input" />
+                    </div>
+                    <div>
+                      <label className="form-label">Unit</label>
+                      <select value={form.campusAreaUnit ?? 'acres'} onChange={e => set('campusAreaUnit', e.target.value)} className="form-input">
+                        <option value="acres">Acres</option>
+                        <option value="sqm">Sq. Metres</option>
+                        <option value="sqft">Sq. Feet</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="form-label">Built-up Area (sq.m)</label>
+                      <input type="number" min={0} value={form.builtUpArea ?? ''} onChange={e => set('builtUpArea', e.target.value ? +e.target.value : null)}
+                        placeholder="e.g. 1200" className="form-input" />
+                    </div>
+                    <div>
+                      <label className="form-label">No. of Buildings</label>
+                      <input type="number" min={0} value={form.numBuildings ?? ''} onChange={e => set('numBuildings', e.target.value ? +e.target.value : null)}
+                        placeholder="e.g. 3" className="form-input" />
+                    </div>
+                    <div>
+                      <label className="form-label">No. of Classrooms</label>
+                      <input type="number" min={0} value={form.numClassrooms ?? ''} onChange={e => set('numClassrooms', e.target.value ? +e.target.value : null)}
+                        placeholder="e.g. 12" className="form-input" />
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Facilities Available</h3>
+                  <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+                    <TriToggle label="Playground" value={form.hasPlayground} onChange={v => set('hasPlayground', v)} />
+                    <TriToggle label="Boundary Wall" value={form.hasBoundaryWall} onChange={v => set('hasBoundaryWall', v)} />
+                    <TriToggle label="Library" value={form.hasLibrary} onChange={v => set('hasLibrary', v)} />
+                    <TriToggle label="Laboratory" value={form.hasLaboratory} onChange={v => set('hasLaboratory', v)} />
+                    <TriToggle label="Computer Lab" value={form.hasComputerLab} onChange={v => set('hasComputerLab', v)} />
+                    <TriToggle label="Smart Classroom" value={form.hasSmartClassroom} onChange={v => set('hasSmartClassroom', v)} />
+                    <TriToggle label="Electricity" value={form.hasElectricity} onChange={v => set('hasElectricity', v)} />
+                    <TriToggle label="Internet Connectivity" value={form.hasInternet} onChange={v => set('hasInternet', v)} />
+                    <TriToggle label="CCTV" value={form.hasCctv} onChange={v => set('hasCctv', v)} />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── Tab: Water & Sanitation ──────────────────────────── */}
+            {tab === 'wash' && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Drinking Water</h3>
+                  <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+                    <TriToggle label="Drinking Water Facility Available" value={form.hasDrinkingWater} onChange={v => set('hasDrinkingWater', v)} />
+                    <div>
+                      <label className="form-label">Source of Drinking Water</label>
+                      <select value={form.drinkingWaterSource ?? ''} onChange={e => set('drinkingWaterSource', e.target.value)} className="form-input">
+                        <option value="">— Select —</option>
+                        <option value="Tap">Tap Water</option>
+                        <option value="Hand-pump">Hand-pump</option>
+                        <option value="Well">Well</option>
+                        <option value="Tank">Tank / Storage</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Toilets</h3>
+                  <div className="grid grid-cols-3 gap-4 mb-4">
+                    <div>
+                      <label className="form-label">Total Toilets</label>
+                      <input type="number" min={0} value={form.numToilets ?? ''} onChange={e => set('numToilets', e.target.value ? +e.target.value : null)} placeholder="0" className="form-input" />
+                    </div>
+                    <div>
+                      <label className="form-label">Boys Toilets</label>
+                      <input type="number" min={0} value={form.numBoysToilets ?? ''} onChange={e => set('numBoysToilets', e.target.value ? +e.target.value : null)} placeholder="0" className="form-input" />
+                    </div>
+                    <div>
+                      <label className="form-label">Girls Toilets</label>
+                      <input type="number" min={0} value={form.numGirlsToilets ?? ''} onChange={e => set('numGirlsToilets', e.target.value ? +e.target.value : null)} placeholder="0" className="form-input" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+                    <TriToggle label="CWSN / Divyang Friendly Toilet" value={form.hasCwsnToilet} onChange={v => set('hasCwsnToilet', v)} />
+                    <TriToggle label="Handwashing Facility Available" value={form.hasHandwashing} onChange={v => set('hasHandwashing', v)} />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── Tab: Academic & Safety ───────────────────────────── */}
+            {tab === 'academic' && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Academic Information</h3>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="form-label">Classes From (Grade)</label>
+                      <select value={form.classesFrom ?? ''} onChange={e => set('classesFrom', e.target.value ? +e.target.value : null)} className="form-input">
+                        <option value="">— Select —</option>
+                        <option value={0}>Pre-Primary</option>
+                        {[1,2,3,4,5,6,7,8,9,10,11,12].map(g => <option key={g} value={g}>Class {g}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="form-label">Classes To (Grade)</label>
+                      <select value={form.classesTo ?? ''} onChange={e => set('classesTo', e.target.value ? +e.target.value : null)} className="form-input">
+                        <option value="">— Select —</option>
+                        {[1,2,3,4,5,6,7,8,9,10,11,12].map(g => <option key={g} value={g}>Class {g}</option>)}
+                      </select>
+                    </div>
+                    <div className="col-span-3">
+                      <label className="form-label">Streams Available</label>
+                      <div className="flex flex-wrap gap-2 mt-1">
+                        {['Science', 'Arts', 'Commerce', 'Vocational'].map(s => {
+                          const list = (form.streams ?? '').split(',').map(x => x.trim()).filter(Boolean);
+                          const checked = list.includes(s);
+                          return (
+                            <label key={s} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm cursor-pointer transition-colors ${
+                              checked ? 'bg-sky-50 border-sky-300 text-sky-700' : 'border-slate-200 text-slate-600 hover:border-sky-200'
+                            }`}>
+                              <input type="checkbox" className="hidden" checked={checked} onChange={() => {
+                                const next = checked ? list.filter(x => x !== s) : [...list, s];
+                                set('streams', next.join(','));
+                              }} />
+                              <i className={`fas fa-${checked ? 'check-circle' : 'circle'} text-xs ${checked ? 'text-sky-500' : 'text-slate-300'}`} />
+                              {s}
+                            </label>
+                          );
+                        })}
+                      </div>
+                      <input value={form.streams ?? ''} onChange={e => set('streams', e.target.value)} placeholder="Or type custom streams, comma-separated" className="form-input mt-2 text-xs" />
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Safety & Security</h3>
+                  <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+                    <TriToggle label="Fire Safety Equipment" value={form.hasFireSafety} onChange={v => set('hasFireSafety', v)} />
+                    <TriToggle label="Disaster Management Plan" value={form.hasDisasterPlan} onChange={v => set('hasDisasterPlan', v)} />
+                    <TriToggle label="First Aid Facility" value={form.hasFirstAid} onChange={v => set('hasFirstAid', v)} />
+                    <TriToggle label="Security Guard" value={form.hasSecurityGuard} onChange={v => set('hasSecurityGuard', v)} />
+                  </div>
+                  <div className="mt-4">
+                    <label className="form-label">Emergency Contact Number</label>
+                    <input value={form.emergencyContact ?? ''} onChange={e => set('emergencyContact', e.target.value)} placeholder="e.g. 9876543210" className="form-input" />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── Tab: Completion Status ───────────────────────────── */}
+            {tab === 'status' && (
+              <div className="space-y-5">
+                {/* Summary cards */}
+                <div className="grid grid-cols-4 gap-3">
+                  {[
+                    { label: 'Total Fields', val: COMPLETION_FIELDS.length, color: 'text-slate-700 bg-slate-50 border-slate-200' },
+                    { label: 'Filled',        val: filledFields.length,     color: 'text-emerald-700 bg-emerald-50 border-emerald-200' },
+                    { label: 'Pending',       val: pendingFields.length,    color: 'text-amber-700 bg-amber-50 border-amber-200' },
+                    { label: 'Completion',    val: `${pct}%`,               color: pct >= 80 ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : pct >= 50 ? 'text-amber-700 bg-amber-50 border-amber-200' : 'text-red-700 bg-red-50 border-red-200' },
+                  ].map(c => (
+                    <div key={c.label} className={`rounded-xl border p-4 text-center ${c.color}`}>
+                      <div className="text-2xl font-bold">{c.val}</div>
+                      <div className="text-xs font-medium mt-0.5">{c.label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Progress bar */}
+                <div>
+                  <div className="flex items-center justify-between text-xs mb-1.5">
+                    <span className="font-medium text-slate-600">Profile Completion</span>
+                    <span className={`font-bold ${pct >= 80 ? 'text-emerald-600' : pct >= 50 ? 'text-amber-600' : 'text-red-500'}`}>
+                      {pct >= 80 ? 'Complete' : pct >= 50 ? 'Partially Complete' : 'Incomplete'}
+                    </span>
+                  </div>
+                  <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full transition-all ${pct >= 80 ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-400' : 'bg-red-400'}`} style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+
+                {/* Pending fields */}
+                {pendingFields.length > 0 && (
+                  <div>
+                    <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Pending Information ({pendingFields.length})</h3>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {pendingFields.map(f => (
+                        <div key={f.key} className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-1.5">
+                          <i className="fas fa-exclamation-circle text-amber-400 shrink-0" />
+                          {f.label}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Filled fields */}
+                {filledFields.length > 0 && (
+                  <div>
+                    <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Filled Fields ({filledFields.length})</h3>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {filledFields.map(f => (
+                        <div key={f.key} className="flex items-center gap-2 text-xs text-emerald-700 bg-emerald-50 rounded-lg px-3 py-1.5">
+                          <i className="fas fa-check-circle text-emerald-500 shrink-0" />
+                          {f.label}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Audit */}
+                {isEdit && (school?.profileUpdatedBy || school?.profileUpdatedAt) && (
+                  <div className="text-xs text-slate-400 border-t border-slate-100 pt-3 flex items-center gap-4">
+                    {school.profileUpdatedBy && <span><i className="fas fa-user mr-1" />Last updated by: <span className="text-slate-600">{school.profileUpdatedBy}</span></span>}
+                    {school.profileUpdatedAt && <span><i className="fas fa-clock mr-1" />{new Date(school.profileUpdatedAt).toLocaleString()}</span>}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Footer actions */}
+          <div className="flex gap-3 justify-between items-center px-6 py-4 border-t border-slate-100 shrink-0 bg-slate-50/50">
+            <div className="flex gap-1">
+              {TABS.map((t, i) => (
+                <button key={t.id} type="button" onClick={() => setTab(t.id)}
+                  className={`w-2 h-2 rounded-full transition-colors ${tab === t.id ? 'bg-sky-500' : 'bg-slate-200 hover:bg-slate-300'}`}
+                  title={t.label}
+                />
+              ))}
+            </div>
+            <div className="flex gap-3">
+              <button type="button" onClick={onClose} className="btn-outline px-5 py-2.5 text-sm">Cancel</button>
+              {tab !== 'status' && (
+                <button type="submit" disabled={saving} className="btn-navy px-6 py-2.5 text-sm">
+                  {saving
+                    ? <><i className="fas fa-circle-notch fa-spin mr-2" />Saving…</>
+                    : <><i className={`fas fa-${isEdit ? 'save' : 'plus'} mr-2`} />{isEdit ? 'Save Changes' : 'Add School'}</>
+                  }
+                </button>
+              )}
+            </div>
           </div>
         </form>
       </div>
