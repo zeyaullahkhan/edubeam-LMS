@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import type { DistrictSummary } from '@edubeam/shared';
 
 interface Props {
@@ -12,20 +12,21 @@ interface DotConfig {
   cy: number;
 }
 
+// Dot positions tuned to stay well inside each district's SVG path
 const DOT_CONFIG: DotConfig[] = [
-  { key: 'uttarkashi',   name: 'Uttarkashi',          cx: 98,  cy: 57  },
-  { key: 'chamoli',      name: 'Chamoli',              cx: 188, cy: 88  },
-  { key: 'pithoragarh',  name: 'Pithoragarh',          cx: 265, cy: 178 },
-  { key: 'tehri',        name: 'Tehri Garhwal',        cx: 100, cy: 102 },
-  { key: 'rudraprayag',  name: 'Rudraprayag',          cx: 150, cy: 112 },
-  { key: 'dehradun',     name: 'Dehradun',             cx: 50,  cy: 122 },
-  { key: 'pauri',        name: 'Pauri Garhwal',        cx: 152, cy: 152 },
-  { key: 'haridwar',     name: 'Haridwar',             cx: 28,  cy: 168 },
-  { key: 'bageshwar',    name: 'Bageshwar',            cx: 232, cy: 155 },
-  { key: 'almora',       name: 'Almora',               cx: 208, cy: 195 },
-  { key: 'champawat',    name: 'Champawat',            cx: 258, cy: 232 },
-  { key: 'nainital',     name: 'Nainital',             cx: 168, cy: 228 },
-  { key: 'usn',          name: 'Udham Singh Nagar',    cx: 128, cy: 258 },
+  { key: 'uttarkashi',  name: 'Uttarkashi',       cx: 98,  cy: 57  },
+  { key: 'chamoli',     name: 'Chamoli',           cx: 188, cy: 90  },
+  { key: 'pithoragarh', name: 'Pithoragarh',       cx: 256, cy: 175 },
+  { key: 'tehri',       name: 'Tehri Garhwal',     cx: 103, cy: 104 },
+  { key: 'rudraprayag', name: 'Rudraprayag',       cx: 150, cy: 114 },
+  { key: 'dehradun',    name: 'Dehradun',          cx: 55,  cy: 155 },
+  { key: 'pauri',       name: 'Pauri Garhwal',     cx: 155, cy: 155 },
+  { key: 'haridwar',    name: 'Haridwar',          cx: 34,  cy: 165 },
+  { key: 'bageshwar',   name: 'Bageshwar',         cx: 232, cy: 158 },
+  { key: 'almora',      name: 'Almora',            cx: 210, cy: 198 },
+  { key: 'champawat',   name: 'Champawat',         cx: 248, cy: 228 },
+  { key: 'nainital',    name: 'Nainital',          cx: 170, cy: 228 },
+  { key: 'usn',         name: 'Udham Singh Nagar', cx: 135, cy: 252 },
 ];
 
 function normKey(s: string) {
@@ -33,35 +34,36 @@ function normKey(s: string) {
 }
 
 const NAME_MAP: Record<string, string> = {
-  uttarkashi: 'uttarkashi',
-  chamoli: 'chamoli',
-  pithoragarh: 'pithoragarh',
-  tehrigarhwal: 'tehri',
-  tehrigarhval: 'tehri',
-  rudraprayag: 'rudraprayag',
-  dehradun: 'dehradun',
-  paurigarhwal: 'pauri',
-  paurigarhval: 'pauri',
-  haridwar: 'haridwar',
-  hardwar: 'haridwar',
-  bageshwar: 'bageshwar',
-  almora: 'almora',
-  champawat: 'champawat',
-  nainital: 'nainital',
-  udhamsighnagar: 'usn',
-  udhamsinghnagar: 'usn',
-  ussagarnagar: 'usn',
-  usnagar: 'usn',
+  uttarkashi:       'uttarkashi',
+  chamoli:          'chamoli',
+  pithoragarh:      'pithoragarh',
+  tehrigarhwal:     'tehri',
+  tehrigarhval:     'tehri',
+  rudraprayag:      'rudraprayag',
+  dehradun:         'dehradun',
+  paurigarhwal:     'pauri',
+  paurigarhval:     'pauri',
+  haridwar:         'haridwar',
+  hardwar:          'haridwar',
+  bageshwar:        'bageshwar',
+  almora:           'almora',
+  champawat:        'champawat',
+  nainital:         'nainital',
+  udhamsighnagar:   'usn',
+  udhamsinghnagar:  'usn',
+  ussagarnagar:     'usn',
+  usnagar:          'usn',
 };
 
-interface Tooltip {
-  dotKey: string;
+interface TooltipState {
+  key: string;
   x: number;
   y: number;
 }
 
 export function UttarakhandMap({ districts }: Props) {
-  const [tooltip, setTooltip] = useState<Tooltip | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [tip, setTip] = useState<TooltipState | null>(null);
 
   const districtByKey: Record<string, DistrictSummary> = {};
   for (const d of districts) {
@@ -73,23 +75,21 @@ export function UttarakhandMap({ districts }: Props) {
   const totalSchools = districts.reduce((s, d) => s + d.schools, 0);
   const totalStudents = districts.reduce((s, d) => s + d.totalStudents, 0);
 
-  const hovered = tooltip ? districtByKey[tooltip.dotKey] : null;
-
-  function handleMouseEnter(e: React.MouseEvent<SVGGElement>, key: string) {
-    const svg = (e.currentTarget.closest('svg') as SVGSVGElement);
-    const rect = svg.getBoundingClientRect();
-    setTooltip({ dotKey: key, x: e.clientX - rect.left, y: e.clientY - rect.top });
-  }
-
-  function handleMouseMove(e: React.MouseEvent<SVGGElement>) {
-    if (!tooltip) return;
-    const svg = (e.currentTarget.closest('svg') as SVGSVGElement);
-    const rect = svg.getBoundingClientRect();
-    setTooltip(t => t ? { ...t, x: e.clientX - rect.left, y: e.clientY - rect.top } : null);
-  }
-
+  const hovered = tip ? districtByKey[tip.key] : null;
   const pct = (v: number | null | undefined) =>
     v == null ? '—' : `${(v * 100).toFixed(1)}%`;
+
+  function onEnter(e: React.MouseEvent, key: string) {
+    if (!wrapRef.current) return;
+    const r = wrapRef.current.getBoundingClientRect();
+    setTip({ key, x: e.clientX - r.left, y: e.clientY - r.top });
+  }
+
+  function onMove(e: React.MouseEvent) {
+    if (!tip || !wrapRef.current) return;
+    const r = wrapRef.current.getBoundingClientRect();
+    setTip(t => t ? { ...t, x: e.clientX - r.left, y: e.clientY - r.top } : null);
+  }
 
   return (
     <div className="panel overflow-hidden">
@@ -100,7 +100,7 @@ export function UttarakhandMap({ districts }: Props) {
             <h2 className="font-heading font-semibold text-navy-700">
               Uttarakhand — Active Schools
             </h2>
-            <span className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600">
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse inline-block" />
               Live
             </span>
@@ -111,30 +111,70 @@ export function UttarakhandMap({ districts }: Props) {
         </div>
       </div>
 
-      {/* Map area */}
-      <div className="relative bg-gradient-to-br from-green-50 to-blue-50 px-6 py-4 flex justify-center">
+      {/* Map area — relative container for HTML tooltip */}
+      <div
+        ref={wrapRef}
+        className="relative bg-gradient-to-br from-green-50 to-blue-50 px-4 py-4 flex justify-center"
+        onMouseLeave={() => setTip(null)}
+      >
         <style>{`
-          @keyframes uk-pulse-ring {
-            0%   { r: 0; opacity: 0.6; }
-            100% { r: 18; opacity: 0; }
+          @keyframes ukring {
+            0%   { r: var(--br); opacity: 0.65; }
+            100% { r: var(--er); opacity: 0; }
           }
-          .uk-ring { animation: uk-pulse-ring 2s ease-out infinite; }
+          .ukr { animation: ukring 2.2s ease-out infinite; }
         `}</style>
 
+        {/* HTML tooltip — large, readable */}
+        {tip && hovered && (
+          <div
+            className="pointer-events-none absolute z-20 bg-white border border-slate-200 rounded-2xl shadow-xl px-4 py-3"
+            style={{
+              left: tip.x + 16,
+              top: tip.y - 10,
+              minWidth: 220,
+              transform: tip.x > (wrapRef.current?.offsetWidth ?? 600) / 2 ? 'translateX(-110%)' : undefined,
+            }}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <span className="font-bold text-blue-800 text-[15px]">{hovered.district}</span>
+              <span className="bg-emerald-100 text-emerald-700 text-[11px] font-bold px-2 py-0.5 rounded-full">Active</span>
+            </div>
+            <div className="space-y-1 text-[13px] text-slate-700">
+              <div className="flex items-center gap-2">
+                <i className="fas fa-school text-blue-400 w-4" />
+                <span><strong>{hovered.schools}</strong> schools active</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <i className="fas fa-user-graduate text-emerald-400 w-4" />
+                <span><strong>{hovered.totalStudents.toLocaleString()}</strong> students enrolled</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <i className="fas fa-award text-amber-400 w-4" />
+                <span>Pass 10th: <strong>{pct(hovered.avgPass10th)}</strong> · 12th: <strong>{pct(hovered.avgPass12th)}</strong></span>
+              </div>
+            </div>
+          </div>
+        )}
+
         <svg
-          viewBox="0 0 309.65662 286.59125"
-          className="w-full max-w-2xl drop-shadow-md"
-          style={{ maxHeight: 420 }}
-          onMouseLeave={() => setTooltip(null)}
+          viewBox="-8 -8 326 303"
+          className="w-full drop-shadow-lg"
+          style={{ maxWidth: 780, maxHeight: 500 }}
         >
           <defs>
-            <filter id="uk-glow">
-              <feGaussianBlur stdDeviation="1.5" result="b" />
+            <filter id="ukglow" x="-30%" y="-30%" width="160%" height="160%">
+              <feGaussianBlur stdDeviation="2" result="b" />
               <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+            </filter>
+            <filter id="uklbl" x="-5%" y="-5%" width="110%" height="110%">
+              <feFlood floodColor="#1e3a5f" floodOpacity="0.55" result="bg" />
+              <feComposite in="bg" in2="SourceGraphic" operator="in" result="bgc" />
+              <feMerge><feMergeNode in="bgc" /><feMergeNode in="SourceGraphic" /></feMerge>
             </filter>
           </defs>
 
-          {/* District fill paths (real simplified SVG from Uttaranchal_Districts_Gray.svg) */}
+          {/* District paths */}
           <path d="M 114.97,210.67 L 118.76,207.53 L 120.53,205.13 L 120.84,203.11 L 121.17,199.58 L 122.55,198.62 L 124.88,196.33 L 127.12,195.84 L 129.59,195.89 L 131.00,194.64 L 132.40,192.36 L 133.33,190.02 L 133.97,187.86 L 135.95,184.08 L 136.72,179.96 L 136.72,174.51 L 136.00,170.75 L 134.04,168.64 L 132.66,167.17 L 132.82,164.84 L 136.53,162.56 L 138.84,162.23 L 141.07,161.99 L 143.71,159.66 L 144.78,156.08 L 144.19,151.01 L 142.47,146.80 L 141.13,144.36 L 139.04,143.03 L 137.66,141.25 L 136.50,138.08 L 136.05,136.19 L 134.51,133.98 L 132.50,132.58 L 131.01,130.97 L 130.29,129.11 L 130.38,127.04 L 130.07,122.67 L 128.33,119.58 L 126.34,118.79 L 124.30,119.32 L 122.59,120.14 L 121.47,121.98 L 120.54,124.66 L 118.00,127.21 L 115.03,128.45 L 112.08,128.99 L 107.69,129.17 L 102.41,128.54 L 99.96,127.49 L 97.28,127.45 L 95.19,128.33 L 92.99,129.78 L 90.01,132.37 L 86.94,136.79 L 86.29,138.89 L 86.72,142.41 L 86.84,145.26 L 85.28,146.62 L 82.83,146.28 L 78.25,145.92 L 76.03,145.56 L 74.31,144.20 L 73.16,141.67 L 70.32,138.40 L 68.02,137.64 L 65.56,138.36 L 63.36,139.60 L 61.83,141.27 L 59.41,144.64 L 55.90,148.37 L 52.17,152.31 L 49.88,155.23 L 47.31,158.17 L 46.77,160.78 L 46.38,163.76 L 46.69,166.84 L 47.75,169.39 L 49.09,171.42 L 49.37,173.97 L 50.06,175.83 L 50.84,178.45 L 50.72,181.18 L 49.05,183.36 L 47.75,186.79 L 47.69,190.10 L 52.00,189.22 L 56.00,187.86 L 60.25,186.97 L 65.16,186.79 L 68.72,183.61 L 73.09,181.51 L 78.15,182.45 L 80.16,186.39 L 81.76,190.42 L 84.51,194.60 L 88.44,197.39 L 93.01,200.84 L 97.84,202.96 L 102.41,204.79 L 106.16,207.30 L 110.82,209.34 L 114.97,210.67 Z" fill="#4a90c4" stroke="#fff" strokeWidth="0.8" strokeLinejoin="round" />
           <path d="M 224.44,70.86 L 224.44,71.96 L 224.16,75.41 L 223.16,76.23 L 220.32,77.95 L 218.29,78.14 L 216.19,78.67 L 214.83,80.09 L 215.03,82.52 L 216.09,84.67 L 218.03,86.76 L 220.02,88.52 L 219.69,91.23 L 218.11,93.12 L 217.04,95.68 L 215.94,99.51 L 216.07,101.99 L 217.50,105.78 L 218.50,110.95 L 218.43,113.16 L 216.67,116.16 L 216.59,120.30 L 218.14,122.11 L 220.69,124.81 L 222.09,129.61 L 223.53,131.38 L 224.98,133.03 L 225.50,135.33 L 225.50,140.19 L 224.68,144.77 L 222.53,148.67 L 222.55,151.12 L 222.97,154.69 L 224.78,157.26 L 227.85,158.59 L 229.85,160.12 L 230.19,162.55 L 229.62,164.12 L 227.69,164.35 L 224.00,164.14 L 219.72,163.56 L 217.39,163.99 L 216.19,164.67 L 215.74,166.42 L 215.60,169.28 L 216.16,171.55 L 217.99,173.11 L 218.51,174.64 L 217.78,175.70 L 215.27,176.92 L 211.70,176.21 L 210.22,174.51 L 207.94,174.35 L 207.06,175.00 L 205.81,176.42 L 205.06,177.00 L 203.01,176.89 L 201.34,175.98 L 198.24,175.36 L 197.85,176.34 L 198.38,178.11 L 199.37,178.92 L 201.72,179.37 L 204.06,181.17 L 206.34,183.54 L 209.68,185.51 L 210.88,187.86 L 212.29,192.60 L 213.26,195.11 L 214.47,196.55 L 217.53,199.61 L 221.23,201.48 L 222.72,203.73 L 222.73,204.97 L 221.51,205.45 L 219.16,205.36 L 217.24,206.68 L 216.35,207.55 L 211.72,207.55 L 209.13,208.10 L 205.31,210.56 L 202.63,211.98 L 201.97,214.00 L 201.39,216.30 L 202.22,217.55 L 204.47,218.04 L 205.91,219.04 L 204.94,221.55 L 201.77,223.88 L 200.62,223.89 L 199.22,222.61 L 197.33,221.73 L 196.13,223.34 L 196.47,225.58 L 197.66,227.45 L 198.74,229.63 L 201.13,230.45 L 206.11,232.74 L 206.69,233.75 L 206.00,235.51 L 203.03,237.86 L 203.01,239.20 L 203.88,241.45 L 205.00,243.08 L 207.12,244.41 L 210.44,244.42 L 211.23,244.88 L 211.38,246.69 L 211.94,249.92 L 213.83,250.43 L 215.96,249.97 L 218.06,248.45 L 219.65,247.27 L 223.48,245.60 L 226.75,244.89 L 229.56,245.27 L 232.36,244.78 L 236.06,244.42 L 237.97,241.08 L 237.43,236.27 L 240.53,235.73 L 243.50,234.25 L 242.61,229.88 L 243.28,225.76 L 242.89,220.82 L 239.77,218.11 L 239.03,213.70 L 240.07,209.97 L 242.78,205.64 L 246.03,203.73 L 248.37,200.08 L 252.19,197.36 L 252.19,192.51 L 251.17,188.36 L 248.04,184.06 L 248.38,179.17 L 251.72,176.34 L 254.57,173.95 L 258.97,172.61 L 262.80,171.44 L 266.00,168.95 L 267.44,164.55 L 266.59,160.51 L 270.49,158.83 L 273.56,158.83 L 278.07,158.42 L 281.01,155.84 L 283.31,151.42 L 285.87,148.65 L 289.74,145.87 L 292.22,143.36 L 294.34,139.16 L 294.10,134.69 L 297.50,132.80 L 301.60,134.50 L 305.43,134.97 L 309.16,132.36 L 307.91,127.52 L 303.71,124.98 L 298.56,123.23 L 294.04,121.41 L 290.11,117.87 L 286.50,116.05 L 283.10,113.50 L 279.91,110.96 L 275.91,108.20 L 271.02,104.29 L 267.06,106.86 L 263.41,104.61 L 258.86,102.99 L 253.42,99.83 L 250.06,98.26 L 247.00,96.04 L 243.01,94.01 L 238.63,92.55 L 235.08,89.99 L 232.69,87.82 L 232.91,82.98 L 237.24,81.51 L 238.99,77.86 L 236.06,74.95 L 234.81,71.60 L 232.40,69.16 L 227.59,71.76 L 224.69,71.03 L 224.44,70.86 Z" fill="#5b9bd5" stroke="#fff" strokeWidth="0.8" strokeLinejoin="round" />
           <path d="M 62.50,140.42 L 62.92,139.97 L 64.91,138.73 L 67.25,137.64 L 69.80,138.08 L 72.61,140.57 L 73.97,143.48 L 75.64,145.37 L 77.42,145.92 L 82.28,146.14 L 84.68,146.64 L 86.81,145.67 L 86.72,143.58 L 86.35,139.49 L 86.67,137.34 L 89.06,133.64 L 92.52,130.30 L 94.54,128.49 L 96.81,127.67 L 99.39,127.26 L 101.66,128.36 L 106.22,129.17 L 110.77,128.76 L 114.42,128.52 L 116.81,127.92 L 120.31,125.27 L 121.13,122.67 L 121.84,121.33 L 121.47,118.85 L 121.88,115.98 L 122.97,114.76 L 124.11,113.71 L 124.66,111.85 L 128.94,109.95 L 128.59,107.33 L 127.55,103.16 L 125.06,96.48 L 123.94,94.26 L 122.46,91.91 L 120.25,89.89 L 117.94,87.80 L 116.90,84.47 L 116.81,81.48 L 117.66,79.92 L 119.66,77.52 L 122.69,76.73 L 125.09,75.18 L 127.89,72.90 L 128.94,70.20 L 129.27,68.68 L 128.65,67.83 L 127.88,65.33 L 126.24,63.52 L 124.49,62.10 L 120.41,61.39 L 118.10,61.11 L 115.04,62.40 L 112.91,64.39 L 112.78,67.25 L 112.53,72.60 L 111.66,75.45 L 109.40,76.95 L 105.75,76.42 L 101.56,75.80 L 99.34,76.18 L 97.11,78.24 L 94.44,79.36 L 92.55,80.56 L 89.79,81.73 L 89.47,85.33 L 87.90,87.22 L 86.06,89.17 L 84.03,91.05 L 81.85,91.40 L 81.22,90.67 L 80.88,89.76 L 79.52,88.82 L 78.25,88.58 L 76.16,89.30 L 75.72,92.04 L 75.89,96.22 L 74.22,100.36 L 72.94,102.43 L 72.09,102.72 L 69.78,100.36 L 66.81,96.54 L 65.13,95.30 L 63.88,93.76 L 62.30,91.58 L 59.15,89.10 L 55.16,85.55 L 51.81,83.76 L 49.73,82.86 L 48.81,82.98 L 47.57,84.69 L 45.77,85.72 L 43.31,85.95 L 40.52,85.24 L 38.91,84.74 L 36.38,85.39 L 35.05,87.86 L 34.76,90.54 L 33.84,91.64 L 32.93,92.53 L 32.83,95.08 L 31.97,96.26 L 30.01,96.48 L 29.14,97.00 L 30.97,98.86 L 33.68,100.65 L 36.98,101.50 L 39.97,102.48 L 43.02,103.89 L 46.63,103.87 L 49.84,103.95 L 53.09,104.71 L 55.50,106.47 L 56.56,108.01 L 56.08,109.76 L 54.46,112.24 L 50.47,115.05 L 49.07,116.83 L 49.07,119.35 L 50.16,119.86 L 53.96,119.55 L 57.22,120.64 L 59.50,122.67 L 60.59,124.01 L 60.33,126.30 L 58.84,128.83 L 57.26,131.31 L 57.03,134.55 L 57.94,136.61 L 59.44,138.48 L 61.89,140.05 L 62.50,140.42 Z" fill="#3d82b8" stroke="#fff" strokeWidth="0.8" strokeLinejoin="round" />
@@ -145,97 +185,91 @@ export function UttarakhandMap({ districts }: Props) {
           <path d="M 162.63,40.08 L 159.34,42.93 L 156.77,45.17 L 155.84,46.14 L 155.96,47.70 L 156.49,50.80 L 155.94,52.01 L 154.68,52.30 L 151.75,51.87 L 150.00,52.73 L 149.42,53.50 L 150.44,54.78 L 151.34,56.51 L 149.07,61.10 L 147.30,64.59 L 148.81,66.26 L 151.45,68.57 L 152.33,70.40 L 151.75,72.42 L 150.51,73.94 L 147.31,74.11 L 142.66,74.73 L 138.65,74.00 L 135.78,71.96 L 133.34,69.86 L 129.88,69.11 L 129.16,69.75 L 128.06,72.20 L 125.84,74.70 L 123.44,76.47 L 120.56,77.30 L 118.03,79.30 L 116.88,80.96 L 116.81,83.23 L 117.49,87.12 L 119.69,89.47 L 121.94,91.36 L 123.59,93.86 L 124.85,95.65 L 127.16,101.58 L 128.29,106.66 L 129.14,109.15 L 125.34,111.17 L 124.24,113.41 L 123.42,114.54 L 122.09,115.61 L 121.47,117.85 L 121.70,120.70 L 122.25,120.61 L 123.89,119.51 L 125.70,118.80 L 127.97,119.26 L 129.46,121.87 L 130.59,125.97 L 130.25,128.64 L 130.76,130.44 L 132.09,132.37 L 134.03,133.58 L 135.91,135.74 L 136.22,137.52 L 137.34,140.61 L 138.62,142.68 L 140.81,143.99 L 142.03,145.92 L 143.56,150.26 L 144.78,154.85 L 144.66,156.67 L 145.96,156.70 L 147.88,157.46 L 149.28,160.14 L 150.06,160.83 L 151.99,160.73 L 153.16,159.70 L 154.23,158.52 L 156.40,158.26 L 158.63,159.39 L 161.53,159.63 L 164.25,158.93 L 166.41,157.61 L 167.05,154.83 L 167.16,152.98 L 168.50,152.45 L 171.29,152.20 L 174.60,153.91 L 177.56,154.64 L 180.75,153.26 L 182.94,152.51 L 186.59,153.33 L 188.87,155.12 L 190.69,154.92 L 193.06,153.70 L 195.77,152.73 L 197.95,151.70 L 198.75,150.08 L 199.06,146.95 L 195.39,144.28 L 195.03,141.58 L 195.74,137.92 L 196.15,135.84 L 199.06,131.51 L 199.66,130.12 L 199.46,127.52 L 199.12,124.70 L 199.80,122.54 L 201.36,122.57 L 204.16,123.73 L 205.78,123.86 L 207.78,122.48 L 210.37,122.11 L 212.80,122.61 L 216.15,120.42 L 216.56,120.05 L 216.67,116.16 L 218.43,113.16 L 218.50,110.95 L 217.50,105.78 L 216.07,101.99 L 215.94,99.51 L 217.04,95.68 L 218.11,93.12 L 219.69,91.23 L 220.02,88.52 L 218.03,86.76 L 216.09,84.67 L 215.03,82.52 L 214.83,80.09 L 216.19,78.67 L 218.29,78.14 L 220.32,77.95 L 223.16,76.23 L 224.16,75.41 L 224.44,71.96 L 224.44,70.86 L 221.63,68.56 L 218.38,65.67 L 214.69,62.86 L 211.21,60.71 L 207.22,58.85 L 206.41,53.98 L 201.76,51.84 L 197.56,52.52 L 193.06,49.33 L 189.66,51.07 L 185.78,52.03 L 180.78,54.61 L 176.86,52.81 L 173.51,48.80 L 170.62,45.51 L 165.00,45.08 L 164.99,41.72 L 162.63,40.08 Z" fill="#6ab0d8" stroke="#fff" strokeWidth="0.8" strokeLinejoin="round" />
           <path d="M 132.69,0.58 L 129.97,2.92 L 127.42,7.11 L 124.22,10.33 L 121.63,13.14 L 119.56,17.10 L 119.56,21.76 L 121.43,25.13 L 124.40,28.66 L 125.72,32.17 L 122.09,35.55 L 118.35,35.54 L 114.28,34.48 L 111.27,31.69 L 108.78,26.69 L 105.38,26.23 L 100.56,26.42 L 95.80,26.01 L 91.81,24.51 L 87.27,25.32 L 83.29,26.42 L 78.88,25.58 L 75.78,22.67 L 72.03,20.32 L 67.88,19.01 L 63.65,17.79 L 59.69,19.57 L 56.44,21.98 L 52.21,23.58 L 49.94,24.88 L 48.59,25.39 L 45.25,27.04 L 42.02,29.83 L 36.31,29.39 L 32.06,29.06 L 27.83,27.07 L 26.56,31.95 L 26.22,35.39 L 21.88,36.67 L 20.41,39.98 L 18.31,43.09 L 18.19,47.04 L 18.38,50.79 L 20.60,51.49 L 25.17,51.31 L 27.19,50.79 L 29.43,50.00 L 32.96,50.98 L 35.28,52.08 L 36.01,53.20 L 35.10,55.32 L 33.78,58.64 L 33.97,60.87 L 35.26,63.75 L 38.44,67.95 L 41.50,70.17 L 41.90,71.89 L 43.31,75.58 L 43.15,79.83 L 41.85,81.07 L 39.81,82.70 L 39.21,83.58 L 40.13,85.11 L 43.31,85.95 L 45.77,85.72 L 47.57,84.69 L 48.81,82.98 L 49.73,82.86 L 51.81,83.76 L 55.16,85.54 L 59.15,89.10 L 62.30,91.58 L 63.88,93.76 L 65.13,95.30 L 66.81,96.54 L 69.78,100.36 L 72.09,102.72 L 72.94,102.43 L 74.22,100.36 L 75.89,96.22 L 75.72,92.04 L 76.16,89.29 L 78.25,88.57 L 79.52,88.82 L 80.88,89.76 L 81.22,90.67 L 81.85,91.40 L 84.03,91.04 L 86.06,89.17 L 87.90,87.22 L 89.47,85.33 L 89.79,81.73 L 92.55,80.56 L 94.44,79.36 L 97.11,78.24 L 99.34,76.18 L 101.56,75.79 L 105.75,76.42 L 109.40,76.95 L 111.66,75.45 L 112.53,72.60 L 112.78,67.24 L 112.91,64.39 L 115.04,62.40 L 118.10,61.11 L 120.41,61.39 L 124.49,62.10 L 126.24,63.52 L 127.88,65.33 L 128.65,67.83 L 129.74,69.07 L 133.34,69.86 L 135.78,71.96 L 138.65,74.00 L 142.66,74.73 L 147.31,74.11 L 150.51,73.94 L 151.75,72.42 L 152.33,70.40 L 151.45,68.57 L 148.81,66.26 L 147.30,64.59 L 149.07,61.10 L 151.34,56.51 L 150.44,54.78 L 149.42,53.50 L 150.00,52.73 L 151.75,51.87 L 154.68,52.29 L 155.94,52.01 L 156.49,50.80 L 155.96,47.70 L 155.84,46.14 L 156.77,45.17 L 159.34,42.93 L 162.63,40.08 L 161.02,38.08 L 155.70,35.78 L 153.47,32.36 L 153.03,28.26 L 152.62,24.70 L 148.38,23.04 L 149.95,18.90 L 148.21,17.33 L 146.69,13.73 L 143.07,10.33 L 139.75,7.24 L 136.72,3.36 L 134.84,1.66 L 132.69,0.58 Z" fill="#4285b8" stroke="#fff" strokeWidth="0.8" strokeLinejoin="round" />
 
-          {/* District dots */}
+          {/* District dots with pulse rings and labels */}
           {DOT_CONFIG.map((dot, i) => {
             const data = districtByKey[dot.key];
             const schools = data?.schools ?? 0;
-            const r = Math.max(3, 3 + (schools / maxSchools) * 4);
-            const delay = `${i * 0.15}s`;
-            const dur = `${1.9 + i * 0.1}s`;
+            const r = Math.max(3.5, 3.5 + (schools / maxSchools) * 4.5);
+            const ringMax = r * 3.8;
+            const delay = `${i * 0.16}s`;
+            const dur = `${2.0 + i * 0.1}s`;
+            const isActive = tip?.key === dot.key;
             const anchor = dot.cx > 155 ? 'end' : 'start';
-            const lx = dot.cx > 155 ? dot.cx - r - 1.5 : dot.cx + r + 1.5;
+            const lx = dot.cx > 155 ? dot.cx - r - 2 : dot.cx + r + 2;
+            const ly = dot.cy - r - 2.5;
 
             return (
               <g
                 key={dot.key}
                 style={{ cursor: 'pointer' }}
-                onMouseEnter={e => handleMouseEnter(e, dot.key)}
-                onMouseMove={handleMouseMove}
-                onMouseLeave={() => setTooltip(null)}
+                onMouseEnter={e => onEnter(e, dot.key)}
+                onMouseMove={onMove}
+                onMouseLeave={() => setTip(null)}
               >
                 {/* Pulsing ring */}
                 <circle
                   cx={dot.cx}
                   cy={dot.cy}
                   r={0}
-                  fill="#1a56db"
+                  fill="none"
+                  stroke={isActive ? '#1e40af' : '#3b82f6'}
+                  strokeWidth="1.5"
                   opacity={0}
-                  className="uk-ring"
-                  style={{ animationDelay: delay, animationDuration: dur }}
+                  className="ukr"
+                  style={{
+                    '--br': `${r}px`,
+                    '--er': `${ringMax}px`,
+                    animationDelay: delay,
+                    animationDuration: dur,
+                  } as React.CSSProperties}
                 />
                 {/* Solid dot */}
                 <circle
                   cx={dot.cx}
                   cy={dot.cy}
                   r={r}
-                  fill={tooltip?.dotKey === dot.key ? '#1e40af' : '#1a56db'}
+                  fill={isActive ? '#1e3a8a' : '#1d4ed8'}
                   stroke="white"
-                  strokeWidth="0.7"
-                  filter="url(#uk-glow)"
+                  strokeWidth="1"
+                  filter="url(#ukglow)"
                 />
-                {/* Label */}
+                {/* Label with dark background pill */}
+                <rect
+                  x={anchor === 'end' ? lx - (dot.name.length * 3.4) : lx}
+                  y={ly - 6}
+                  width={dot.name.length * 3.4}
+                  height={7}
+                  rx="2"
+                  fill="rgba(15,23,42,0.72)"
+                />
                 <text
-                  x={lx}
-                  y={dot.cy - r - 1}
-                  fontSize="4.5"
+                  x={anchor === 'end' ? lx - (dot.name.length * 3.4) / 2 : lx + (dot.name.length * 3.4) / 2}
+                  y={ly - 1}
+                  fontSize="5.2"
                   fill="white"
-                  fontWeight="700"
-                  fontFamily="system-ui"
-                  textAnchor={anchor}
-                  style={{ pointerEvents: 'none', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}
+                  fontWeight="600"
+                  fontFamily="system-ui,sans-serif"
+                  textAnchor="middle"
+                  style={{ pointerEvents: 'none' }}
                 >
                   {dot.name}
                 </text>
               </g>
             );
           })}
-
-          {/* SVG tooltip */}
-          {tooltip && hovered && (() => {
-            const svgW = 309.65662;
-            const svgH = 286.59125;
-            const dot = DOT_CONFIG.find(d => d.key === tooltip.dotKey)!;
-            const tw = 68, th = 26;
-            let tx = dot.cx + 5;
-            let ty = dot.cy - th - 3;
-            if (tx + tw > svgW) tx = dot.cx - tw - 5;
-            if (ty < 0) ty = dot.cy + 5;
-            return (
-              <g style={{ pointerEvents: 'none' }}>
-                <rect x={tx} y={ty} width={tw} height={th} rx="2" fill="white" stroke="#e2e8f0" strokeWidth="0.5" filter="url(#uk-glow)" />
-                <text x={tx + 3} y={ty + 6} fontSize="4" fontWeight="700" fill="#1e40af" fontFamily="system-ui">{hovered.district}</text>
-                <text x={tx + 3} y={ty + 12} fontSize="3.5" fill="#374151" fontFamily="system-ui">
-                  {hovered.schools} schools · {hovered.totalStudents.toLocaleString()} students
-                </text>
-                <text x={tx + 3} y={ty + 18} fontSize="3.5" fill="#374151" fontFamily="system-ui">
-                  Pass 10th: {hovered.avgPass10th != null ? `${(hovered.avgPass10th * 100).toFixed(0)}%` : '—'}
-                  {'  '}12th: {hovered.avgPass12th != null ? `${(hovered.avgPass12th * 100).toFixed(0)}%` : '—'}
-                </text>
-                <rect x={tx + tw - 22} y={ty + 21} width={20} height={3.5} rx="1.5" fill="#dcfce7" />
-                <text x={tx + tw - 12} y={ty + 24} fontSize="2.8" fontWeight="700" fill="#15803d" textAnchor="middle" fontFamily="system-ui">Active</text>
-              </g>
-            );
-          })()}
         </svg>
       </div>
 
       {/* Stats bar */}
       <div className="grid grid-cols-4 border-t border-slate-100">
         {[
-          { icon: 'fas fa-school', bg: '#eff6ff', color: '#1d4ed8', value: totalSchools.toLocaleString(), label: 'Total Active Schools', sub: 'Across Uttarakhand' },
-          { icon: 'fas fa-map-marker-alt', bg: '#f0fdf4', color: '#15803d', value: districts.length.toString(), label: 'Districts Covered', sub: 'Out of 13' },
-          { icon: 'fas fa-user-graduate', bg: '#fffbeb', color: '#d97706', value: totalStudents.toLocaleString(), label: 'Students Impacted', sub: 'Enrolled 2025–26' },
-          { icon: 'fas fa-clock', bg: '#faf5ff', color: '#7c3aed', value: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }), label: 'Last Updated', sub: new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) },
+          { icon: 'fas fa-school',         bg: '#eff6ff', color: '#1d4ed8', value: totalSchools.toLocaleString(),   label: 'Active Schools',    sub: 'Across Uttarakhand' },
+          { icon: 'fas fa-map-marker-alt', bg: '#f0fdf4', color: '#15803d', value: String(districts.length),        label: 'Districts',         sub: 'All covered' },
+          { icon: 'fas fa-user-graduate',  bg: '#fffbeb', color: '#d97706', value: totalStudents.toLocaleString(),  label: 'Students Enrolled', sub: '2025–26 session' },
+          { icon: 'fas fa-clock',          bg: '#faf5ff', color: '#7c3aed',
+            value: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+            label: 'Last Refreshed',
+            sub: new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) },
         ].map((s, i) => (
           <div key={i} className={`flex items-center gap-3 px-4 py-3 ${i < 3 ? 'border-r border-slate-100' : ''}`}>
             <div className="w-9 h-9 rounded-xl flex items-center justify-center text-sm shrink-0" style={{ background: s.bg }}>
@@ -251,7 +285,7 @@ export function UttarakhandMap({ districts }: Props) {
       </div>
 
       <div className="px-5 py-2 border-t border-slate-50 text-[11px] text-slate-400">
-        Pulsing dots = live active school installations per district · Dot size ∝ school count
+        Pulsing dots = live active school installations · Dot size proportional to school count
       </div>
     </div>
   );
