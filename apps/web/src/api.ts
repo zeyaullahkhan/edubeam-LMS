@@ -336,6 +336,7 @@ export const api = {
     stats: () => req<any>('/content/stats'),
     channels: () => req<any>('/content/channels'),
     subjects: (standard: number) => req<any>(`/content/subjects?standard=${standard}`),
+    allSubjects: () => req<string[]>('/content/all-subjects'),
     lectures: (standard: number, subject: string, opts?: { search?: string; date?: string; page?: number }) => {
       const qs = new URLSearchParams({ standard: String(standard), subject });
       if (opts?.search) qs.set('search', opts.search);
@@ -345,6 +346,18 @@ export const api = {
     },
     setUrl: (id: string, youtubeUrl: string | null) =>
       req<any>(`/content/lectures/${id}/url`, { method: 'PATCH', body: JSON.stringify({ youtubeUrl }) }),
+    createLecture: (body: {
+      topic: string; teacherName: string; subject: string; standard: number;
+      studioName: string; date: string; startTime: string; endTime: string;
+      medium?: string; youtubeUrl?: string | null;
+    }) => req<any>('/content/lectures', { method: 'POST', body: JSON.stringify(body) }),
+    updateLecture: (id: string, body: Partial<{
+      topic: string; teacherName: string; subject: string; standard: number;
+      studioName: string; date: string; startTime: string; endTime: string;
+      medium: string; youtubeUrl: string | null;
+    }>) => req<any>(`/content/lectures/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+    deleteLecture: (id: string) =>
+      req<{ ok: boolean }>(`/content/lectures/${id}`, { method: 'DELETE' }),
   },
 
   storage: {

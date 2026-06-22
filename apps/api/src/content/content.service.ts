@@ -1,5 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { prisma } from '@edubeam/db';
+import type { AuthUser } from '@edubeam/shared';
+
+const EDITOR_ROLES = new Set(['ADMIN', 'PRINCIPAL', 'TEACHER']);
 
 const PAGE_SIZE = 30;
 
@@ -73,6 +76,56 @@ export class ContentService {
   /** Set a YouTube URL on a specific lecture (admin action). */
   async setYoutubeUrl(id: string, youtubeUrl: string | null) {
     await prisma.lecture.update({ where: { id }, data: { youtubeUrl } });
+    return { ok: true };
+  }
+
+  /** All subjects across all standards (for move-to dropdown). */
+  async allSubjects() {
+    const rows = await prisma.lecture.groupBy({
+      by: ['subject'],
+      _count: { subject: true },
+      orderBy: { _count: { subject: 'desc' } },
+    });
+    return rows.map(r => r.subject);
+  }
+
+  /** Full update of a lecture (subject, topic, teacher, date, times, studio, standard, medium, url). */
+  async updateLecture(id: string, user: AuthUser, dto: {
+    topic?: string; teacherName?: string; subject?: string;
+    standard?: number; studioName?: string; date?: string;
+    startTime?: string; endTime?: string; medium?: string; youtubeUrl?: string | null;
+  }) {
+    if (!EDITOR_ROLES.has(user.role)) throw new ForbiddenException('Not authorized');
+    const existing = await prisma.lecture.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Lecture not found');
+    const updated = await prisma.lecture.update({ where: { id }, data: dto });
+    return updated;
+  }
+
+  /** Create a new lecture entry (link only, no upload). */
+  async createLecture(user: AuthUser, dto: {
+    topic: string; teacherName: string; subject: string;
+    standard: number; studioName: string; date: string;
+    startTime: string; endTime: string; medium?: string; youtubeUrl?: string | null;
+  }) {
+    if (!EDITOR_ROLES.has(user.role)) throw new ForbiddenException('Not authorized');
+    const maxSrNo = await prisma.lecture.aggregate({ _max: { srNo: true } });
+    return prisma.lecture.create({
+      data: {
+        ...dto,
+        medium: dto.medium ?? 'Hindi',
+        srNo: (maxSrNo._max.srNo ?? 0) + 1,
+        youtubeUrl: dto.youtubeUrl ?? null,
+      },
+    });
+  }
+
+  /** Delete a lecture (admin only). */
+  async deleteLecture(id: string, user: AuthUser) {
+    if (user.role !== 'ADMIN' && user.role !== 'PRINCIPAL') throw new ForbiddenException('Not authorized');
+    const existing = await prisma.lecture.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Lecture not found');
+    await prisma.lecture.delete({ where: { id } });
     return { ok: true };
   }
 }
