@@ -19,7 +19,7 @@ import type { Request } from 'express';
  * global rather than per-process.
  */
 const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
-const MAX_ATTEMPTS = 10; // per IP per window
+const MAX_ATTEMPTS = 20; // per IP per window
 
 type Bucket = { count: number; resetAt: number };
 

@@ -1,203 +1,502 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import {
-  SCHEDULE, HOLIDAYS, EVENTS, STUDIO_LABELS, SUBJECT_COLOR,
-  type ScheduleSession, type Holiday, type SchoolEvent,
+  SCHEDULE, HOLIDAYS as STATIC_HOLIDAYS, EVENTS, STUDIO_LABELS, SUBJECT_COLOR,
+  type ScheduleSession,
 } from '../data/schedule';
+import { api } from '../api';
+import { useAuth } from '../auth';
+import type { AuthUser } from '@edubeam/shared';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
-const JUNE_DAYS = 30;
-const JUNE_START_DOW = 1; // Monday (0=Sun)
-
 function fmtDate(d: string) {
-  return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  return new Date(d + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 }
-
-function holidayForDate(date: string): Holiday | undefined {
-  return HOLIDAYS.find(h => h.date === date);
-}
-
-function pad2(d: number) { return String(d).padStart(2, '0'); }
+function pad2(n: number) { return String(n).padStart(2, '0'); }
 function dateKey(y: number, m: number, d: number) { return `${y}-${pad2(m)}-${pad2(d)}`; }
 
-const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-const TIME_SLOTS = ['10:00-10:40','10:40-11:20','11:20-12:00','12:00-12:40'];
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const TIME_SLOTS = ['10:00-10:40', '10:40-11:20', '11:20-12:00', '12:00-12:40'];
 
-const HOLIDAY_COLOR: Record<string,string> = {
-  weekly:       'bg-red-100 text-red-700 border-red-300',
-  national:     'bg-orange-100 text-orange-700 border-orange-300',
-  institutional:'bg-amber-100 text-amber-700 border-amber-300',
+const SCOPE_LABEL: Record<string, string> = {
+  TENANT: 'State-wide', DISTRICT: 'District', BLOCK: 'Block', SCHOOL: 'School',
 };
 
-const EVENT_TYPE_COLOR: Record<string,string> = {
-  ceremony:   'bg-violet-100 text-violet-700 border-violet-300',
-  workshop:   'bg-sky-100 text-sky-700 border-sky-300',
-  assessment: 'bg-rose-100 text-rose-700 border-rose-300',
-  meeting:    'bg-teal-100 text-teal-700 border-teal-300',
-  other:      'bg-slate-100 text-slate-600 border-slate-300',
-};
+function scopeColorCls(scope: string) {
+  if (scope === 'TENANT')   return 'text-orange-700 bg-orange-100 border-orange-300';
+  if (scope === 'DISTRICT') return 'text-amber-700 bg-amber-100 border-amber-300';
+  if (scope === 'BLOCK')    return 'text-violet-700 bg-violet-100 border-violet-300';
+  return 'text-sky-700 bg-sky-100 border-sky-300'; // SCHOOL
+}
+
+function scopeCellBg(scope: string | null, sunday: boolean) {
+  if (sunday) return { bg: 'bg-red-50', border: 'border-red-200', hover: 'hover:bg-red-100', label: 'text-red-400' };
+  if (scope === 'TENANT')   return { bg: 'bg-orange-50', border: 'border-orange-300', hover: 'hover:bg-orange-100', label: 'text-orange-600' };
+  if (scope === 'DISTRICT') return { bg: 'bg-amber-50', border: 'border-amber-200', hover: 'hover:bg-amber-100', label: 'text-amber-600' };
+  if (scope === 'BLOCK')    return { bg: 'bg-violet-50', border: 'border-violet-200', hover: 'hover:bg-violet-100', label: 'text-violet-600' };
+  if (scope === 'SCHOOL')   return { bg: 'bg-sky-50', border: 'border-sky-200', hover: 'hover:bg-sky-100', label: 'text-sky-600' };
+  return { bg: 'bg-white', border: 'border-slate-200', hover: 'hover:bg-sky-50', label: 'text-slate-300' };
+}
 
 // ─── Calendar Widget ───────────────────────────────────────────────────────────
 
-function CalendarWidget() {
+const SCOPE_LEVELS = [
+  { value: 'TENANT',   label: 'State-wide',   icon: 'fa-globe-asia',      color: 'orange' },
+  { value: 'DISTRICT', label: 'District',     icon: 'fa-map-marker-alt',  color: 'amber'  },
+  { value: 'BLOCK',    label: 'Block',        icon: 'fa-map-pin',         color: 'violet' },
+  { value: 'SCHOOL',   label: 'School',       icon: 'fa-school',          color: 'sky'    },
+] as const;
+
+function autoScopeForRole(role: string): string {
+  if (role === 'STATE_OFFICIAL') return 'TENANT';
+  if (role === 'DISTRICT_OFFICIAL') return 'DISTRICT';
+  if (role === 'BLOCK_OFFICIAL') return 'BLOCK';
+  return 'SCHOOL';
+}
+
+function scopeLevelLabel(role: string): string {
+  if (role === 'STATE_OFFICIAL') return 'All schools in the state';
+  if (role === 'DISTRICT_OFFICIAL') return 'All schools in your district';
+  if (role === 'BLOCK_OFFICIAL') return 'All schools in your block';
+  return 'This school only';
+}
+
+function CalendarWidget({ user }: { user: AuthUser | null }) {
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const [ym, setYm] = useState(() => todayStr.slice(0, 7));
+  const [holidays, setHolidays] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ title: '', description: '', startDate: '', endDate: '' });
+  // Admin scope selection
+  const [scopeLevel, setScopeLevel] = useState('TENANT');
+  const [scopeTargetId, setScopeTargetId] = useState('');
+  const [scopeDistrictFilter, setScopeDistrictFilter] = useState('');
+  const [scopeOpts, setScopeOpts] = useState<{ tenants: any[]; districts: any[]; blocks: any[] }>({ tenants: [], districts: [], blocks: [] });
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const today = new Date();
-  const todayKey = dateKey(today.getFullYear(), today.getMonth() + 1, today.getDate());
+  const isAdmin = user?.role === 'ADMIN';
+  const canMark = ['ADMIN', 'STATE_OFFICIAL', 'DISTRICT_OFFICIAL', 'BLOCK_OFFICIAL', 'PRINCIPAL'].includes(user?.role ?? '');
 
-  // Build grid: blank leading cells + day cells
-  const cells: Array<{ day: number | null; key: string | null }> = [];
-  for (let i = 0; i < JUNE_START_DOW; i++) cells.push({ day: null, key: null });
-  for (let d = 1; d <= JUNE_DAYS; d++) cells.push({ day: d, key: dateKey(2026, 6, d) });
+  const [year, monthNum] = ym.split('-').map(Number);
+  const daysInMonth = new Date(year, monthNum, 0).getDate();
+  const startDow = new Date(year, monthNum - 1, 1).getDay();
+  const monthLabel = new Date(year, monthNum - 1, 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' });
 
-  const nextHoliday = HOLIDAYS.find(h => h.date >= todayKey);
+  const changeMonth = (delta: number) => {
+    const d = new Date(year, monthNum - 1 + delta, 1);
+    setYm(`${d.getFullYear()}-${pad2(d.getMonth() + 1)}`);
+    setSelected(null);
+    setShowForm(false);
+  };
+
+  const loadHolidays = useCallback(async () => {
+    setLoading(true);
+    try { setHolidays(await api.planner.holidays(ym)); }
+    finally { setLoading(false); }
+  }, [ym]);
+
+  useEffect(() => { loadHolidays(); }, [loadHolidays]);
+
+  // Fetch scope options for roles that need dropdowns
+  useEffect(() => {
+    if (canMark) {
+      api.planner.scopeOptions().then(setScopeOpts).catch(() => {});
+    }
+  }, [canMark]);
+
+  const holidaysOnDate = (d: string) =>
+    holidays.filter(h => d >= h.startDate && d <= h.endDate);
+
+  const isSunday = (d: string) => new Date(d + 'T00:00:00').getDay() === 0;
+
+  const openForm = () => {
+    setShowForm(true);
+    setFormError('');
+    setScopeLevel('TENANT');
+    setScopeTargetId('');
+    setScopeDistrictFilter('');
+  };
+
+  const handleDateClick = (dateStr: string) => {
+    const same = selected === dateStr;
+    setSelected(same ? null : dateStr);
+    setShowForm(false);
+    setForm({ title: '', description: '', startDate: dateStr, endDate: dateStr });
+    setFormError('');
+  };
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isAdmin && !scopeTargetId) { setFormError('Please select a specific target for the chosen scope level.'); return; }
+    setSaving(true); setFormError('');
+    try {
+      const payload: any = { ...form };
+      if (isAdmin) { payload.scopeLevel = scopeLevel; payload.scopeTargetId = scopeTargetId; }
+      await api.planner.createHoliday(payload);
+      setShowForm(false);
+      setForm(f => ({ ...f, title: '', description: '' }));
+      loadHolidays();
+    } catch (err: any) {
+      setFormError(err.message);
+    } finally { setSaving(false); }
+  };
+
+  const remove = async (id: string) => {
+    if (!confirm('Delete this holiday?')) return;
+    setDeletingId(id);
+    try { await api.planner.deleteHoliday(id); loadHolidays(); }
+    finally { setDeletingId(null); }
+  };
+
+  const cells: Array<string | null> = [];
+  for (let i = 0; i < startDow; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(`${ym}-${pad2(d)}`);
+
+  const upcomingHoliday = holidays.find(h => h.startDate >= todayStr);
+  const inputCls = 'border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white w-full';
+
+  // Filtered blocks for admin cascading
+  const filteredBlocks = scopeOpts.blocks.filter(b => !scopeDistrictFilter || b.districtId === scopeDistrictFilter);
 
   return (
     <div className="space-y-4">
-      {/* Next holiday banner */}
-      {nextHoliday && (
+      {/* Upcoming holiday banner */}
+      {upcomingHoliday && (
         <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-          <span className="text-2xl">🗓️</span>
+          <span className="text-2xl flex-shrink-0">🗓️</span>
           <div className="flex-1 min-w-0">
             <p className="text-xs text-amber-600 uppercase tracking-wide font-semibold">Next Upcoming Holiday</p>
-            <p className="font-bold text-amber-800 text-sm leading-tight">{nextHoliday.name}</p>
-            <p className="text-xs text-amber-600">{fmtDate(nextHoliday.date)}</p>
+            <p className="font-bold text-amber-800 text-sm">{upcomingHoliday.title}</p>
+            <p className="text-xs text-amber-600">
+              {fmtDate(upcomingHoliday.startDate)}
+              {upcomingHoliday.endDate !== upcomingHoliday.startDate ? ` – ${fmtDate(upcomingHoliday.endDate)}` : ''}
+            </p>
           </div>
-          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border capitalize ${HOLIDAY_COLOR[nextHoliday.type]}`}>
-            {nextHoliday.type}
+          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border flex-shrink-0 ${scopeColorCls(upcomingHoliday.scope)}`}>
+            {SCOPE_LABEL[upcomingHoliday.scope] ?? upcomingHoliday.scope}
           </span>
         </div>
       )}
 
-      {/* Month header */}
-      <div className="flex items-center justify-between">
-        <h3 className="font-bold text-slate-700 text-lg">June 2026</h3>
-        <div className="flex items-center gap-3 text-xs">
+      {/* Month navigation + legend */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-2">
+          <button onClick={() => changeMonth(-1)} className="p-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600">
+            <i className="fas fa-chevron-left text-xs" />
+          </button>
+          <h3 className="font-bold text-slate-700 text-lg min-w-[180px] text-center">{monthLabel}</h3>
+          <button onClick={() => changeMonth(1)} className="p-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600">
+            <i className="fas fa-chevron-right text-xs" />
+          </button>
+          {loading && <i className="fas fa-circle-notch fa-spin text-slate-300 text-sm" />}
+        </div>
+        <div className="flex items-center gap-3 text-xs flex-wrap">
           <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-200 border border-red-400 inline-block" /> Weekend</span>
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-orange-200 border border-orange-400 inline-block" /> National</span>
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-200 border border-amber-400 inline-block" /> Institutional</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-orange-200 border border-orange-400 inline-block" /> State</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-200 border border-amber-400 inline-block" /> District</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-violet-200 border border-violet-400 inline-block" /> Block</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-sky-200 border border-sky-400 inline-block" /> School</span>
         </div>
       </div>
 
-      {/* Grid header */}
+      {/* Calendar grid */}
       <div className="grid grid-cols-7 gap-1.5">
         {DAY_NAMES.map(d => (
           <div key={d} className={`text-xs font-bold text-center py-1.5 ${d === 'Sun' ? 'text-red-500' : 'text-slate-500'}`}>{d}</div>
         ))}
-        {cells.map((cell, i) => {
-          if (!cell.key || !cell.day) return <div key={`blank-${i}`} className="rounded-lg" />;
-          const holiday = holidayForDate(cell.key);
-          const isSelected = selected === cell.key;
-          const isToday = cell.key === todayKey;
-          const eventsOnDay = EVENTS.filter(e => e.date === cell.key);
-          const isWorkingDay = !holiday;
-
-          let bg = 'bg-white hover:bg-sky-50';
-          let border = 'border-slate-200';
-          let labelText = '';
-          let labelCls = '';
-          if (holiday?.type === 'weekly') {
-            bg = 'bg-red-50 hover:bg-red-100'; border = 'border-red-200';
-            labelText = holiday.name === 'Sunday' ? 'Sunday' : holiday.name;
-            labelCls = 'text-red-500';
-          } else if (holiday?.type === 'national') {
-            bg = 'bg-orange-50 hover:bg-orange-100'; border = 'border-orange-200';
-            labelText = holiday.name; labelCls = 'text-orange-600';
-          } else if (holiday?.type === 'institutional') {
-            bg = 'bg-amber-50 hover:bg-amber-100'; border = 'border-amber-200';
-            labelText = 'Camp Holiday'; labelCls = 'text-amber-600';
-          }
-          if (isSelected) border = 'border-sky-500 ring-2 ring-sky-300';
-
+        {cells.map((dateStr, i) => {
+          if (!dateStr) return <div key={`blank-${i}`} className="rounded-lg" />;
+          const dayHolidays = holidaysOnDate(dateStr);
+          const sunday = isSunday(dateStr);
+          const isSelected = selected === dateStr;
+          const isToday = dateStr === todayStr;
+          const topScope = dayHolidays.find(h => h.scope === 'TENANT') ? 'TENANT'
+            : dayHolidays.find(h => h.scope === 'DISTRICT') ? 'DISTRICT'
+            : dayHolidays.find(h => h.scope === 'BLOCK') ? 'BLOCK'
+            : dayHolidays.length > 0 ? 'SCHOOL' : null;
+          const { bg, border, hover, label } = scopeCellBg(sunday ? null : topScope, sunday);
+          const dayNum = parseInt(dateStr.split('-')[2]);
           return (
-            <button
-              key={cell.key}
-              onClick={() => setSelected(cell.key === selected ? null : cell.key)}
-              className={`relative rounded-xl border ${bg} ${border} px-1.5 pt-2 pb-1.5 text-left transition-all cursor-pointer flex flex-col gap-1 min-h-[80px]`}
-            >
-              {/* Day number */}
-              <span className={`text-sm font-bold leading-none self-center ${isToday ? 'bg-sky-600 text-white rounded-full w-6 h-6 flex items-center justify-center' : holiday ? labelCls : 'text-slate-700'}`}>
-                {cell.day}
-              </span>
-              {/* Label */}
-              {holiday && (
-                <span className={`text-[9px] font-bold leading-tight text-center w-full break-words ${labelCls}`}>
-                  {labelText}
+            <button key={dateStr} onClick={() => handleDateClick(dateStr)}
+              className={`relative rounded-xl border px-1.5 pt-2 pb-1.5 text-left transition-all cursor-pointer flex flex-col gap-0.5 min-h-[80px]
+                ${bg} ${hover} ${isSelected ? 'border-sky-500 ring-2 ring-sky-300' : border}`}>
+              <span className={`text-sm font-bold leading-none self-center mb-0.5 ${
+                isToday ? 'bg-sky-600 text-white rounded-full w-6 h-6 flex items-center justify-center'
+                : sunday ? 'text-red-500' : 'text-slate-700'
+              }`}>{dayNum}</span>
+              {sunday && <span className="text-[9px] font-bold text-red-400 text-center w-full">Sunday</span>}
+              {dayHolidays.length > 0 && (
+                <span className={`text-[9px] font-bold text-center w-full leading-tight break-words ${label}`}>
+                  {dayHolidays[0].title}{dayHolidays.length > 1 && ` +${dayHolidays.length - 1}`}
                 </span>
               )}
-              {isWorkingDay && (
-                <span className="text-[9px] text-emerald-500 font-semibold text-center w-full">
-                  Camp Day
-                </span>
-              )}
-              {/* Event dots */}
-              {eventsOnDay.length > 0 && (
-                <span className="flex gap-0.5 justify-center mt-auto">
-                  {eventsOnDay.map(e => (
-                    <span key={e.id} className={`w-1.5 h-1.5 rounded-full ${e.urgent ? 'bg-rose-500 animate-pulse' : 'bg-sky-400'}`} />
-                  ))}
-                </span>
+              {!sunday && !topScope && canMark && (
+                <span className="text-[9px] text-slate-200 text-center w-full mt-auto leading-tight">+ mark</span>
               )}
             </button>
           );
         })}
       </div>
 
-      {/* Selected day detail */}
-      {selected && (() => {
-        const holiday = holidayForDate(selected);
-        const eventsOnDay = EVENTS.filter(e => e.date === selected);
-        return (
-          <div className="border rounded-xl p-4 bg-slate-50 space-y-2">
-            <p className="font-bold text-slate-700">{fmtDate(selected)}</p>
-            {holiday ? (
-              <div className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-sm ${HOLIDAY_COLOR[holiday.type]}`}>
-                <i className="fas fa-calendar-times mt-0.5" />
-                <div>
-                  <p className="font-semibold">{holiday.name}</p>
-                  {holiday.description && <p className="text-xs opacity-80">{holiday.description}</p>}
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-emerald-600 flex items-center gap-1"><i className="fas fa-check-circle" /> Regular session day</p>
+      {/* Selected date panel */}
+      {selected && (
+        <div className="border border-slate-200 rounded-xl bg-slate-50 overflow-hidden">
+          <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-slate-100">
+            <p className="font-bold text-slate-700">
+              <i className="fas fa-calendar-day text-sky-400 mr-2" />
+              {fmtDate(selected)}
+            </p>
+            {canMark && !isSunday(selected) && (
+              <button onClick={() => { showForm ? setShowForm(false) : openForm(); }}
+                className="flex items-center gap-1.5 text-xs text-sky-600 bg-sky-50 border border-sky-200 rounded-lg px-3 py-1.5 hover:bg-sky-100 font-semibold">
+                <i className={`fas fa-${showForm ? 'times' : 'plus'}`} />
+                {showForm ? 'Cancel' : 'Mark Holiday'}
+              </button>
             )}
-            {eventsOnDay.map(ev => (
-              <div key={ev.id} className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-sm ${EVENT_TYPE_COLOR[ev.type] ?? EVENT_TYPE_COLOR.other}`}>
-                <i className={`fas fa-${ev.type === 'ceremony' ? 'star' : ev.type === 'workshop' ? 'tools' : ev.type === 'assessment' ? 'clipboard-list' : 'info-circle'} mt-0.5`} />
-                <div>
-                  <p className="font-semibold flex items-center gap-1">{ev.title}{ev.urgent && <span className="text-xs bg-rose-500 text-white rounded px-1">Urgent</span>}</p>
-                  <p className="text-xs opacity-80">{ev.time} {ev.studio ? `· Studio ${ev.studio}` : ''}</p>
+          </div>
+
+          <div className="p-4 space-y-2">
+            {isSunday(selected) && (
+              <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm">
+                <i className="fas fa-calendar-times" /> Weekend — No sessions scheduled
+              </div>
+            )}
+
+            {holidaysOnDate(selected).map(h => (
+              <div key={h.id} className={`flex items-start gap-3 rounded-lg border px-3 py-2.5 text-sm ${scopeColorCls(h.scope)}`}>
+                <i className="fas fa-umbrella-beach mt-0.5 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold">{h.title}</p>
+                  {h.description && <p className="text-xs opacity-80 mt-0.5">{h.description}</p>}
+                  <p className="text-xs opacity-60 mt-1">
+                    {SCOPE_LABEL[h.scope] ?? h.scope} level
+                    {h.createdByName && <> · Marked by {h.createdByName}</>}
+                    {h.startDate !== h.endDate && <> · {fmtDate(h.startDate)} – {fmtDate(h.endDate)}</>}
+                  </p>
                 </div>
+                {canMark && (
+                  <button onClick={() => remove(h.id)} disabled={deletingId === h.id}
+                    className="hover:text-red-500 flex-shrink-0 p-1 transition-colors opacity-50 hover:opacity-100 disabled:opacity-30">
+                    <i className="fas fa-trash-alt text-xs" />
+                  </button>
+                )}
               </div>
             ))}
-            {!holiday && eventsOnDay.length === 0 && <p className="text-xs text-slate-400">No special events today.</p>}
-          </div>
-        );
-      })()}
 
-      {/* Holiday legend table */}
+            {!isSunday(selected) && holidaysOnDate(selected).length === 0 && !showForm && (
+              <p className="text-sm text-emerald-600 flex items-center gap-1.5">
+                <i className="fas fa-check-circle" /> Regular working day
+                {canMark && <span className="text-xs text-slate-400">— click "Mark Holiday" to add one</span>}
+              </p>
+            )}
+
+            {showForm && canMark && (
+              <form onSubmit={save} className="space-y-4 pt-3 border-t border-slate-200 mt-2">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">New Holiday</p>
+
+                {/* Title & description */}
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1">Holiday Title *</label>
+                    <input className={inputCls} placeholder="e.g. Eid, Independence Day, School Function" required
+                      value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1">Description (optional)</label>
+                    <input className={inputCls} placeholder="Additional details..."
+                      value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+                  </div>
+                </div>
+
+                {/* Date range */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1">From Date</label>
+                    <input type="date" className={inputCls} value={form.startDate}
+                      onChange={e => setForm(f => ({ ...f, startDate: e.target.value, endDate: e.target.value > f.endDate ? e.target.value : f.endDate }))} />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1">To Date</label>
+                    <input type="date" className={inputCls} value={form.endDate} min={form.startDate}
+                      onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))} />
+                  </div>
+                </div>
+
+                {/* ── Scope selector ── */}
+                <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-3">
+                  <p className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                    <i className="fas fa-sitemap text-sky-400" /> Applies To (Scope)
+                  </p>
+
+                  {isAdmin ? (
+                    /* ADMIN: full scope picker */
+                    <>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {SCOPE_LEVELS.map(sl => (
+                          <button key={sl.value} type="button"
+                            onClick={() => { setScopeLevel(sl.value); setScopeTargetId(''); setScopeDistrictFilter(''); }}
+                            className={`flex flex-col items-center gap-1 py-2.5 rounded-lg border text-xs font-semibold transition-all ${
+                              scopeLevel === sl.value
+                                ? 'bg-sky-600 text-white border-sky-600 shadow'
+                                : 'bg-white text-slate-600 border-slate-200 hover:border-sky-300 hover:text-sky-600'
+                            }`}>
+                            <i className={`fas ${sl.icon} text-base`} />
+                            {sl.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* TENANT: state dropdown */}
+                      {scopeLevel === 'TENANT' && (
+                        <div>
+                          <label className="block text-xs text-slate-500 mb-1">Select State *</label>
+                          <select value={scopeTargetId} onChange={e => setScopeTargetId(e.target.value)} className={inputCls} required>
+                            <option value="">— Choose a state —</option>
+                            {scopeOpts.tenants.map(t => (
+                              <option key={t.id} value={t.id}>{t.name} ({t.code})</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
+                      {/* DISTRICT: district dropdown */}
+                      {scopeLevel === 'DISTRICT' && (
+                        <div>
+                          <label className="block text-xs text-slate-500 mb-1">Select District *</label>
+                          <select value={scopeTargetId} onChange={e => setScopeTargetId(e.target.value)} className={inputCls} required>
+                            <option value="">— Choose a district —</option>
+                            {scopeOpts.districts.map(d => (
+                              <option key={d.id} value={d.id}>{d.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
+                      {/* BLOCK: cascading district → block */}
+                      {scopeLevel === 'BLOCK' && (
+                        <div className="space-y-2">
+                          <div>
+                            <label className="block text-xs text-slate-500 mb-1">Filter by District</label>
+                            <select value={scopeDistrictFilter}
+                              onChange={e => { setScopeDistrictFilter(e.target.value); setScopeTargetId(''); }}
+                              className={inputCls}>
+                              <option value="">— All Districts —</option>
+                              {scopeOpts.districts.map(d => (
+                                <option key={d.id} value={d.id}>{d.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs text-slate-500 mb-1">Select Block *</label>
+                            <select value={scopeTargetId} onChange={e => setScopeTargetId(e.target.value)} className={inputCls} required>
+                              <option value="">— Choose a block —</option>
+                              {filteredBlocks.map(b => (
+                                <option key={b.id} value={b.id}>{b.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* SCHOOL: info message — use principal login */}
+                      {scopeLevel === 'SCHOOL' && (
+                        <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                          <i className="fas fa-info-circle mt-0.5 flex-shrink-0" />
+                          For school-level holidays, ask the school Principal to mark it from their login — they have direct access to their school scope.
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    /* Non-admin: show fixed scope info */
+                    <div className="flex items-center gap-3 flex-wrap">
+                      {SCOPE_LEVELS.map(sl => {
+                        const isActive = sl.value === autoScopeForRole(user?.role ?? '');
+                        return (
+                          <div key={sl.value}
+                            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-semibold ${
+                              isActive
+                                ? 'bg-sky-600 text-white border-sky-600'
+                                : 'bg-white text-slate-300 border-slate-100'
+                            }`}>
+                            <i className={`fas ${sl.icon}`} />
+                            {sl.label}
+                            {isActive && <i className="fas fa-check ml-1" />}
+                          </div>
+                        );
+                      })}
+                      <p className="w-full text-xs text-slate-500 mt-1">
+                        <i className="fas fa-lock mr-1 text-slate-300" />
+                        {scopeLevelLabel(user?.role ?? '')} — scope is set by your role
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {formError && (
+                  <p className="text-xs text-red-500 flex items-center gap-1.5">
+                    <i className="fas fa-exclamation-circle" /> {formError}
+                  </p>
+                )}
+                <div className="flex justify-end">
+                  <button type="submit" disabled={saving || (isAdmin && scopeLevel !== 'SCHOOL' && !scopeTargetId)}
+                    className="bg-sky-600 text-white px-5 py-2 rounded-lg text-sm font-semibold hover:bg-sky-700 disabled:opacity-40">
+                    {saving ? 'Saving…' : 'Mark Holiday'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Holiday list for the month */}
       <div className="rounded-xl border border-slate-200 overflow-hidden">
-        <div className="bg-slate-700 text-white text-xs font-semibold px-4 py-2">Holiday List — June 2026</div>
-        <table className="w-full text-sm">
-          <thead className="bg-slate-100">
-            <tr>
-              <th className="text-left px-4 py-2 font-semibold text-slate-600">Date</th>
-              <th className="text-left px-4 py-2 font-semibold text-slate-600">Holiday Name</th>
-              <th className="text-left px-4 py-2 font-semibold text-slate-600">Type</th>
-            </tr>
-          </thead>
-          <tbody>
-            {HOLIDAYS.map(h => (
-              <tr key={h.date} className="border-t border-slate-100 hover:bg-slate-50">
-                <td className="px-4 py-2 text-slate-700">{fmtDate(h.date)}</td>
-                <td className="px-4 py-2 text-slate-700">{h.name}</td>
-                <td className="px-4 py-2">
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border capitalize ${HOLIDAY_COLOR[h.type]}`}>{h.type}</span>
-                </td>
+        <div className="bg-slate-700 text-white text-xs font-semibold px-4 py-2.5 flex items-center justify-between">
+          <span><i className="fas fa-list mr-2" />Holidays — {monthLabel}</span>
+          {loading && <i className="fas fa-circle-notch fa-spin text-slate-400" />}
+        </div>
+        {!loading && holidays.length === 0 ? (
+          <div className="py-8 text-center text-slate-400 text-sm">
+            <i className="fas fa-calendar-check text-2xl mb-2 text-slate-200 block" />
+            No holidays marked for this month.
+            {canMark && <p className="text-xs mt-1">Click any date on the calendar to add one.</p>}
+          </div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="bg-slate-100">
+              <tr>
+                <th className="text-left px-4 py-2.5 font-semibold text-slate-600">Date</th>
+                <th className="text-left px-4 py-2.5 font-semibold text-slate-600">Holiday</th>
+                <th className="text-left px-4 py-2.5 font-semibold text-slate-600">Scope</th>
+                <th className="text-left px-4 py-2.5 font-semibold text-slate-600">Marked By</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {holidays.map(h => (
+                <tr key={h.id} className="border-t border-slate-100 hover:bg-slate-50">
+                  <td className="px-4 py-2.5 text-slate-700 whitespace-nowrap text-xs">
+                    {fmtDate(h.startDate)}
+                    {h.endDate !== h.startDate && <> – {fmtDate(h.endDate)}</>}
+                  </td>
+                  <td className="px-4 py-2.5 text-slate-800 font-medium">
+                    {h.title}
+                    {h.description && <p className="text-xs text-slate-400 font-normal">{h.description}</p>}
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${scopeColorCls(h.scope)}`}>
+                      {SCOPE_LABEL[h.scope] ?? h.scope}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5 text-slate-500 text-xs">{h.createdByName ?? '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );
@@ -212,51 +511,57 @@ function subjectColor(subject: string): string {
 function SubjectChip({ subject, teacher }: { subject: string; teacher: string }) {
   const color = subjectColor(subject);
   return (
-    <div
-      className="rounded-lg px-2 py-1.5 text-white text-xs font-semibold shadow-sm"
-      style={{ backgroundColor: color }}
-      title={`${subject} — ${teacher}`}
-    >
+    <div className="rounded-lg px-2 py-1.5 text-white text-xs font-semibold shadow-sm"
+      style={{ backgroundColor: color }} title={`${subject} — ${teacher}`}>
       <p className="leading-tight truncate">{subject}</p>
       <p className="text-white/80 text-[10px] leading-tight truncate">{teacher}</p>
     </div>
   );
 }
 
-// Working days in June 2026 (skip holidays)
-const OFF_DATES = new Set(HOLIDAYS.map(h => h.date));
+const JUNE_DAYS = 30;
+const OFF_DATES = new Set(STATIC_HOLIDAYS.map(h => h.date));
 const WORKING_DAYS: string[] = [];
 for (let d = 1; d <= JUNE_DAYS; d++) {
   const key = dateKey(2026, 6, d);
   if (!OFF_DATES.has(key)) WORKING_DAYS.push(key);
 }
 
-function SchoolPlanner() {
-  const [studio, setStudio] = useState<1|2|3|4>(1);
-  const [view, setView] = useState<'daily'|'weekly'>('daily');
-  // Default to today if it's a working day, else nearest future working day
+function SchoolPlanner({ apiHolidays }: { apiHolidays: any[] }) {
+  const [studio, setStudio] = useState<1 | 2 | 3 | 4>(1);
+  const [view, setView] = useState<'daily' | 'weekly'>('daily');
   const [selectedDate, setSelectedDate] = useState<string>(() => {
     const today = new Date();
     const key = dateKey(today.getFullYear(), today.getMonth() + 1, today.getDate());
     return WORKING_DAYS.find(d => d >= key) ?? WORKING_DAYS[0] ?? '2026-06-01';
   });
 
-  // Week containing selected date
+  // Merge static + API holidays for off-date detection
+  const allOffDates = useMemo(() => {
+    const set = new Set(OFF_DATES);
+    for (const h of apiHolidays) {
+      const start = new Date(h.startDate + 'T00:00:00');
+      const end = new Date(h.endDate + 'T00:00:00');
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        set.add(dateKey(d.getFullYear(), d.getMonth() + 1, d.getDate()));
+      }
+    }
+    return set;
+  }, [apiHolidays]);
+
   const weekStart = useMemo(() => {
     const dt = new Date(selectedDate + 'T00:00:00');
-    const dow = dt.getDay(); // 0=Sun
+    const dow = dt.getDay();
     const start = new Date(dt);
-    start.setDate(dt.getDate() - (dow === 0 ? 6 : dow - 1)); // align to Monday
+    start.setDate(dt.getDate() - (dow === 0 ? 6 : dow - 1));
     return start;
   }, [selectedDate]);
 
-  const weekDates = useMemo(() => {
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(weekStart);
-      d.setDate(weekStart.getDate() + i);
-      return dateKey(d.getFullYear(), d.getMonth() + 1, d.getDate());
-    });
-  }, [weekStart]);
+  const weekDates = useMemo(() => Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(weekStart);
+    d.setDate(weekStart.getDate() + i);
+    return dateKey(d.getFullYear(), d.getMonth() + 1, d.getDate());
+  }), [weekStart]);
 
   const studioSessions = useMemo(() => SCHEDULE.filter(s => s.studio === studio), [studio]);
 
@@ -273,24 +578,27 @@ function SchoolPlanner() {
     if (idx < WORKING_DAYS.length - 1) setSelectedDate(WORKING_DAYS[idx + 1]);
   }
 
-  const isOffDay = (date: string) => OFF_DATES.has(date);
+  const isOffDay = (date: string) => allOffDates.has(date);
+
+  const getHolidayName = (date: string) => {
+    const staticH = STATIC_HOLIDAYS.find(h => h.date === date);
+    if (staticH) return staticH.name;
+    const apiH = apiHolidays.find(h => date >= h.startDate && date <= h.endDate);
+    return apiH?.title ?? 'Holiday';
+  };
 
   return (
     <div className="space-y-4">
       {/* Studio tabs */}
       <div className="flex flex-wrap gap-2">
-        {([1,2,3,4] as const).map(s => (
-          <button
-            key={s}
-            onClick={() => setStudio(s)}
+        {([1, 2, 3, 4] as const).map(s => (
+          <button key={s} onClick={() => setStudio(s)}
             className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-all ${
               studio === s
                 ? 'bg-sky-600 text-white border-sky-600 shadow'
                 : 'bg-white text-slate-600 border-slate-200 hover:border-sky-300 hover:text-sky-600'
-            }`}
-          >
-            <i className="fas fa-tv mr-1.5" />
-            {STUDIO_LABELS[s]}
+            }`}>
+            <i className="fas fa-tv mr-1.5" />{STUDIO_LABELS[s]}
           </button>
         ))}
       </div>
@@ -298,16 +606,12 @@ function SchoolPlanner() {
       {/* View toggle + date nav */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1">
-          <button
-            onClick={() => setView('daily')}
-            className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all ${view === 'daily' ? 'bg-white text-sky-700 shadow' : 'text-slate-500 hover:text-slate-700'}`}
-          >
+          <button onClick={() => setView('daily')}
+            className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all ${view === 'daily' ? 'bg-white text-sky-700 shadow' : 'text-slate-500 hover:text-slate-700'}`}>
             <i className="fas fa-calendar-day mr-1.5" />Daily
           </button>
-          <button
-            onClick={() => setView('weekly')}
-            className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all ${view === 'weekly' ? 'bg-white text-sky-700 shadow' : 'text-slate-500 hover:text-slate-700'}`}
-          >
+          <button onClick={() => setView('weekly')}
+            className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all ${view === 'weekly' ? 'bg-white text-sky-700 shadow' : 'text-slate-500 hover:text-slate-700'}`}>
             <i className="fas fa-calendar-week mr-1.5" />Weekly
           </button>
         </div>
@@ -317,11 +621,8 @@ function SchoolPlanner() {
             <button onClick={prevDay} className="p-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600">
               <i className="fas fa-chevron-left text-xs" />
             </button>
-            <select
-              value={selectedDate}
-              onChange={e => setSelectedDate(e.target.value)}
-              className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm font-medium text-slate-700 bg-white"
-            >
+            <select value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
+              className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm font-medium text-slate-700 bg-white">
               {WORKING_DAYS.map(d => (
                 <option key={d} value={d}>
                   {new Date(d + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}
@@ -336,38 +637,30 @@ function SchoolPlanner() {
 
         {view === 'weekly' && (
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                const prev = new Date(weekStart);
-                prev.setDate(prev.getDate() - 7);
-                const key = dateKey(prev.getFullYear(), prev.getMonth() + 1, prev.getDate());
-                const found = WORKING_DAYS.find(d => d >= key);
-                if (found) setSelectedDate(found);
-              }}
-              className="p-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600"
-            >
+            <button onClick={() => {
+              const prev = new Date(weekStart);
+              prev.setDate(prev.getDate() - 7);
+              const key = dateKey(prev.getFullYear(), prev.getMonth() + 1, prev.getDate());
+              const found = WORKING_DAYS.find(d => d >= key);
+              if (found) setSelectedDate(found);
+            }} className="p-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600">
               <i className="fas fa-chevron-left text-xs" />
             </button>
-            <span className="text-sm font-semibold text-slate-700 px-2">
-              Week of {fmtDate(weekDates[0])}
-            </span>
-            <button
-              onClick={() => {
-                const next = new Date(weekStart);
-                next.setDate(next.getDate() + 7);
-                const key = dateKey(next.getFullYear(), next.getMonth() + 1, next.getDate());
-                const found = WORKING_DAYS.find(d => d >= key);
-                if (found) setSelectedDate(found);
-              }}
-              className="p-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600"
-            >
+            <span className="text-sm font-semibold text-slate-700 px-2">Week of {fmtDate(weekDates[0])}</span>
+            <button onClick={() => {
+              const next = new Date(weekStart);
+              next.setDate(next.getDate() + 7);
+              const key = dateKey(next.getFullYear(), next.getMonth() + 1, next.getDate());
+              const found = WORKING_DAYS.find(d => d >= key);
+              if (found) setSelectedDate(found);
+            }} className="p-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600">
               <i className="fas fa-chevron-right text-xs" />
             </button>
           </div>
         )}
       </div>
 
-      {/* ── Daily view ── */}
+      {/* Daily view */}
       {view === 'daily' && (
         <div className="rounded-xl border border-slate-200 overflow-hidden bg-white">
           <div className="px-5 py-3 bg-slate-700 text-white flex items-center justify-between">
@@ -378,8 +671,8 @@ function SchoolPlanner() {
           </div>
           {isOffDay(selectedDate) ? (
             <div className="py-16 text-center text-slate-400">
-              <i className="fas fa-calendar-times text-3xl mb-2 text-red-400" />
-              <p className="font-semibold text-slate-600">{holidayForDate(selectedDate)?.name ?? 'Holiday'}</p>
+              <i className="fas fa-calendar-times text-3xl mb-2 text-red-400 block" />
+              <p className="font-semibold text-slate-600">{getHolidayName(selectedDate)}</p>
               <p className="text-sm">No sessions scheduled today.</p>
             </div>
           ) : (
@@ -400,12 +693,8 @@ function SchoolPlanner() {
                       <td className="px-5 py-3 font-mono text-sm font-semibold text-slate-600">{slot}</td>
                       <td className="px-5 py-3">
                         {sess ? (
-                          <span
-                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-white text-sm font-semibold"
-                            style={{ backgroundColor: subjectColor(sess.subject) }}
-                          >
-                            {sess.subject}
-                          </span>
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-white text-sm font-semibold"
+                            style={{ backgroundColor: subjectColor(sess.subject) }}>{sess.subject}</span>
                         ) : <span className="text-slate-300 text-sm">—</span>}
                       </td>
                       <td className="px-5 py-3 text-sm text-slate-700">{sess?.teacher ?? '—'}</td>
@@ -419,10 +708,10 @@ function SchoolPlanner() {
         </div>
       )}
 
-      {/* ── Weekly view ── */}
+      {/* Weekly view */}
       {view === 'weekly' && (
         <div className="rounded-xl border border-slate-200 overflow-hidden bg-white">
-          <div className="px-5 py-3 bg-slate-700 text-white flex items-center justify-between">
+          <div className="px-5 py-3 bg-slate-700 text-white">
             <span className="font-bold">Weekly Schedule — {STUDIO_LABELS[studio]}</span>
           </div>
           <div className="overflow-x-auto">
@@ -441,7 +730,7 @@ function SchoolPlanner() {
                       <th key={d} className={`text-center px-2 py-2 text-xs font-semibold uppercase tracking-wide ${off ? 'text-red-400 bg-red-50' : 'text-slate-500'}`}>
                         <span>{DAY_NAMES[dt.getDay()]}</span>
                         <span className="block text-sm font-bold">{dt.getDate()}</span>
-                        {off && <span className="text-[10px] font-normal normal-case">Holiday</span>}
+                        {off && <span className="text-[10px] font-normal normal-case">{getHolidayName(d)}</span>}
                       </th>
                     );
                   })}
@@ -472,9 +761,8 @@ function SchoolPlanner() {
       {/* Subject legend */}
       <div className="flex flex-wrap gap-2">
         {Object.entries(SUBJECT_COLOR).map(([name, color]) => (
-          <span key={name} className="flex items-center gap-1.5 text-xs font-semibold text-white px-2.5 py-1 rounded-full" style={{ backgroundColor: color }}>
-            {name}
-          </span>
+          <span key={name} className="flex items-center gap-1.5 text-xs font-semibold text-white px-2.5 py-1 rounded-full"
+            style={{ backgroundColor: color }}>{name}</span>
         ))}
       </div>
     </div>
@@ -483,8 +771,16 @@ function SchoolPlanner() {
 
 // ─── Event Notifications ───────────────────────────────────────────────────────
 
+const EVENT_TYPE_COLOR: Record<string, string> = {
+  ceremony:   'bg-violet-100 text-violet-700 border-violet-300',
+  workshop:   'bg-sky-100 text-sky-700 border-sky-300',
+  assessment: 'bg-rose-100 text-rose-700 border-rose-300',
+  meeting:    'bg-teal-100 text-teal-700 border-teal-300',
+  other:      'bg-slate-100 text-slate-600 border-slate-300',
+};
+
 function EventNotifications() {
-  const [filter, setFilter] = useState<'all'|'urgent'|'ceremony'|'workshop'|'assessment'|'meeting'>('all');
+  const [filter, setFilter] = useState<'all' | 'urgent' | 'ceremony' | 'workshop' | 'assessment' | 'meeting'>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
@@ -497,18 +793,12 @@ function EventNotifications() {
 
   return (
     <div className="space-y-4">
-      {/* Filters */}
       <div className="flex flex-wrap items-center gap-2">
-        {(['all','urgent','ceremony','workshop','assessment','meeting'] as const).map(f => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
+        {(['all', 'urgent', 'ceremony', 'workshop', 'assessment', 'meeting'] as const).map(f => (
+          <button key={f} onClick={() => setFilter(f)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
-              filter === f
-                ? 'bg-slate-700 text-white border-slate-700'
-                : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
-            }`}
-          >
+              filter === f ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
+            }`}>
             {f === 'urgent' && <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />}
             {f === 'all' ? 'All Events' : f.charAt(0).toUpperCase() + f.slice(1)}
             {f === 'urgent' && urgentCount > 0 && (
@@ -518,28 +808,18 @@ function EventNotifications() {
         ))}
       </div>
 
-      {/* Event cards */}
       <div className="space-y-3">
         {filtered.map(ev => {
           const expanded = expandedId === ev.id;
           const colors = EVENT_TYPE_COLOR[ev.type] ?? EVENT_TYPE_COLOR.other;
           return (
-            <div
-              key={ev.id}
-              className={`rounded-xl border-l-4 border border-slate-200 bg-white overflow-hidden transition-all ${ev.urgent ? 'border-l-rose-500' : 'border-l-sky-400'}`}
-            >
-              <button
-                className="w-full text-left px-5 py-4 flex items-start gap-3"
-                onClick={() => setExpandedId(expanded ? null : ev.id)}
-              >
+            <div key={ev.id}
+              className={`rounded-xl border-l-4 border border-slate-200 bg-white overflow-hidden transition-all ${ev.urgent ? 'border-l-rose-500' : 'border-l-sky-400'}`}>
+              <button className="w-full text-left px-5 py-4 flex items-start gap-3"
+                onClick={() => setExpandedId(expanded ? null : ev.id)}>
                 <div className="mt-0.5 shrink-0">
                   <span className={`inline-flex items-center justify-center w-8 h-8 rounded-lg text-sm ${colors}`}>
-                    <i className={`fas fa-${
-                      ev.type === 'ceremony' ? 'star' :
-                      ev.type === 'workshop' ? 'tools' :
-                      ev.type === 'assessment' ? 'clipboard-list' :
-                      ev.type === 'meeting' ? 'users' : 'info-circle'
-                    }`} />
+                    <i className={`fas fa-${ev.type === 'ceremony' ? 'star' : ev.type === 'workshop' ? 'tools' : ev.type === 'assessment' ? 'clipboard-list' : ev.type === 'meeting' ? 'users' : 'info-circle'}`} />
                   </span>
                 </div>
                 <div className="flex-1 min-w-0">
@@ -568,10 +848,9 @@ function EventNotifications() {
             </div>
           );
         })}
-
         {filtered.length === 0 && (
           <div className="py-12 text-center text-slate-400">
-            <i className="fas fa-bell-slash text-3xl mb-2" />
+            <i className="fas fa-bell-slash text-3xl mb-2 block" />
             <p className="font-semibold text-slate-500">No events found</p>
           </div>
         )}
@@ -585,21 +864,28 @@ function EventNotifications() {
 type Tab = 'calendar' | 'planner' | 'events';
 
 const TABS: Array<{ id: Tab; label: string; icon: string; badge?: number }> = [
-  { id: 'calendar', label: 'Holiday Calendar',     icon: 'fas fa-calendar-alt' },
-  { id: 'planner',  label: 'Lecture Schedule',     icon: 'fas fa-chalkboard-teacher' },
-  { id: 'events',   label: 'Event Notifications',  icon: 'fas fa-bell', badge: EVENTS.filter(e => e.urgent).length },
+  { id: 'calendar', label: 'Holiday Calendar',    icon: 'fas fa-calendar-alt' },
+  { id: 'planner',  label: 'Lecture Schedule',    icon: 'fas fa-chalkboard-teacher' },
+  { id: 'events',   label: 'Event Notifications', icon: 'fas fa-bell', badge: EVENTS.filter(e => e.urgent).length },
 ];
 
 export function Planner() {
+  const { user } = useAuth();
   const [tab, setTab] = useState<Tab>('calendar');
+  // Fetch June 2026 holidays once so SchoolPlanner can mark them as off-days
+  const [juneHolidays, setJuneHolidays] = useState<any[]>([]);
+  useEffect(() => {
+    api.planner.holidays('2026-06').then(setJuneHolidays).catch(() => {});
+  }, []);
 
   return (
     <div className="space-y-6">
       {/* Page header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800 font-heading">Summer Camp 2026</h1>
-          <p className="text-sm text-slate-500 mt-0.5">June 2026 · 4 Studios · Scheduled by Valuable Group</p>
+          <p className="text-xs font-semibold tracking-widest text-sky-600 uppercase mb-1">PLANNER</p>
+          <h1 className="text-2xl font-bold text-slate-800">Academic Planner</h1>
+          <p className="text-sm text-slate-500 mt-1">Manage holidays, lecture schedule &amp; events</p>
         </div>
         <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2">
           <i className="fas fa-sun text-amber-500" />
@@ -611,15 +897,10 @@ export function Planner() {
       {/* Tabs */}
       <div className="flex items-center gap-1 bg-white rounded-xl border border-slate-200 p-1 shadow-sm w-fit">
         {TABS.map(t => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
+          <button key={t.id} onClick={() => setTab(t.id)}
             className={`relative flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-all ${
-              tab === t.id
-                ? 'bg-sky-600 text-white shadow'
-                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
-            }`}
-          >
+              tab === t.id ? 'bg-sky-600 text-white shadow' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+            }`}>
             <i className={t.icon} />
             {t.label}
             {t.badge != null && t.badge > 0 && (
@@ -633,8 +914,8 @@ export function Planner() {
 
       {/* Tab content */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-        {tab === 'calendar' && <CalendarWidget />}
-        {tab === 'planner'  && <SchoolPlanner />}
+        {tab === 'calendar' && <CalendarWidget user={user} />}
+        {tab === 'planner'  && <SchoolPlanner apiHolidays={juneHolidays} />}
         {tab === 'events'   && <EventNotifications />}
       </div>
     </div>

@@ -301,6 +301,22 @@ export const api = {
       req<any>(`/attendance/leave/${id}/reject`, { method: 'PUT', body: JSON.stringify({ remarks }) }),
   },
 
+  planner: {
+    scopeOptions: () =>
+      req<{ tenants: any[]; districts: any[]; blocks: any[] }>('/planner/scope-options'),
+    holidays: (month?: string) =>
+      req<any[]>(`/planner/holidays${month ? `?month=${month}` : ''}`),
+    upcoming: (limit = 5) =>
+      req<any[]>(`/planner/holidays/upcoming?limit=${limit}`),
+    createHoliday: (body: {
+      title: string; description?: string; startDate: string; endDate: string;
+      scopeLevel?: string; scopeTargetId?: string;
+    }) =>
+      req<any>('/planner/holidays', { method: 'POST', body: JSON.stringify(body) }),
+    deleteHoliday: (id: string) =>
+      req<{ ok: boolean }>(`/planner/holidays/${id}`, { method: 'DELETE' }),
+  },
+
   quiz: {
     list: (params: { schoolId?: string; grade?: number } = {}) =>
       req<any[]>(`/quiz${qstr(params)}`),

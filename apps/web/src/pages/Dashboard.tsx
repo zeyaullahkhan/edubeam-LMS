@@ -82,12 +82,14 @@ export function Dashboard() {
   const [drillSchools, setDrillSchools] = useState<SchoolRow[]>([]);
   const [error, setError] = useState('');
   const [todayAtt, setTodayAtt] = useState<any>(null);
+  const [upcomingHolidays, setUpcomingHolidays] = useState<any[]>([]);
 
   useEffect(() => {
     Promise.all([api.overview(), api.districts(), api.enrollment(), api.teacherStats()])
       .then(([o, d, e, ts]) => { setOverview(o); setDistricts(d); setEnrollment(e); setTeacherStats(ts); })
       .catch((e) => setError((e as Error).message));
     api.attendance.today().then(setTodayAtt).catch(() => null);
+    api.planner.upcoming(3).then(setUpcomingHolidays).catch(() => null);
   }, []);
 
   const selectDrillDistrict = async (id: string) => {
@@ -182,6 +184,37 @@ export function Dashboard() {
           </div>
         );
       })()}
+
+      {/* ── Upcoming holidays alert ──────────────────────────── */}
+      {upcomingHolidays.length > 0 && (
+        <div className="no-print bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-start gap-4 flex-wrap">
+          <div className="flex items-center gap-2 text-amber-700 font-bold text-sm shrink-0">
+            <span className="text-xl">🗓️</span> Upcoming Holidays
+          </div>
+          <div className="flex flex-wrap gap-3 flex-1 min-w-0">
+            {upcomingHolidays.map(h => {
+              const SCOPE_LABEL: Record<string, string> = { TENANT: 'State', DISTRICT: 'District', BLOCK: 'Block', SCHOOL: 'School' };
+              const scopeCls = h.scope === 'TENANT' ? 'text-orange-700 bg-orange-100 border-orange-300'
+                : h.scope === 'DISTRICT' ? 'text-amber-700 bg-amber-100 border-amber-300'
+                : 'text-sky-700 bg-sky-100 border-sky-300';
+              return (
+                <div key={h.id} className="flex items-center gap-2 bg-white border border-amber-200 rounded-lg px-3 py-1.5 text-sm shadow-sm">
+                  <div>
+                    <p className="font-semibold text-slate-800 leading-none">{h.title}</p>
+                    <p className="text-xs text-slate-400 mt-0.5">{new Date(h.startDate + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</p>
+                  </div>
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${scopeCls}`}>
+                    {SCOPE_LABEL[h.scope] ?? h.scope}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <a href="/planner" className="flex items-center gap-1.5 text-xs font-bold text-amber-600 hover:text-amber-800 shrink-0 mt-1">
+            Manage <i className="fas fa-arrow-right text-[10px]" />
+          </a>
+        </div>
+      )}
 
       {/* ── Today's attendance summary ───────────────────────── */}
       {todayAtt && (todayAtt.students.present > 0 || todayAtt.staff.present > 0 || todayAtt.students.absent > 0) && (

@@ -566,144 +566,7 @@ function StaffMonthlyReport({ schoolId }: { schoolId: string }) {
   );
 }
 
-// ── TAB: Holidays ─────────────────────────────────────────────────────────────
-function HolidaysTab({ schoolId, user }: { schoolId: string; user: any }) {
-  const [month, setMonth] = useState(monthStr());
-  const [holidays, setHolidays] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({ title: '', description: '', startDate: todayStr(), endDate: todayStr(), scope: 'SCHOOL' });
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-
-  const SCOPE_LABELS: Record<string, string> = {
-    SCHOOL: 'School-wide', BLOCK: 'Block-wide', DISTRICT: 'District-wide', TENANT: 'State-wide',
-  };
-
-  const canCreate = ['ADMIN', 'STATE_OFFICIAL', 'DISTRICT_OFFICIAL', 'BLOCK_OFFICIAL', 'PRINCIPAL'].includes(user?.role);
-
-  const load = useCallback(async () => {
-    if (!schoolId) return;
-    setLoading(true);
-    try { setHolidays(await api.attendance.holidays(schoolId, month)); }
-    finally { setLoading(false); }
-  }, [schoolId, month]);
-
-  useEffect(() => { load(); }, [load]);
-
-  const getScopeId = () => {
-    if (form.scope === 'SCHOOL') return schoolId;
-    return schoolId; // simplified — in a full multi-state build, pick block/district/tenantId here
-  };
-
-  const create = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.title.trim()) return;
-    setSaving(true); setError('');
-    try {
-      await api.attendance.createHoliday({ ...form, scopeId: getScopeId() });
-      setForm(f => ({ ...f, title: '', description: '' }));
-      load();
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const remove = async (id: string) => {
-    if (!confirm('Delete this holiday?')) return;
-    await api.attendance.deleteHoliday(id);
-    load();
-  };
-
-  const inputCls = 'border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white w-full';
-
-  return (
-    <div className="space-y-6">
-      {canCreate && (
-        <form onSubmit={create} className="bg-slate-50 rounded-xl border border-slate-100 p-4 space-y-3">
-          <p className="text-sm font-semibold text-slate-700">Mark Holiday</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="sm:col-span-2">
-              <label className="block text-xs text-slate-500 mb-1">Holiday Title *</label>
-              <input className={inputCls} placeholder="e.g. Diwali, Independence Day" required
-                value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
-            </div>
-            <div className="sm:col-span-2">
-              <label className="block text-xs text-slate-500 mb-1">Description (optional)</label>
-              <input className={inputCls} placeholder="Additional details..."
-                value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
-            </div>
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">From Date</label>
-              <input type="date" className={inputCls} value={form.startDate}
-                onChange={e => setForm(f => ({ ...f, startDate: e.target.value, endDate: e.target.value < f.endDate ? f.endDate : e.target.value }))} />
-            </div>
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">To Date</label>
-              <input type="date" className={inputCls} value={form.endDate} min={form.startDate}
-                onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))} />
-            </div>
-            {['ADMIN', 'STATE_OFFICIAL', 'DISTRICT_OFFICIAL', 'BLOCK_OFFICIAL'].includes(user?.role) && (
-              <div>
-                <label className="block text-xs text-slate-500 mb-1">Applies To</label>
-                <select className={inputCls} value={form.scope} onChange={e => setForm(f => ({ ...f, scope: e.target.value }))}>
-                  {Object.entries(SCOPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
-              </div>
-            )}
-          </div>
-          {error && <p className="text-xs text-red-500">{error}</p>}
-          <div className="flex justify-end">
-            <button type="submit" disabled={saving}
-              className="bg-sky-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-sky-700 disabled:opacity-50">
-              {saving ? 'Saving…' : 'Mark Holiday'}
-            </button>
-          </div>
-        </form>
-      )}
-
-      <div className="flex items-center gap-3">
-        <div>
-          <label className="block text-xs text-slate-500 mb-1">Filter by Month</label>
-          <input type="month" value={month} onChange={e => setMonth(e.target.value)}
-            className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white" />
-        </div>
-      </div>
-
-      {loading ? (
-        <div className="text-center py-10 text-slate-400">Loading holidays…</div>
-      ) : !holidays.length ? (
-        <div className="text-center py-10 text-slate-400">No holidays found for this month.</div>
-      ) : (
-        <div className="space-y-2">
-          {holidays.map(h => (
-            <div key={h.id} className="flex items-start gap-3 bg-white border border-slate-100 rounded-xl px-4 py-3">
-              <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center flex-shrink-0">
-                <i className="fas fa-umbrella-beach text-orange-500" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-slate-800">{h.title}</p>
-                {h.description && <p className="text-xs text-slate-500 mt-0.5">{h.description}</p>}
-                <div className="flex items-center gap-3 mt-1 text-xs text-slate-400">
-                  <span><i className="fas fa-calendar mr-1" />{h.startDate}{h.endDate !== h.startDate ? ` → ${h.endDate}` : ''}</span>
-                  <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">{SCOPE_LABELS[h.scope] ?? h.scope}</span>
-                  {h.createdByName && <span>by {h.createdByName}</span>}
-                </div>
-              </div>
-              {canCreate && (
-                <button onClick={() => remove(h.id)}
-                  className="text-slate-300 hover:text-red-400 transition-colors flex-shrink-0 p-1">
-                  <i className="fas fa-trash-alt text-xs" />
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
+// Holidays are managed in Planner → Holiday Calendar tab.
 
 // ── TAB: Leave Requests (teacher / principal view) ────────────────────────────
 function LeaveRequestsTab({ schoolId }: { schoolId: string }) {
@@ -950,12 +813,11 @@ const TABS = [
   { id: 'monthly',        label: 'Monthly Report',          icon: 'fas fa-calendar-alt' },
   { id: 'date-report',    label: 'Date-wise Report',        icon: 'fas fa-table' },
   { id: 'staff-monthly',  label: 'Staff Monthly Report',    icon: 'fas fa-users' },
-  { id: 'holidays',       label: 'Holidays',                icon: 'fas fa-umbrella-beach' },
   { id: 'leave-requests', label: 'Leave Requests',          icon: 'fas fa-clipboard-list' },
   { id: 'my-leave',       label: 'My Leave',                icon: 'fas fa-calendar-check' },
 ];
 
-const STUDENT_TAB_IDS = ['mark-students', 'monthly', 'date-report', 'holidays', 'leave-requests'];
+const STUDENT_TAB_IDS = ['mark-students', 'monthly', 'date-report', 'leave-requests'];
 const STAFF_TAB_IDS = ['mark-staff', 'staff-monthly'];
 
 export function Attendance({ mode = 'all' }: { mode?: 'student' | 'staff' | 'all' }) {
@@ -1021,7 +883,6 @@ export function Attendance({ mode = 'all' }: { mode?: 'student' | 'staff' | 'all
             {tab === 'monthly'        && <MonthlyReport schoolId={schoolId} />}
             {tab === 'date-report'    && <DateReport   schoolId={schoolId} />}
             {tab === 'staff-monthly'  && <StaffMonthlyReport schoolId={schoolId} />}
-            {tab === 'holidays'       && <HolidaysTab schoolId={schoolId} user={user} />}
             {tab === 'leave-requests' && <LeaveRequestsTab schoolId={schoolId} />}
             {tab === 'my-leave'       && <MyLeaveTab />}
           </div>
