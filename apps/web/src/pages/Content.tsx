@@ -36,7 +36,7 @@ const GRADE_COLORS = [
   'from-cyan-500 to-sky-600',
 ];
 
-const EDITOR_ROLES = new Set(['ADMIN', 'PRINCIPAL', 'TEACHER']);
+const EDITOR_ROLES = new Set(['ADMIN']);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -243,7 +243,6 @@ function LectureCard({
 }) {
   const { user } = useAuth();
   const isEditor = EDITOR_ROLES.has(user?.role ?? '');
-  const isAdmin = user?.role === 'ADMIN' || user?.role === 'PRINCIPAL';
 
   const [mode, setMode] = useState<'view' | 'edit'>('view');
   const [form, setForm] = useState<LectureFormData>(blankForm({
@@ -305,7 +304,7 @@ function LectureCard({
             className="px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50">
             Cancel
           </button>
-          {isAdmin && (
+          {isEditor && (
             <button onClick={() => setConfirmDelete(true)}
               className="px-3 py-2 border border-red-200 text-red-500 rounded-lg text-sm hover:bg-red-50">
               <i className="fas fa-trash" />

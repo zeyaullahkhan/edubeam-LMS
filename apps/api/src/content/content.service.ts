@@ -2,7 +2,7 @@ import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/commo
 import { prisma } from '@edubeam/db';
 import type { AuthUser } from '@edubeam/shared';
 
-const EDITOR_ROLES = new Set(['ADMIN', 'PRINCIPAL', 'TEACHER']);
+const EDITOR_ROLES = new Set(['ADMIN']);
 
 const PAGE_SIZE = 30;
 
@@ -122,7 +122,7 @@ export class ContentService {
 
   /** Delete a lecture (admin only). */
   async deleteLecture(id: string, user: AuthUser) {
-    if (user.role !== 'ADMIN' && user.role !== 'PRINCIPAL') throw new ForbiddenException('Not authorized');
+    if (user.role !== 'ADMIN') throw new ForbiddenException('Not authorized');
     const existing = await prisma.lecture.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Lecture not found');
     await prisma.lecture.delete({ where: { id } });
