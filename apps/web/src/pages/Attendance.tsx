@@ -3,6 +3,20 @@ import { api } from '../api';
 import { useAuth } from '../auth';
 import { ScopeBar, type Scope } from '../components/ScopeBar';
 
+const LEAVE_REASONS: Record<string, string> = {
+  SICK: 'Sickness / Illness',
+  FAMILY: 'Family Emergency',
+  MEDICAL: 'Medical Appointment',
+  PERSONAL: 'Personal Reason',
+  OTHER: 'Other',
+};
+
+const LEAVE_STATUS_CFG: Record<string, { label: string; bg: string; text: string }> = {
+  PENDING:  { label: 'Pending',  bg: 'bg-amber-100',   text: 'text-amber-700'  },
+  APPROVED: { label: 'Approved', bg: 'bg-emerald-100', text: 'text-emerald-700' },
+  REJECTED: { label: 'Rejected', bg: 'bg-red-100',     text: 'text-red-700'    },
+};
+
 const GRADES = [6, 7, 8, 9, 10, 11, 12];
 const ACADEMIC_YEAR = '2025-26';
 
@@ -552,27 +566,411 @@ function StaffMonthlyReport({ schoolId }: { schoolId: string }) {
   );
 }
 
+// ── TAB: Holidays ─────────────────────────────────────────────────────────────
+function HolidaysTab({ schoolId, user }: { schoolId: string; user: any }) {
+  const [month, setMonth] = useState(monthStr());
+  const [holidays, setHolidays] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [form, setForm] = useState({ title: '', description: '', startDate: todayStr(), endDate: todayStr(), scope: 'SCHOOL' });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const SCOPE_LABELS: Record<string, string> = {
+    SCHOOL: 'School-wide', BLOCK: 'Block-wide', DISTRICT: 'District-wide', TENANT: 'State-wide',
+  };
+
+  const canCreate = ['ADMIN', 'STATE_OFFICIAL', 'DISTRICT_OFFICIAL', 'BLOCK_OFFICIAL', 'PRINCIPAL'].includes(user?.role);
+
+  const load = useCallback(async () => {
+    if (!schoolId) return;
+    setLoading(true);
+    try { setHolidays(await api.attendance.holidays(schoolId, month)); }
+    finally { setLoading(false); }
+  }, [schoolId, month]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const getScopeId = () => {
+    if (form.scope === 'SCHOOL') return schoolId;
+    return schoolId; // simplified — in a full multi-state build, pick block/district/tenantId here
+  };
+
+  const create = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.title.trim()) return;
+    setSaving(true); setError('');
+    try {
+      await api.attendance.createHoliday({ ...form, scopeId: getScopeId() });
+      setForm(f => ({ ...f, title: '', description: '' }));
+      load();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async (id: string) => {
+    if (!confirm('Delete this holiday?')) return;
+    await api.attendance.deleteHoliday(id);
+    load();
+  };
+
+  const inputCls = 'border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white w-full';
+
+  return (
+    <div className="space-y-6">
+      {canCreate && (
+        <form onSubmit={create} className="bg-slate-50 rounded-xl border border-slate-100 p-4 space-y-3">
+          <p className="text-sm font-semibold text-slate-700">Mark Holiday</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="sm:col-span-2">
+              <label className="block text-xs text-slate-500 mb-1">Holiday Title *</label>
+              <input className={inputCls} placeholder="e.g. Diwali, Independence Day" required
+                value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="block text-xs text-slate-500 mb-1">Description (optional)</label>
+              <input className={inputCls} placeholder="Additional details..."
+                value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">From Date</label>
+              <input type="date" className={inputCls} value={form.startDate}
+                onChange={e => setForm(f => ({ ...f, startDate: e.target.value, endDate: e.target.value < f.endDate ? f.endDate : e.target.value }))} />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">To Date</label>
+              <input type="date" className={inputCls} value={form.endDate} min={form.startDate}
+                onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))} />
+            </div>
+            {['ADMIN', 'STATE_OFFICIAL', 'DISTRICT_OFFICIAL', 'BLOCK_OFFICIAL'].includes(user?.role) && (
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Applies To</label>
+                <select className={inputCls} value={form.scope} onChange={e => setForm(f => ({ ...f, scope: e.target.value }))}>
+                  {Object.entries(SCOPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                </select>
+              </div>
+            )}
+          </div>
+          {error && <p className="text-xs text-red-500">{error}</p>}
+          <div className="flex justify-end">
+            <button type="submit" disabled={saving}
+              className="bg-sky-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-sky-700 disabled:opacity-50">
+              {saving ? 'Saving…' : 'Mark Holiday'}
+            </button>
+          </div>
+        </form>
+      )}
+
+      <div className="flex items-center gap-3">
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">Filter by Month</label>
+          <input type="month" value={month} onChange={e => setMonth(e.target.value)}
+            className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white" />
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="text-center py-10 text-slate-400">Loading holidays…</div>
+      ) : !holidays.length ? (
+        <div className="text-center py-10 text-slate-400">No holidays found for this month.</div>
+      ) : (
+        <div className="space-y-2">
+          {holidays.map(h => (
+            <div key={h.id} className="flex items-start gap-3 bg-white border border-slate-100 rounded-xl px-4 py-3">
+              <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center flex-shrink-0">
+                <i className="fas fa-umbrella-beach text-orange-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-slate-800">{h.title}</p>
+                {h.description && <p className="text-xs text-slate-500 mt-0.5">{h.description}</p>}
+                <div className="flex items-center gap-3 mt-1 text-xs text-slate-400">
+                  <span><i className="fas fa-calendar mr-1" />{h.startDate}{h.endDate !== h.startDate ? ` → ${h.endDate}` : ''}</span>
+                  <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">{SCOPE_LABELS[h.scope] ?? h.scope}</span>
+                  {h.createdByName && <span>by {h.createdByName}</span>}
+                </div>
+              </div>
+              {canCreate && (
+                <button onClick={() => remove(h.id)}
+                  className="text-slate-300 hover:text-red-400 transition-colors flex-shrink-0 p-1">
+                  <i className="fas fa-trash-alt text-xs" />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── TAB: Leave Requests (teacher / principal view) ────────────────────────────
+function LeaveRequestsTab({ schoolId }: { schoolId: string }) {
+  const [statusFilter, setStatusFilter] = useState('PENDING');
+  const [leaves, setLeaves] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [remarkInputs, setRemarkInputs] = useState<Record<string, string>>({});
+  const [actionId, setActionId] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    if (!schoolId) return;
+    setLoading(true);
+    try {
+      const res = await api.attendance.schoolLeaves(schoolId, statusFilter || undefined);
+      setLeaves(res.leaves);
+    } finally { setLoading(false); }
+  }, [schoolId, statusFilter]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handle = async (id: string, action: 'approve' | 'reject') => {
+    setActionId(id);
+    try {
+      const remark = remarkInputs[id];
+      if (action === 'approve') await api.attendance.approveLeave(id, remark);
+      else await api.attendance.rejectLeave(id, remark);
+      setRemarkInputs(r => { const n = { ...r }; delete n[id]; return n; });
+      load();
+    } finally { setActionId(null); }
+  };
+
+  const statusBadge = (status: string) => {
+    const cfg = LEAVE_STATUS_CFG[status] ?? { label: status, bg: 'bg-slate-100', text: 'text-slate-600' };
+    return <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${cfg.bg} ${cfg.text}`}>{cfg.label}</span>;
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-2 flex-wrap">
+        {['', 'PENDING', 'APPROVED', 'REJECTED'].map(s => (
+          <button key={s} onClick={() => setStatusFilter(s)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              statusFilter === s ? 'bg-sky-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}>
+            {s === '' ? 'All' : LEAVE_STATUS_CFG[s]?.label ?? s}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="text-center py-10 text-slate-400">Loading…</div>
+      ) : !leaves.length ? (
+        <div className="text-center py-10 text-slate-400">No leave requests found.</div>
+      ) : (
+        <div className="space-y-3">
+          {leaves.map(l => (
+            <div key={l.id} className="bg-white border border-slate-100 rounded-xl p-4 space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-slate-800">{l.studentName ?? 'Student'}</span>
+                    {statusBadge(l.status)}
+                  </div>
+                  <div className="text-xs text-slate-500 mt-1 space-x-3">
+                    <span><i className="fas fa-calendar mr-1 text-sky-400" />{l.startDate}{l.endDate !== l.startDate ? ` → ${l.endDate}` : ''}</span>
+                    <span><i className="fas fa-tag mr-1 text-slate-300" />{LEAVE_REASONS[l.reason] ?? l.reason}</span>
+                  </div>
+                  {l.remarks && (
+                    <p className="text-xs text-slate-600 mt-1.5 bg-slate-50 rounded-lg px-3 py-2 italic">"{l.remarks}"</p>
+                  )}
+                </div>
+                <span className="text-xs text-slate-400 whitespace-nowrap flex-shrink-0">
+                  {new Date(l.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                </span>
+              </div>
+
+              {l.status === 'PENDING' && (
+                <div className="flex flex-col gap-2">
+                  <input placeholder="Approver remarks (optional)…"
+                    value={remarkInputs[l.id] ?? ''}
+                    onChange={e => setRemarkInputs(r => ({ ...r, [l.id]: e.target.value }))}
+                    className="border border-slate-200 rounded-lg px-3 py-2 text-xs w-full bg-white" />
+                  <div className="flex gap-2">
+                    <button disabled={actionId === l.id} onClick={() => handle(l.id, 'approve')}
+                      className="flex-1 bg-emerald-600 text-white rounded-lg py-1.5 text-xs font-semibold hover:bg-emerald-700 disabled:opacity-50">
+                      <i className="fas fa-check mr-1" />Approve
+                    </button>
+                    <button disabled={actionId === l.id} onClick={() => handle(l.id, 'reject')}
+                      className="flex-1 bg-red-500 text-white rounded-lg py-1.5 text-xs font-semibold hover:bg-red-600 disabled:opacity-50">
+                      <i className="fas fa-times mr-1" />Reject
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {l.status !== 'PENDING' && l.approvedByName && (
+                <div className="text-xs text-slate-400 border-t border-slate-50 pt-2">
+                  <span className={l.status === 'APPROVED' ? 'text-emerald-600' : 'text-red-500'}>
+                    <i className={`fas ${l.status === 'APPROVED' ? 'fa-check-circle' : 'fa-times-circle'} mr-1`} />
+                    {l.status === 'APPROVED' ? 'Approved' : 'Rejected'} by {l.approvedByName}
+                  </span>
+                  {l.approvedAt && <span> · {new Date(l.approvedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>}
+                  {l.approverRemarks && <span className="italic"> · "{l.approverRemarks}"</span>}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── TAB: My Leave (student view) ──────────────────────────────────────────────
+function MyLeaveTab() {
+  const [leaves, setLeaves] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ startDate: todayStr(), endDate: todayStr(), reason: 'SICK', remarks: '' });
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try { const res = await api.attendance.myLeaves(); setLeaves(res.leaves); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true); setError('');
+    try {
+      await api.attendance.applyLeave({ ...form, remarks: form.remarks || undefined });
+      setForm({ startDate: todayStr(), endDate: todayStr(), reason: 'SICK', remarks: '' });
+      setShowForm(false);
+      load();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const inputCls = 'border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white w-full';
+
+  const statusBadge = (status: string) => {
+    const cfg = LEAVE_STATUS_CFG[status] ?? { label: status, bg: 'bg-slate-100', text: 'text-slate-600' };
+    return <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${cfg.bg} ${cfg.text}`}>{cfg.label}</span>;
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <p className="text-sm text-slate-500">Apply for leave and track your requests</p>
+        <button onClick={() => setShowForm(f => !f)}
+          className="bg-sky-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-sky-700">
+          <i className="fas fa-plus mr-1.5" />{showForm ? 'Cancel' : 'Apply for Leave'}
+        </button>
+      </div>
+
+      {showForm && (
+        <form onSubmit={submit} className="bg-slate-50 rounded-xl border border-slate-100 p-4 space-y-3">
+          <p className="text-sm font-semibold text-slate-700">New Leave Application</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">From Date</label>
+              <input type="date" className={inputCls} value={form.startDate} min={todayStr()}
+                onChange={e => setForm(f => ({ ...f, startDate: e.target.value, endDate: e.target.value > f.endDate ? e.target.value : f.endDate }))} />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">To Date</label>
+              <input type="date" className={inputCls} value={form.endDate} min={form.startDate}
+                onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))} />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="block text-xs text-slate-500 mb-1">Reason *</label>
+              <select className={inputCls} value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))}>
+                {Object.entries(LEAVE_REASONS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+            </div>
+            <div className="sm:col-span-2">
+              <label className="block text-xs text-slate-500 mb-1">Additional Remarks</label>
+              <textarea rows={3} className={inputCls} placeholder="Provide more details about your leave..."
+                value={form.remarks} onChange={e => setForm(f => ({ ...f, remarks: e.target.value }))} />
+            </div>
+          </div>
+          {error && <p className="text-xs text-red-500">{error}</p>}
+          <div className="flex justify-end">
+            <button type="submit" disabled={submitting}
+              className="bg-sky-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-sky-700 disabled:opacity-50">
+              {submitting ? 'Submitting…' : 'Submit Application'}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {loading ? (
+        <div className="text-center py-10 text-slate-400">Loading…</div>
+      ) : !leaves.length ? (
+        <div className="text-center py-10 text-slate-400">No leave requests yet. Click "Apply for Leave" to submit one.</div>
+      ) : (
+        <div className="space-y-3">
+          {leaves.map(l => (
+            <div key={l.id} className="bg-white border border-slate-100 rounded-xl p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-slate-700">{LEAVE_REASONS[l.reason] ?? l.reason}</span>
+                    {statusBadge(l.status)}
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1">
+                    <i className="fas fa-calendar mr-1" />{l.startDate}{l.endDate !== l.startDate ? ` → ${l.endDate}` : ''}
+                  </p>
+                  {l.remarks && <p className="text-xs text-slate-600 mt-1.5 italic">"{l.remarks}"</p>}
+                </div>
+                <span className="text-xs text-slate-400 flex-shrink-0">
+                  {new Date(l.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                </span>
+              </div>
+              {l.status !== 'PENDING' && l.approvedByName && (
+                <div className="text-xs mt-2 pt-2 border-t border-slate-50">
+                  <span className={l.status === 'APPROVED' ? 'text-emerald-600' : 'text-red-500'}>
+                    <i className={`fas ${l.status === 'APPROVED' ? 'fa-check-circle' : 'fa-times-circle'} mr-1`} />
+                    {l.status === 'APPROVED' ? 'Approved' : 'Rejected'} by {l.approvedByName}
+                    {l.approvedAt && <> on {new Date(l.approvedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</>}
+                  </span>
+                  {l.approverRemarks && <p className="text-slate-500 italic mt-0.5">"{l.approverRemarks}"</p>}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 const TABS = [
-  { id: 'mark-students', label: 'Mark Student Attendance', icon: 'fas fa-user-check' },
-  { id: 'mark-staff',    label: 'Mark Staff Attendance',   icon: 'fas fa-chalkboard-teacher' },
-  { id: 'monthly',       label: 'Monthly Report',          icon: 'fas fa-calendar-alt' },
-  { id: 'date-report',   label: 'Date-wise Report',        icon: 'fas fa-table' },
-  { id: 'staff-monthly', label: 'Staff Monthly Report',    icon: 'fas fa-users' },
+  { id: 'mark-students',  label: 'Mark Student Attendance', icon: 'fas fa-user-check' },
+  { id: 'mark-staff',     label: 'Mark Staff Attendance',   icon: 'fas fa-chalkboard-teacher' },
+  { id: 'monthly',        label: 'Monthly Report',          icon: 'fas fa-calendar-alt' },
+  { id: 'date-report',    label: 'Date-wise Report',        icon: 'fas fa-table' },
+  { id: 'staff-monthly',  label: 'Staff Monthly Report',    icon: 'fas fa-users' },
+  { id: 'holidays',       label: 'Holidays',                icon: 'fas fa-umbrella-beach' },
+  { id: 'leave-requests', label: 'Leave Requests',          icon: 'fas fa-clipboard-list' },
+  { id: 'my-leave',       label: 'My Leave',                icon: 'fas fa-calendar-check' },
 ];
 
-// mode controls which tabs show: 'student' (People → Students), 'staff'
-// (People → Staff), or 'all' (standalone page).
-const STUDENT_TAB_IDS = ['mark-students', 'monthly', 'date-report'];
+const STUDENT_TAB_IDS = ['mark-students', 'monthly', 'date-report', 'holidays', 'leave-requests'];
 const STAFF_TAB_IDS = ['mark-staff', 'staff-monthly'];
 
 export function Attendance({ mode = 'all' }: { mode?: 'student' | 'staff' | 'all' }) {
   const { user } = useAuth();
-  const visibleTabs = TABS.filter(t =>
-    mode === 'student' ? STUDENT_TAB_IDS.includes(t.id)
-      : mode === 'staff' ? STAFF_TAB_IDS.includes(t.id)
-      : true,
-  );
+
+  const isStudent = user?.role === 'STUDENT';
+
+  const visibleTabs = TABS.filter(t => {
+    if (isStudent) return t.id === 'my-leave';
+    if (t.id === 'my-leave') return false; // hidden for non-students
+    if (mode === 'student') return STUDENT_TAB_IDS.includes(t.id);
+    if (mode === 'staff') return STAFF_TAB_IDS.includes(t.id);
+    return true;
+  });
+
   const [tab, setTab] = useState(visibleTabs[0]?.id ?? 'mark-students');
   const [scope, setScope] = useState<Scope>({});
 
@@ -594,7 +992,7 @@ export function Attendance({ mode = 'all' }: { mode?: 'student' | 'staff' | 'all
         <ScopeBar value={scope} onChange={setScope} />
       )}
 
-      {!schoolId ? (
+      {!schoolId && !isStudent ? (
         <div className="bg-amber-50 border border-amber-200 rounded-xl px-5 py-4 text-amber-700 text-sm">
           Please select a school to mark or view attendance.
         </div>
@@ -618,11 +1016,14 @@ export function Attendance({ mode = 'all' }: { mode?: 'student' | 'staff' | 'all
           </div>
 
           <div className="p-5">
-            {tab === 'mark-students' && <MarkStudents schoolId={schoolId} />}
-            {tab === 'mark-staff'    && <MarkStaff    schoolId={schoolId} />}
-            {tab === 'monthly'       && <MonthlyReport schoolId={schoolId} />}
-            {tab === 'date-report'   && <DateReport   schoolId={schoolId} />}
-            {tab === 'staff-monthly' && <StaffMonthlyReport schoolId={schoolId} />}
+            {tab === 'mark-students'  && <MarkStudents schoolId={schoolId} />}
+            {tab === 'mark-staff'     && <MarkStaff    schoolId={schoolId} />}
+            {tab === 'monthly'        && <MonthlyReport schoolId={schoolId} />}
+            {tab === 'date-report'    && <DateReport   schoolId={schoolId} />}
+            {tab === 'staff-monthly'  && <StaffMonthlyReport schoolId={schoolId} />}
+            {tab === 'holidays'       && <HolidaysTab schoolId={schoolId} user={user} />}
+            {tab === 'leave-requests' && <LeaveRequestsTab schoolId={schoolId} />}
+            {tab === 'my-leave'       && <MyLeaveTab />}
           </div>
         </div>
       )}

@@ -379,6 +379,50 @@ model ExamResult {
   @@index([schoolId, grade, academicYear])
 }
 
+// ── Holidays ──────────────────────────────────────────────────────────────────
+
+// scope: "SCHOOL" | "BLOCK" | "DISTRICT" | "TENANT"
+model Holiday {
+  id            String   @id @default(cuid())
+  title         String
+  description   String?
+  startDate     String   // "YYYY-MM-DD"
+  endDate       String   // "YYYY-MM-DD" (same as startDate for single day)
+  scope         String   // "SCHOOL" | "BLOCK" | "DISTRICT" | "TENANT"
+  scopeId       String   // schoolId / blockId / districtId / tenantId
+  createdBy     String   // userId
+  createdByName String?
+  createdAt     DateTime @default(now())
+
+  @@index([scopeId, startDate])
+  @@index([scope, scopeId])
+}
+
+// ── Leave Requests ────────────────────────────────────────────────────────────
+
+// status: "PENDING" | "APPROVED" | "REJECTED"
+// reason: "SICK" | "FAMILY" | "MEDICAL" | "PERSONAL" | "OTHER"
+model LeaveRequest {
+  id              String    @id @default(cuid())
+  studentId       String
+  studentName     String?
+  schoolId        String
+  startDate       String    // "YYYY-MM-DD"
+  endDate         String    // "YYYY-MM-DD"
+  reason          String    // "SICK" | "FAMILY" | "MEDICAL" | "PERSONAL" | "OTHER"
+  remarks         String?   // student's note
+  status          String    @default("PENDING")
+  approvedBy      String?   // userId of approver
+  approvedByName  String?
+  approvedAt      DateTime?
+  approverRemarks String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([studentId])
+  @@index([schoolId, status])
+}
+
 // ── Quiz Engine ──────────────────────────────────────────────────────────────
 
 // A quiz/test created by a teacher or principal for a class.

@@ -283,6 +283,22 @@ export const api = {
       req<any>('/attendance/students/me'),
     children: () =>
       req<any>('/attendance/children'),
+    createHoliday: (body: { title: string; description?: string; startDate: string; endDate: string; scope: string; scopeId: string }) =>
+      req<any>('/attendance/holidays', { method: 'POST', body: JSON.stringify(body) }),
+    holidays: (schoolId: string, month?: string) =>
+      req<any[]>(`/attendance/holidays?schoolId=${schoolId}${month ? `&month=${month}` : ''}`),
+    deleteHoliday: (id: string) =>
+      req<{ ok: boolean }>(`/attendance/holidays/${id}`, { method: 'DELETE' }),
+    applyLeave: (body: { startDate: string; endDate: string; reason: string; remarks?: string }) =>
+      req<any>('/attendance/leave/apply', { method: 'POST', body: JSON.stringify(body) }),
+    myLeaves: () =>
+      req<{ leaves: any[] }>('/attendance/leave/my'),
+    schoolLeaves: (schoolId?: string, status?: string) =>
+      req<{ leaves: any[] }>(`/attendance/leave/school${qstr({ schoolId, status })}`),
+    approveLeave: (id: string, remarks?: string) =>
+      req<any>(`/attendance/leave/${id}/approve`, { method: 'PUT', body: JSON.stringify({ remarks }) }),
+    rejectLeave: (id: string, remarks?: string) =>
+      req<any>(`/attendance/leave/${id}/reject`, { method: 'PUT', body: JSON.stringify({ remarks }) }),
   },
 
   quiz: {

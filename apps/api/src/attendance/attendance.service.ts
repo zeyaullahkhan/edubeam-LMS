@@ -1,4 +1,4 @@
-import { Injectable, ForbiddenException } from '@nestjs/common';
+import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import type { AuthUser } from '@edubeam/shared';
 
@@ -81,15 +81,22 @@ export class AttendanceService {
 
   async getStudentCalendar(studentId: string, month: string) {
     // month = "YYYY-MM"
-    const records = await prisma.attendance.findMany({
-      where: { studentId, date: { startsWith: month } },
-      orderBy: { date: 'asc' },
-    });
+    const student = await prisma.student.findUnique({ where: { id: studentId }, select: { schoolId: true } });
+
+    const [records, leaves] = await Promise.all([
+      prisma.attendance.findMany({ where: { studentId, date: { startsWith: month } }, orderBy: { date: 'asc' } }),
+      student ? prisma.leaveRequest.findMany({ where: { studentId, status: 'APPROVED', startDate: { startsWith: month } } }) : Promise.resolve([]),
+    ]);
+
+    const holidays = student ? await this.getHolidaysForSchool(student.schoolId, month) : [];
+
     const total = records.length;
     const present = records.filter(r => r.status === 'P').length;
     return {
       records: records.map(r => ({ date: r.date, status: r.status, label: gradeLabel(r.status) })),
       summary: { total, present, absent: records.filter(r => r.status === 'A').length, late: records.filter(r => r.status === 'L').length, pct: total ? Math.round(present / total * 100) : 0 },
+      holidays,
+      leaves,
     };
   }
 
@@ -388,6 +395,111 @@ export class AttendanceService {
         thisMonth: attByStudent[s.id] ?? { present: 0, absent: 0, late: 0, total: 0 },
       })),
     };
+  }
+
+  // ── HOLIDAYS ─────────────────────────────────────────────────────────────
+
+  private async getHolidaysForSchool(schoolId: string, month?: string) {
+    const school = await prisma.school.findUnique({
+      where: { id: schoolId },
+      include: { block: { include: { district: true } } },
+    });
+    if (!school) return [];
+
+    const orConditions = [
+      { scope: 'SCHOOL', scopeId: schoolId },
+      { scope: 'BLOCK', scopeId: school.blockId },
+      { scope: 'DISTRICT', scopeId: school.block.districtId },
+      { scope: 'TENANT', scopeId: school.block.district.tenantId },
+    ];
+
+    const where: any = { OR: orConditions };
+    if (month) where.startDate = { startsWith: month };
+
+    return prisma.holiday.findMany({ where, orderBy: { startDate: 'asc' } });
+  }
+
+  async createHoliday(user: AuthUser, dto: {
+    title: string; description?: string;
+    startDate: string; endDate: string;
+    scope: string; scopeId: string;
+  }) {
+    return prisma.holiday.create({
+      data: { ...dto, createdBy: user.id, createdByName: user.name },
+    });
+  }
+
+  async getHolidays(schoolId: string, month?: string) {
+    return this.getHolidaysForSchool(schoolId, month);
+  }
+
+  async deleteHoliday(user: AuthUser, id: string) {
+    const holiday = await prisma.holiday.findUnique({ where: { id } });
+    if (!holiday) throw new NotFoundException('Holiday not found');
+    if (holiday.createdBy !== user.id && !['ADMIN', 'STATE_OFFICIAL', 'DISTRICT_OFFICIAL'].includes(user.role)) {
+      throw new ForbiddenException('Not authorized to delete this holiday');
+    }
+    await prisma.holiday.delete({ where: { id } });
+    return { ok: true };
+  }
+
+  // ── LEAVE REQUESTS ────────────────────────────────────────────────────────
+
+  async applyLeave(user: AuthUser, dto: {
+    startDate: string; endDate: string; reason: string; remarks?: string;
+  }) {
+    if (!user.studentId) throw new ForbiddenException('Only students can apply for leave');
+    const student = await prisma.student.findUnique({ where: { id: user.studentId } });
+    if (!student) throw new NotFoundException('Student not found');
+    return prisma.leaveRequest.create({
+      data: {
+        studentId: user.studentId,
+        studentName: student.name,
+        schoolId: student.schoolId,
+        startDate: dto.startDate,
+        endDate: dto.endDate,
+        reason: dto.reason,
+        remarks: dto.remarks,
+        status: 'PENDING',
+      },
+    });
+  }
+
+  async getMyLeaves(user: AuthUser) {
+    if (!user.studentId) return { leaves: [] };
+    return {
+      leaves: await prisma.leaveRequest.findMany({
+        where: { studentId: user.studentId },
+        orderBy: { createdAt: 'desc' },
+      }),
+    };
+  }
+
+  async getSchoolLeaves(user: AuthUser, schoolId?: string, status?: string) {
+    const sid = await this.resolveSchoolId(user, schoolId);
+    const where: any = { schoolId: sid };
+    if (status) where.status = status;
+    return {
+      leaves: await prisma.leaveRequest.findMany({ where, orderBy: { createdAt: 'desc' } }),
+    };
+  }
+
+  async updateLeaveStatus(user: AuthUser, id: string, status: 'APPROVED' | 'REJECTED', remarks?: string) {
+    const leave = await prisma.leaveRequest.findUnique({ where: { id } });
+    if (!leave) throw new NotFoundException('Leave request not found');
+    if (!['PRINCIPAL', 'TEACHER', 'ADMIN', 'STATE_OFFICIAL', 'DISTRICT_OFFICIAL', 'BLOCK_OFFICIAL'].includes(user.role)) {
+      throw new ForbiddenException('Not authorized to update leave status');
+    }
+    return prisma.leaveRequest.update({
+      where: { id },
+      data: {
+        status,
+        approvedBy: user.id,
+        approvedByName: user.name,
+        approvedAt: new Date(),
+        approverRemarks: remarks,
+      },
+    });
   }
 
   // ── DASHBOARD TODAY SUMMARY ─────────────────────────────────────────────

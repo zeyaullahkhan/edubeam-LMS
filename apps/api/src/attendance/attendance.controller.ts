@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import type { AuthUser } from '@edubeam/shared';
 import { JwtGuard } from '../auth/jwt.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -108,5 +108,53 @@ export class AttendanceController {
   @Get('today')
   today(@CurrentUser() user: AuthUser, @Query('schoolId') schoolId?: string) {
     return this.svc.todaySummary(user, schoolId);
+  }
+
+  // ── Holidays ────────────────────────────────────────────────────────────
+
+  @Post('holidays')
+  createHoliday(@CurrentUser() user: AuthUser, @Body() dto: any) {
+    return this.svc.createHoliday(user, dto);
+  }
+
+  @Get('holidays')
+  getHolidays(@Query('schoolId') schoolId: string, @Query('month') month?: string) {
+    return this.svc.getHolidays(schoolId, month);
+  }
+
+  @Delete('holidays/:id')
+  deleteHoliday(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.svc.deleteHoliday(user, id);
+  }
+
+  // ── Leave requests ──────────────────────────────────────────────────────
+
+  @Post('leave/apply')
+  applyLeave(@CurrentUser() user: AuthUser, @Body() dto: any) {
+    return this.svc.applyLeave(user, dto);
+  }
+
+  @Get('leave/my')
+  myLeaves(@CurrentUser() user: AuthUser) {
+    return this.svc.getMyLeaves(user);
+  }
+
+  @Get('leave/school')
+  schoolLeaves(
+    @CurrentUser() user: AuthUser,
+    @Query('schoolId') schoolId?: string,
+    @Query('status') status?: string,
+  ) {
+    return this.svc.getSchoolLeaves(user, schoolId, status);
+  }
+
+  @Put('leave/:id/approve')
+  approveLeave(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: any) {
+    return this.svc.updateLeaveStatus(user, id, 'APPROVED', dto.remarks);
+  }
+
+  @Put('leave/:id/reject')
+  rejectLeave(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: any) {
+    return this.svc.updateLeaveStatus(user, id, 'REJECTED', dto.remarks);
   }
 }
