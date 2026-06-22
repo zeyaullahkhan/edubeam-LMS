@@ -18,6 +18,7 @@ import { api, type BlockSummary, type Overview, type SchoolRow } from '../api';
 import { exportCsv, printPdf } from '../export';
 import { useAuth } from '../auth';
 import { stateFor } from '../config/states';
+import { UttarakhandMap } from '../components/UttarakhandMap';
 
 const BOYS_COLOR = '#0076BC';
 const GIRLS_COLOR = '#EC4899';
@@ -317,6 +318,9 @@ export function Dashboard() {
           accent="linear-gradient(135deg,#b45309,#f59e0b)"
         />
       </div>
+
+      {/* ── Uttarakhand map ───────────────────────────────────── */}
+      {districts.length > 0 && <UttarakhandMap districts={districts} />}
 
       {/* ── Drill-down panel (districts / blocks / students / teachers) ── */}
       {drilldown && <DrillPanel
