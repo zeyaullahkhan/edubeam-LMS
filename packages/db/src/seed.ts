@@ -778,14 +778,12 @@ async function restoreYoutubeUrls(): Promise<number> {
   const map: Record<string, string> = JSON.parse(readFileSync(urlsFile, 'utf8'));
   const entries = Object.entries(map);
   if (!entries.length) return 0;
-  const CHUNK = 200;
+  const CHUNK = 20;
   let restored = 0;
   for (let i = 0; i < entries.length; i += CHUNK) {
-    await Promise.all(
-      entries.slice(i, i + CHUNK).map(([id, youtubeUrl]) =>
-        prisma.lecture.updateMany({ where: { id }, data: { youtubeUrl } }),
-      ),
-    );
+    for (const [id, youtubeUrl] of entries.slice(i, i + CHUNK)) {
+      await prisma.lecture.updateMany({ where: { id }, data: { youtubeUrl } });
+    }
     restored += Math.min(CHUNK, entries.length - i);
   }
   return restored;
