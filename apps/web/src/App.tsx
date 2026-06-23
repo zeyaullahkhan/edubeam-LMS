@@ -14,6 +14,10 @@ import { Content } from './pages/Content';
 import { Attendance } from './pages/Attendance';
 import { ReportCard } from './pages/ReportCard';
 import { Quiz } from './pages/Quiz';
+import { NoticeBoard } from './pages/NoticeBoard';
+import { AcademicYears } from './pages/AcademicYears';
+import { ClassManagement } from './pages/ClassManagement';
+import { SubjectMaster } from './pages/SubjectMaster';
 
 export function App() {
   const { user, loading } = useAuth();
@@ -61,6 +65,10 @@ export function App() {
         <Route path="/quiz" element={<Quiz />} />
         <Route path="/planner" element={<Planner />} />
         <Route path="/content" element={<Content />} />
+        <Route path="/notices" element={<NoticeBoard />} />
+        <Route path="/academic-years" element={<AcademicYears />} />
+        <Route path="/classes" element={<ClassManagement />} />
+        <Route path="/subjects" element={<SubjectMaster />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>

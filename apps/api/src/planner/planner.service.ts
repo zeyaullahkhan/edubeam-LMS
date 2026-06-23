@@ -130,4 +130,138 @@ export class PlannerService {
     await prisma.holiday.delete({ where: { id } });
     return { ok: true };
   }
+
+  // ── Notices ──────────────────────────────────────────────────────────────────
+
+  async getNotices(user: AuthUser, schoolId?: string): Promise<any[]> {
+    const today = this.today();
+    const sid = schoolId ?? user.schoolId;
+    if (!sid) return [];
+    return prisma.notice.findMany({
+      where: {
+        schoolId: sid,
+        publishDate: { lte: today },
+        OR: [{ expiryDate: null }, { expiryDate: { gte: today } }],
+      },
+      orderBy: { publishDate: 'desc' },
+    });
+  }
+
+  async getAllNotices(user: AuthUser, schoolId?: string): Promise<any[]> {
+    const sid = schoolId ?? user.schoolId;
+    if (!sid) return [];
+    return prisma.notice.findMany({
+      where: { schoolId: sid },
+      orderBy: { publishDate: 'desc' },
+    });
+  }
+
+  async createNotice(user: AuthUser, dto: {
+    title: string; description?: string; type?: string;
+    publishDate: string; expiryDate?: string; schoolId?: string;
+  }) {
+    const WRITE_ROLES = ['ADMIN', 'STATE_OFFICIAL', 'DISTRICT_OFFICIAL', 'PRINCIPAL'];
+    if (!WRITE_ROLES.includes(user.role)) throw new ForbiddenException('Not authorized to create notices');
+    const sid = dto.schoolId ?? user.schoolId;
+    if (!sid) throw new ForbiddenException('No school ID');
+    return prisma.notice.create({
+      data: {
+        schoolId: sid,
+        title: dto.title,
+        description: dto.description,
+        type: dto.type ?? 'General',
+        publishDate: dto.publishDate,
+        expiryDate: dto.expiryDate,
+        createdById: user.id,
+        createdByName: user.name,
+      },
+    });
+  }
+
+  async updateNotice(user: AuthUser, id: string, dto: any) {
+    const notice = await prisma.notice.findUnique({ where: { id } });
+    if (!notice) throw new NotFoundException('Notice not found');
+    const ok = user.role === 'ADMIN' || notice.createdById === user.id;
+    if (!ok) throw new ForbiddenException('Not authorized');
+    return prisma.notice.update({ where: { id }, data: dto });
+  }
+
+  async deleteNotice(user: AuthUser, id: string) {
+    const notice = await prisma.notice.findUnique({ where: { id } });
+    if (!notice) throw new NotFoundException('Notice not found');
+    const ok = user.role === 'ADMIN' || notice.createdById === user.id;
+    if (!ok) throw new ForbiddenException('Not authorized');
+    await prisma.notice.delete({ where: { id } });
+    return { ok: true };
+  }
+
+  // ── Events ──────────────────────────────────────────────────────────────────
+
+  async getEvents(user: AuthUser, month?: string): Promise<any[]> {
+    const or = this.buildConditions(user);
+    const base: any = month ? { date: { startsWith: month } } : {};
+    return prisma.event.findMany({
+      where: or ? { OR: or, ...base } : base,
+      orderBy: { date: 'asc' },
+    });
+  }
+
+  async createEvent(user: AuthUser, dto: {
+    title: string; description?: string; type?: string;
+    date: string; endDate?: string; urgent?: boolean;
+    scopeLevel?: string; scopeTargetId?: string;
+  }) {
+    let scope: string;
+    let scopeId: string | null | undefined;
+
+    if (user.role === 'ADMIN') {
+      if (!dto.scopeLevel || !dto.scopeTargetId) {
+        throw new ForbiddenException('Admin must specify scope level and target');
+      }
+      scope = dto.scopeLevel;
+      scopeId = dto.scopeTargetId;
+    } else {
+      switch (user.role) {
+        case 'STATE_OFFICIAL':   scope = 'TENANT';   scopeId = user.tenantId; break;
+        case 'DISTRICT_OFFICIAL':scope = 'DISTRICT'; scopeId = user.districtId; break;
+        case 'BLOCK_OFFICIAL':   scope = 'BLOCK';    scopeId = user.blockId; break;
+        case 'PRINCIPAL':        scope = 'SCHOOL';   scopeId = user.schoolId; break;
+        default: throw new ForbiddenException('Not authorized to create events');
+      }
+    }
+
+    if (!scopeId) throw new ForbiddenException('No scope ID — contact admin');
+
+    return prisma.event.create({
+      data: {
+        title: dto.title,
+        description: dto.description,
+        type: dto.type ?? 'Other',
+        date: dto.date,
+        endDate: dto.endDate,
+        urgent: dto.urgent ?? false,
+        scope,
+        scopeId,
+        createdBy: user.id,
+        createdByName: user.name,
+      },
+    });
+  }
+
+  async deleteEvent(user: AuthUser, id: string) {
+    const ev = await prisma.event.findUnique({ where: { id } });
+    if (!ev) throw new NotFoundException('Event not found');
+
+    const ok =
+      ev.createdBy === user.id ||
+      user.role === 'ADMIN' ||
+      (user.role === 'STATE_OFFICIAL' && ev.scope === 'TENANT' && ev.scopeId === user.tenantId) ||
+      (user.role === 'DISTRICT_OFFICIAL' && ev.scope === 'DISTRICT' && ev.scopeId === user.districtId) ||
+      (user.role === 'BLOCK_OFFICIAL' && ev.scope === 'BLOCK' && ev.scopeId === user.blockId) ||
+      (user.role === 'PRINCIPAL' && ev.scope === 'SCHOOL' && ev.scopeId === user.schoolId);
+
+    if (!ok) throw new ForbiddenException('Not authorized to delete this event');
+    await prisma.event.delete({ where: { id } });
+    return { ok: true };
+  }
 }

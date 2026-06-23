@@ -48,8 +48,8 @@ export class StudentsController {
   }
 
   @Post('promote')
-  promote(@CurrentUser() user: AuthUser, @Body() body: { schoolId?: string }) {
-    return this.students.promote(user, body?.schoolId);
+  promote(@CurrentUser() user: AuthUser, @Body() body: { schoolId?: string; grade?: number }) {
+    return this.students.promote(user, body?.schoolId, body?.grade);
   }
 
   @Patch(':id')

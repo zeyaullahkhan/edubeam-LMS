@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import type { AuthUser } from '@edubeam/shared';
 import { JwtGuard } from '../auth/jwt.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -32,5 +32,42 @@ export class PlannerController {
   @Delete('holidays/:id')
   deleteHoliday(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.svc.deleteHoliday(user, id);
+  }
+
+  @Get('events')
+  getEvents(@CurrentUser() user: AuthUser, @Query('month') month?: string) {
+    return this.svc.getEvents(user, month);
+  }
+
+  @Post('events')
+  createEvent(@CurrentUser() user: AuthUser, @Body() dto: any) {
+    return this.svc.createEvent(user, dto);
+  }
+
+  @Delete('events/:id')
+  deleteEvent(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.svc.deleteEvent(user, id);
+  }
+
+  // ── Notices ──────────────────────────────────────────────────────────────────
+
+  @Get('notices')
+  getNotices(@CurrentUser() user: AuthUser, @Query('schoolId') schoolId?: string) {
+    return this.svc.getAllNotices(user, schoolId);
+  }
+
+  @Post('notices')
+  createNotice(@CurrentUser() user: AuthUser, @Body() dto: any) {
+    return this.svc.createNotice(user, dto);
+  }
+
+  @Patch('notices/:id')
+  updateNotice(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: any) {
+    return this.svc.updateNotice(user, id, dto);
+  }
+
+  @Delete('notices/:id')
+  deleteNotice(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.svc.deleteNotice(user, id);
   }
 }

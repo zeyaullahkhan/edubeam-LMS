@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import {
-  SCHEDULE, HOLIDAYS as STATIC_HOLIDAYS, EVENTS, STUDIO_LABELS, SUBJECT_COLOR,
+  SCHEDULE, HOLIDAYS as STATIC_HOLIDAYS, STUDIO_LABELS, SUBJECT_COLOR,
   type ScheduleSession,
 } from '../data/schedule';
 import { api } from '../api';
@@ -779,82 +779,207 @@ const EVENT_TYPE_COLOR: Record<string, string> = {
   other:      'bg-slate-100 text-slate-600 border-slate-300',
 };
 
-function EventNotifications() {
-  const [filter, setFilter] = useState<'all' | 'urgent' | 'ceremony' | 'workshop' | 'assessment' | 'meeting'>('all');
+const EVENT_TYPES = ['Ceremony', 'Workshop', 'Assessment', 'Meeting', 'Exam', 'Other'] as const;
+type EventType = typeof EVENT_TYPES[number];
+
+const CREATE_ROLES = ['ADMIN', 'STATE_OFFICIAL', 'DISTRICT_OFFICIAL', 'BLOCK_OFFICIAL', 'PRINCIPAL'];
+
+function typeIcon(t: string) {
+  const m: Record<string, string> = {
+    ceremony: 'star', workshop: 'tools', assessment: 'clipboard-list',
+    meeting: 'users', exam: 'file-alt', other: 'info-circle',
+  };
+  return m[t.toLowerCase()] ?? 'info-circle';
+}
+
+function EventNotifications({ user }: { user: AuthUser | null }) {
+  const canCreate = CREATE_ROLES.includes(user?.role ?? '');
+  const [events, setEvents] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<string>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ title: '', description: '', type: 'Other', date: '', endDate: '', urgent: false });
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [formErr, setFormErr] = useState('');
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try { setEvents(await api.planner.events()); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   const filtered = useMemo(() => {
-    if (filter === 'urgent') return EVENTS.filter(e => e.urgent);
-    if (filter === 'all') return EVENTS;
-    return EVENTS.filter(e => e.type === filter);
-  }, [filter]);
+    if (filter === 'urgent') return events.filter(e => e.urgent);
+    if (filter === 'all') return events;
+    return events.filter(e => e.type.toLowerCase() === filter);
+  }, [filter, events]);
 
-  const urgentCount = EVENTS.filter(e => e.urgent).length;
+  const urgentCount = events.filter(e => e.urgent).length;
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormErr('');
+    if (!form.title.trim() || !form.date) { setFormErr('Title and date are required.'); return; }
+    setSaving(true);
+    try {
+      await api.planner.createEvent(form);
+      setForm({ title: '', description: '', type: 'Other', date: '', endDate: '', urgent: false });
+      setShowForm(false);
+      load();
+    } catch (err: any) {
+      setFormErr(err.message ?? 'Failed to save event');
+    } finally { setSaving(false); }
+  };
+
+  const handleDelete = async (id: string) => {
+    setDeletingId(id);
+    try { await api.planner.deleteEvent(id); load(); }
+    finally { setDeletingId(null); }
+  };
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        {(['all', 'urgent', 'ceremony', 'workshop', 'assessment', 'meeting'] as const).map(f => (
-          <button key={f} onClick={() => setFilter(f)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
-              filter === f ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
-            }`}>
-            {f === 'urgent' && <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />}
-            {f === 'all' ? 'All Events' : f.charAt(0).toUpperCase() + f.slice(1)}
-            {f === 'urgent' && urgentCount > 0 && (
-              <span className="bg-rose-500 text-white text-[10px] rounded-full px-1 min-w-[16px] text-center">{urgentCount}</span>
-            )}
-          </button>
-        ))}
-      </div>
-
-      <div className="space-y-3">
-        {filtered.map(ev => {
-          const expanded = expandedId === ev.id;
-          const colors = EVENT_TYPE_COLOR[ev.type] ?? EVENT_TYPE_COLOR.other;
-          return (
-            <div key={ev.id}
-              className={`rounded-xl border-l-4 border border-slate-200 bg-white overflow-hidden transition-all ${ev.urgent ? 'border-l-rose-500' : 'border-l-sky-400'}`}>
-              <button className="w-full text-left px-5 py-4 flex items-start gap-3"
-                onClick={() => setExpandedId(expanded ? null : ev.id)}>
-                <div className="mt-0.5 shrink-0">
-                  <span className={`inline-flex items-center justify-center w-8 h-8 rounded-lg text-sm ${colors}`}>
-                    <i className={`fas fa-${ev.type === 'ceremony' ? 'star' : ev.type === 'workshop' ? 'tools' : ev.type === 'assessment' ? 'clipboard-list' : ev.type === 'meeting' ? 'users' : 'info-circle'}`} />
-                  </span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-bold text-slate-800 text-sm">{ev.title}</span>
-                    {ev.urgent && (
-                      <span className="flex items-center gap-1 text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-200 rounded-full px-2 py-0.5 animate-pulse">
-                        <i className="fas fa-exclamation-triangle" /> URGENT
-                      </span>
-                    )}
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border capitalize ${colors}`}>{ev.type}</span>
-                  </div>
-                  <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
-                    <span className="flex items-center gap-1"><i className="fas fa-calendar" /> {fmtDate(ev.date)}</span>
-                    <span className="flex items-center gap-1"><i className="fas fa-clock" /> {ev.time}</span>
-                    {ev.studio && <span className="flex items-center gap-1"><i className="fas fa-tv" /> Studio {ev.studio}</span>}
-                  </div>
-                </div>
-                <i className={`fas fa-chevron-${expanded ? 'up' : 'down'} text-slate-400 text-xs mt-1 shrink-0`} />
-              </button>
-              {expanded && (
-                <div className="px-5 pb-4 pt-0 border-t border-slate-100 bg-slate-50/50">
-                  <p className="text-sm text-slate-600 leading-relaxed pt-3">{ev.description}</p>
-                </div>
+      {/* Header row */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {(['all', 'urgent', ...EVENT_TYPES.map(t => t.toLowerCase())] as const).map(f => (
+            <button key={f} onClick={() => setFilter(f)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                filter === f ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
+              }`}>
+              {f === 'urgent' && <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />}
+              {f === 'all' ? 'All Events' : f === 'urgent' ? 'Urgent' : f.charAt(0).toUpperCase() + f.slice(1)}
+              {f === 'urgent' && urgentCount > 0 && (
+                <span className="bg-rose-500 text-white text-[10px] rounded-full px-1 min-w-[16px] text-center">{urgentCount}</span>
               )}
-            </div>
-          );
-        })}
-        {filtered.length === 0 && (
-          <div className="py-12 text-center text-slate-400">
-            <i className="fas fa-bell-slash text-3xl mb-2 block" />
-            <p className="font-semibold text-slate-500">No events found</p>
-          </div>
+            </button>
+          ))}
+        </div>
+        {canCreate && (
+          <button onClick={() => setShowForm(s => !s)} className={showForm ? 'btn-outline text-sm' : 'btn-navy text-sm'}>
+            {showForm ? <><i className="fas fa-times" />Cancel</> : <><i className="fas fa-plus" />Add Event</>}
+          </button>
         )}
       </div>
+
+      {/* Create event form */}
+      {showForm && canCreate && (
+        <form onSubmit={handleCreate} className="rounded-xl border border-sky-200 bg-sky-50 p-5 space-y-3">
+          <h3 className="font-semibold text-slate-700 text-sm"><i className="fas fa-bell text-sky-500 mr-1.5" />New Event</h3>
+          {formErr && <p className="text-xs text-rose-600 bg-rose-50 border border-rose-200 rounded px-3 py-2">{formErr}</p>}
+          <div className="grid md:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Title *</label>
+              <input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sky-300/50"
+                value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="Event title" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Type</label>
+              <select className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none"
+                value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}>
+                {EVENT_TYPES.map(t => <option key={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Date *</label>
+              <input type="date" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none"
+                value={form.date} min={today} onChange={e => setForm({ ...form, date: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">End Date (optional)</label>
+              <input type="date" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none"
+                value={form.endDate} min={form.date || today} onChange={e => setForm({ ...form, endDate: e.target.value })} />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Description</label>
+              <textarea className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none resize-none"
+                rows={2} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Optional details…" />
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input type="checkbox" checked={form.urgent} onChange={e => setForm({ ...form, urgent: e.target.checked })}
+                className="accent-rose-500 w-4 h-4" />
+              <span className="text-rose-600 font-semibold">Mark as Urgent</span>
+            </label>
+            <button type="submit" disabled={saving} className="btn-primary text-sm ml-auto">
+              {saving ? <i className="fas fa-circle-notch fa-spin" /> : <i className="fas fa-save" />}
+              Save Event
+            </button>
+          </div>
+        </form>
+      )}
+
+      {loading && (
+        <div className="py-8 text-center text-slate-400">
+          <i className="fas fa-circle-notch fa-spin text-2xl mb-2 block" />
+          <p className="text-sm">Loading events…</p>
+        </div>
+      )}
+
+      {!loading && (
+        <div className="space-y-3">
+          {filtered.map(ev => {
+            const expanded = expandedId === ev.id;
+            const colors = EVENT_TYPE_COLOR[ev.type.toLowerCase()] ?? EVENT_TYPE_COLOR.other;
+            return (
+              <div key={ev.id}
+                className={`rounded-xl border-l-4 border border-slate-200 bg-white overflow-hidden transition-all ${ev.urgent ? 'border-l-rose-500' : 'border-l-sky-400'}`}>
+                <div className="px-5 py-4 flex items-start gap-3">
+                  <div className="mt-0.5 shrink-0">
+                    <span className={`inline-flex items-center justify-center w-8 h-8 rounded-lg text-sm ${colors}`}>
+                      <i className={`fas fa-${typeIcon(ev.type)}`} />
+                    </span>
+                  </div>
+                  <button className="flex-1 text-left min-w-0" onClick={() => setExpandedId(expanded ? null : ev.id)}>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-slate-800 text-sm">{ev.title}</span>
+                      {ev.urgent && (
+                        <span className="flex items-center gap-1 text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-200 rounded-full px-2 py-0.5 animate-pulse">
+                          <i className="fas fa-exclamation-triangle" /> URGENT
+                        </span>
+                      )}
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border capitalize ${colors}`}>{ev.type}</span>
+                    </div>
+                    <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
+                      <span className="flex items-center gap-1"><i className="fas fa-calendar" /> {fmtDate(ev.date)}</span>
+                      {ev.endDate && ev.endDate !== ev.date && <span className="flex items-center gap-1">→ {fmtDate(ev.endDate)}</span>}
+                      {ev.createdByName && <span className="flex items-center gap-1"><i className="fas fa-user" /> {ev.createdByName}</span>}
+                    </div>
+                  </button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {canCreate && (ev.createdBy === user?.id || user?.role === 'ADMIN') && (
+                      <button onClick={() => handleDelete(ev.id)} disabled={deletingId === ev.id}
+                        className="text-slate-300 hover:text-rose-500 transition-colors px-1 py-1 text-xs">
+                        {deletingId === ev.id ? <i className="fas fa-circle-notch fa-spin" /> : <i className="fas fa-trash" />}
+                      </button>
+                    )}
+                    <i className={`fas fa-chevron-${expanded ? 'up' : 'down'} text-slate-400 text-xs ml-1`} />
+                  </div>
+                </div>
+                {expanded && ev.description && (
+                  <div className="px-5 pb-4 pt-0 border-t border-slate-100 bg-slate-50/50">
+                    <p className="text-sm text-slate-600 leading-relaxed pt-3">{ev.description}</p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {filtered.length === 0 && (
+            <div className="py-12 text-center text-slate-400">
+              <i className="fas fa-bell-slash text-3xl mb-2 block" />
+              <p className="font-semibold text-slate-500">No events found</p>
+              {canCreate && <p className="text-xs mt-1">Click "Add Event" to create the first one.</p>}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -863,16 +988,15 @@ function EventNotifications() {
 
 type Tab = 'calendar' | 'planner' | 'events';
 
-const TABS: Array<{ id: Tab; label: string; icon: string; badge?: number }> = [
+const TABS: Array<{ id: Tab; label: string; icon: string }> = [
   { id: 'calendar', label: 'Holiday Calendar',    icon: 'fas fa-calendar-alt' },
   { id: 'planner',  label: 'Lecture Schedule',    icon: 'fas fa-chalkboard-teacher' },
-  { id: 'events',   label: 'Event Notifications', icon: 'fas fa-bell', badge: EVENTS.filter(e => e.urgent).length },
+  { id: 'events',   label: 'Event Notifications', icon: 'fas fa-bell' },
 ];
 
 export function Planner() {
   const { user } = useAuth();
   const [tab, setTab] = useState<Tab>('calendar');
-  // Fetch June 2026 holidays once so SchoolPlanner can mark them as off-days
   const [juneHolidays, setJuneHolidays] = useState<any[]>([]);
   useEffect(() => {
     api.planner.holidays('2026-06').then(setJuneHolidays).catch(() => {});
@@ -903,11 +1027,6 @@ export function Planner() {
             }`}>
             <i className={t.icon} />
             {t.label}
-            {t.badge != null && t.badge > 0 && (
-              <span className={`text-[10px] font-bold rounded-full px-1.5 min-w-[18px] text-center ${tab === t.id ? 'bg-white/30 text-white' : 'bg-rose-500 text-white'}`}>
-                {t.badge}
-              </span>
-            )}
           </button>
         ))}
       </div>
@@ -916,7 +1035,7 @@ export function Planner() {
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
         {tab === 'calendar' && <CalendarWidget user={user} />}
         {tab === 'planner'  && <SchoolPlanner apiHolidays={juneHolidays} />}
-        {tab === 'events'   && <EventNotifications />}
+        {tab === 'events'   && <EventNotifications user={user} />}
       </div>
     </div>
   );

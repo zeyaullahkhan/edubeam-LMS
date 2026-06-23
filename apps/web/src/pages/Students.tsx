@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import {
   CATEGORIES, GENDERS, GENDER_LABELS,
   type EnrollmentDemographics, type Student, type StudentDemographics,
@@ -125,6 +125,7 @@ export function Students() {
   const [loading, setLoading] = useState(true);
   const [confirmStudent, setConfirmStudent] = useState<Student | null>(null);
   const [confirmPromote, setConfirmPromote] = useState(false);
+  const [promoteGrade, setPromoteGrade] = useState<string>('');
   const [newCreds, setNewCreds] = useState<{ name: string; studentLogin: { email: string; password: string }; parentLogin: { email: string; password: string } } | null>(null);
 
   const filter = useMemo(
@@ -201,8 +202,10 @@ export function Students() {
 
   const promote = async () => {
     try {
-      const res = await api.students.promote(scope.schoolId);
-      setMsg(`Promoted ${res.promoted} students, ${res.graduated} graduated.`);
+      const gradeNum = promoteGrade ? Number(promoteGrade) : undefined;
+      const res = await api.students.promote(scope.schoolId, gradeNum);
+      const scope_label = promoteGrade ? `Class ${promoteGrade}` : 'all grades';
+      setMsg(`Promoted ${res.promoted} students (${scope_label}), ${res.graduated} graduated.`);
       load();
     } catch (e) {
       setErr((e as Error).message);
@@ -353,6 +356,70 @@ export function Students() {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* Category / Religion / RTE breakdown — from live student summary */}
+      {summary && (summary.byCategory.length > 0 || summary.byReligion.length > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Category donut */}
+          {summary.byCategory.length > 0 && (
+            <div className="panel p-5">
+              <h2 className="font-heading font-semibold text-navy-700 mb-3 text-sm">By Category</h2>
+              <ResponsiveContainer width="100%" height={180}>
+                <PieChart>
+                  <Pie data={summary.byCategory} dataKey="count" nameKey="category" cx="50%" cy="50%" innerRadius={42} outerRadius={68} isAnimationActive={false}>
+                    {summary.byCategory.map((_, i) => (
+                      <Cell key={i} fill={['#0076BC','#3AAAC5','#F59E0B','#EF4444'][i % 4]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(v: number) => [v, 'Students']} contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', fontSize: 12 }} />
+                  <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} formatter={(v) => v} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+          {/* Religion donut */}
+          {summary.byReligion.length > 0 && (
+            <div className="panel p-5">
+              <h2 className="font-heading font-semibold text-navy-700 mb-3 text-sm">By Religion</h2>
+              <ResponsiveContainer width="100%" height={180}>
+                <PieChart>
+                  <Pie data={summary.byReligion} dataKey="count" nameKey="religion" cx="50%" cy="50%" innerRadius={42} outerRadius={68} isAnimationActive={false}>
+                    {summary.byReligion.map((_, i) => (
+                      <Cell key={i} fill={['#8B5CF6','#10B981','#F59E0B','#EF4444','#EC4899','#6B7280'][i % 6]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(v: number) => [v, 'Students']} contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', fontSize: 12 }} />
+                  <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} formatter={(v) => v} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+          {/* RTE KPI chip */}
+          <div className="panel p-5 flex flex-col justify-center items-center gap-3">
+            <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center">
+              <i className="fas fa-graduation-cap text-emerald-600 text-xl" />
+            </div>
+            <div className="text-center">
+              <div className="text-3xl font-bold text-navy-700">{summary.rte.toLocaleString()}</div>
+              <div className="text-sm text-slate-500 mt-1">RTE Students</div>
+              <div className="text-xs text-emerald-600 mt-1 font-medium">
+                Right to Education Act admissions
+              </div>
+            </div>
+            {summary.total > 0 && (
+              <div className="w-full bg-slate-100 rounded-full h-2">
+                <div
+                  className="bg-emerald-500 h-2 rounded-full"
+                  style={{ width: `${Math.min(100, (summary.rte / summary.total) * 100).toFixed(1)}%` }}
+                />
+              </div>
+            )}
+            <div className="text-xs text-slate-400">
+              {summary.total > 0 ? `${((summary.rte / summary.total) * 100).toFixed(1)}% of total students` : '—'}
+            </div>
+          </div>
         </div>
       )}
 
@@ -531,14 +598,43 @@ export function Students() {
         onCancel={() => setConfirmStudent(null)}
         onConfirm={() => { remove(confirmStudent!); setConfirmStudent(null); }}
       />
-      <ConfirmDialog
-        open={confirmPromote}
-        title="Promote all students"
-        message="Move all students one grade up? Class 12 students will be marked as graduated."
-        confirmLabel="Promote"
-        onCancel={() => setConfirmPromote(false)}
-        onConfirm={() => { promote(); setConfirmPromote(false); }}
-      />
+      {confirmPromote && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
+                <i className="fas fa-level-up-alt text-amber-600" />
+              </div>
+              <div>
+                <p className="font-bold text-navy-700">Promote Students</p>
+                <p className="text-xs text-slate-500">Move students one grade up</p>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1.5">Grade to promote (optional)</label>
+              <select
+                className={inputCls}
+                value={promoteGrade}
+                onChange={(e) => setPromoteGrade(e.target.value)}
+              >
+                <option value="">All grades</option>
+                {GRADES_6_12.map((g) => <option key={g} value={g}>Class {g} only</option>)}
+              </select>
+              <p className="text-xs text-slate-400 mt-1.5">
+                {promoteGrade
+                  ? `Only Class ${promoteGrade} students will be promoted. Class 12 → graduated.`
+                  : 'All non-dropout students will be promoted one grade. Class 12 → graduated.'}
+              </p>
+            </div>
+            <div className="flex gap-2 justify-end pt-2 border-t border-slate-100">
+              <button onClick={() => { setConfirmPromote(false); setPromoteGrade(''); }} className="btn-outline text-sm">Cancel</button>
+              <button onClick={() => { promote(); setConfirmPromote(false); setPromoteGrade(''); }} className="btn-primary text-sm">
+                <i className="fas fa-level-up-alt" />Promote
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

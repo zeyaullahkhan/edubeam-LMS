@@ -242,4 +242,122 @@ export class SchoolsService {
       include: { block: { include: { district: true } } },
     });
   }
+
+  // ── Academic Year ───────────────────────────────────────────────────────────
+
+  private resolveSchoolId(user: AuthUser, schoolId?: string): string {
+    const sid = schoolId ?? user.schoolId;
+    if (!sid) throw new ForbiddenException('School ID required');
+    return sid;
+  }
+
+  async listAcademicYears(user: AuthUser, schoolId?: string) {
+    const sid = this.resolveSchoolId(user, schoolId);
+    return prisma.academicYear.findMany({ where: { schoolId: sid }, orderBy: { label: 'desc' } });
+  }
+
+  async createAcademicYear(user: AuthUser, dto: { label: string; startDate: string; endDate: string; schoolId?: string }) {
+    const WRITE_ROLES = ['ADMIN', 'STATE_OFFICIAL', 'PRINCIPAL'];
+    if (!WRITE_ROLES.includes(user.role)) throw new ForbiddenException('Not authorized');
+    const sid = this.resolveSchoolId(user, dto.schoolId);
+    return prisma.academicYear.create({ data: { schoolId: sid, label: dto.label, startDate: dto.startDate, endDate: dto.endDate } });
+  }
+
+  async setCurrentAcademicYear(user: AuthUser, id: string) {
+    const WRITE_ROLES = ['ADMIN', 'STATE_OFFICIAL', 'PRINCIPAL'];
+    if (!WRITE_ROLES.includes(user.role)) throw new ForbiddenException('Not authorized');
+    const year = await prisma.academicYear.findUnique({ where: { id } });
+    if (!year) throw new NotFoundException('Academic year not found');
+    await prisma.academicYear.updateMany({ where: { schoolId: year.schoolId }, data: { isCurrent: false } });
+    return prisma.academicYear.update({ where: { id }, data: { isCurrent: true } });
+  }
+
+  async deleteAcademicYear(user: AuthUser, id: string) {
+    if (!['ADMIN', 'PRINCIPAL'].includes(user.role)) throw new ForbiddenException('Not authorized');
+    await prisma.academicYear.delete({ where: { id } });
+    return { ok: true };
+  }
+
+  // ── Class Section ────────────────────────────────────────────────────────────
+
+  async listClassSections(user: AuthUser, schoolId?: string, academicYear?: string) {
+    const sid = this.resolveSchoolId(user, schoolId);
+    return prisma.classSection.findMany({
+      where: { schoolId: sid, ...(academicYear ? { academicYear } : {}) },
+      orderBy: [{ grade: 'asc' }, { section: 'asc' }],
+      include: { subjectAssignments: { include: { subject: true } } },
+    });
+  }
+
+  async createClassSection(user: AuthUser, dto: {
+    grade: number; section: string; academicYear: string;
+    classTeacherId?: string; capacity?: number; stream?: string; schoolId?: string;
+  }) {
+    const WRITE_ROLES = ['ADMIN', 'STATE_OFFICIAL', 'PRINCIPAL'];
+    if (!WRITE_ROLES.includes(user.role)) throw new ForbiddenException('Not authorized');
+    const sid = this.resolveSchoolId(user, dto.schoolId);
+    return prisma.classSection.create({
+      data: { schoolId: sid, grade: dto.grade, section: dto.section, academicYear: dto.academicYear, classTeacherId: dto.classTeacherId, capacity: dto.capacity, stream: dto.stream },
+    });
+  }
+
+  async updateClassSection(user: AuthUser, id: string, dto: any) {
+    if (!['ADMIN', 'STATE_OFFICIAL', 'PRINCIPAL'].includes(user.role)) throw new ForbiddenException('Not authorized');
+    return prisma.classSection.update({ where: { id }, data: dto });
+  }
+
+  async deleteClassSection(user: AuthUser, id: string) {
+    if (!['ADMIN', 'PRINCIPAL'].includes(user.role)) throw new ForbiddenException('Not authorized');
+    await prisma.classSection.delete({ where: { id } });
+    return { ok: true };
+  }
+
+  // ── Subject Master ───────────────────────────────────────────────────────────
+
+  async listSubjects(user: AuthUser, schoolId?: string) {
+    const sid = this.resolveSchoolId(user, schoolId);
+    return prisma.subject.findMany({ where: { schoolId: sid, isActive: true }, orderBy: { name: 'asc' } });
+  }
+
+  async createSubject(user: AuthUser, dto: {
+    name: string; code?: string; grade?: number; stream?: string;
+    maxMarks?: number; isElective?: boolean; schoolId?: string;
+  }) {
+    const WRITE_ROLES = ['ADMIN', 'STATE_OFFICIAL', 'PRINCIPAL'];
+    if (!WRITE_ROLES.includes(user.role)) throw new ForbiddenException('Not authorized');
+    const sid = this.resolveSchoolId(user, dto.schoolId);
+    return prisma.subject.create({
+      data: { schoolId: sid, name: dto.name, code: dto.code, grade: dto.grade, stream: dto.stream, maxMarks: dto.maxMarks ?? 100, isElective: dto.isElective ?? false },
+    });
+  }
+
+  async updateSubject(user: AuthUser, id: string, dto: any) {
+    if (!['ADMIN', 'STATE_OFFICIAL', 'PRINCIPAL'].includes(user.role)) throw new ForbiddenException('Not authorized');
+    return prisma.subject.update({ where: { id }, data: dto });
+  }
+
+  async deleteSubject(user: AuthUser, id: string) {
+    if (!['ADMIN', 'PRINCIPAL'].includes(user.role)) throw new ForbiddenException('Not authorized');
+    return prisma.subject.update({ where: { id }, data: { isActive: false } });
+  }
+
+  // ── Subject Assignment ───────────────────────────────────────────────────────
+
+  async listAssignments(user: AuthUser, classSectionId: string) {
+    return prisma.subjectAssignment.findMany({
+      where: { classSectionId },
+      include: { subject: true },
+    });
+  }
+
+  async createAssignment(user: AuthUser, dto: { staffId: string; classSectionId: string; subjectId: string; academicYear: string }) {
+    if (!['ADMIN', 'STATE_OFFICIAL', 'PRINCIPAL'].includes(user.role)) throw new ForbiddenException('Not authorized');
+    return prisma.subjectAssignment.create({ data: dto });
+  }
+
+  async deleteAssignment(user: AuthUser, id: string) {
+    if (!['ADMIN', 'PRINCIPAL'].includes(user.role)) throw new ForbiddenException('Not authorized');
+    await prisma.subjectAssignment.delete({ where: { id } });
+    return { ok: true };
+  }
 }

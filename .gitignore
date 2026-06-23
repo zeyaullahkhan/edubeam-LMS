@@ -7,6 +7,12 @@ build/
 # local SQLite dev database
 packages/db/prisma/*.db
 packages/db/prisma/*.db-journal
+packages/db/prisma/*.db-shm
+packages/db/prisma/*.db-wal
+# nested prisma output (generated, not source)
+packages/db/prisma/prisma/
+# scratch/map-generation files
+Images/
 .DS_Store
 # Generated credential exports — contain plaintext passwords, never commit
 login-credentials-all.xlsx

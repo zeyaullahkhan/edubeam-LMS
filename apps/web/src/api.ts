@@ -206,6 +206,50 @@ export const api = {
     req<SchoolRow>('/schools', { method: 'POST', body: JSON.stringify(body) }),
   updateSchool: (id: string, body: Partial<SchoolFormData>) =>
     req<SchoolRow>(`/schools/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+
+  // Academic Years
+  academicYears: (schoolId: string) => req<any[]>(`/schools/${schoolId}/academic-years`),
+  createAcademicYear: (schoolId: string, body: { label: string; startDate: string; endDate: string }) =>
+    req<any>(`/schools/${schoolId}/academic-years`, { method: 'POST', body: JSON.stringify(body) }),
+  setCurrentAcademicYear: (id: string) =>
+    req<any>(`/schools/academic-years/${id}/set-current`, { method: 'PATCH', body: '{}' }),
+  deleteAcademicYear: (id: string) =>
+    req<{ ok: boolean }>(`/schools/academic-years/${id}`, { method: 'DELETE' }),
+
+  // Class Sections
+  classSections: (schoolId: string, academicYear?: string) =>
+    req<any[]>(`/schools/${schoolId}/class-sections${academicYear ? `?academicYear=${academicYear}` : ''}`),
+  createClassSection: (schoolId: string, body: any) =>
+    req<any>(`/schools/${schoolId}/class-sections`, { method: 'POST', body: JSON.stringify(body) }),
+  updateClassSection: (id: string, body: any) =>
+    req<any>(`/schools/class-sections/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteClassSection: (id: string) =>
+    req<{ ok: boolean }>(`/schools/class-sections/${id}`, { method: 'DELETE' }),
+
+  // Subjects
+  schoolSubjects: (schoolId: string) => req<any[]>(`/schools/${schoolId}/subjects`),
+  createSubject: (schoolId: string, body: any) =>
+    req<any>(`/schools/${schoolId}/subjects`, { method: 'POST', body: JSON.stringify(body) }),
+  updateSubject: (id: string, body: any) =>
+    req<any>(`/schools/subjects/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteSubject: (id: string) =>
+    req<any>(`/schools/subjects/${id}`, { method: 'DELETE' }),
+
+  // Subject Assignments
+  sectionAssignments: (classSectionId: string) =>
+    req<any[]>(`/schools/class-sections/${classSectionId}/assignments`),
+  createAssignment: (classSectionId: string, body: any) =>
+    req<any>(`/schools/class-sections/${classSectionId}/assignments`, { method: 'POST', body: JSON.stringify(body) }),
+  deleteAssignment: (id: string) =>
+    req<{ ok: boolean }>(`/schools/assignments/${id}`, { method: 'DELETE' }),
+
+  // Notices
+  notices: (schoolId: string) => req<any[]>(`/planner/notices?schoolId=${schoolId}`),
+  createNotice: (body: any) => req<any>('/planner/notices', { method: 'POST', body: JSON.stringify(body) }),
+  updateNotice: (id: string, body: any) =>
+    req<any>(`/planner/notices/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteNotice: (id: string) =>
+    req<{ ok: boolean }>(`/planner/notices/${id}`, { method: 'DELETE' }),
   kpis: (params: { districtId?: string; blockId?: string; schoolId?: string }) => {
     const qs = new URLSearchParams(
       Object.entries(params).filter(([, v]) => v) as [string, string][],
@@ -236,8 +280,8 @@ export const api = {
       req<{ id: string; studentLogin: { email: string; password: string }; parentLogin: { email: string; password: string } }>('/students', { method: 'POST', body: JSON.stringify(body) }),
     bulk: (schoolId: string | undefined, rows: Partial<Student>[]) =>
       req<{ inserted: number; skipped: number }>('/students/bulk', { method: 'POST', body: JSON.stringify({ schoolId, rows }) }),
-    promote: (schoolId?: string) =>
-      req<{ promoted: number; graduated: number }>('/students/promote', { method: 'POST', body: JSON.stringify({ schoolId }) }),
+    promote: (schoolId?: string, grade?: number) =>
+      req<{ promoted: number; graduated: number }>('/students/promote', { method: 'POST', body: JSON.stringify({ schoolId, grade }) }),
     update: (id: string, body: Partial<Student>) =>
       req<{ ok: boolean }>(`/students/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
     remove: (id: string) => req<{ ok: boolean }>(`/students/${id}`, { method: 'DELETE' }),
@@ -315,6 +359,16 @@ export const api = {
       req<any>('/planner/holidays', { method: 'POST', body: JSON.stringify(body) }),
     deleteHoliday: (id: string) =>
       req<{ ok: boolean }>(`/planner/holidays/${id}`, { method: 'DELETE' }),
+    events: (month?: string) =>
+      req<any[]>(`/planner/events${month ? `?month=${month}` : ''}`),
+    createEvent: (body: {
+      title: string; description?: string; type?: string;
+      date: string; endDate?: string; urgent?: boolean;
+      scopeLevel?: string; scopeTargetId?: string;
+    }) =>
+      req<any>('/planner/events', { method: 'POST', body: JSON.stringify(body) }),
+    deleteEvent: (id: string) =>
+      req<{ ok: boolean }>(`/planner/events/${id}`, { method: 'DELETE' }),
   },
 
   quiz: {

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import type { AuthUser } from '@edubeam/shared';
 import { JwtGuard } from '../auth/jwt.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -37,5 +37,86 @@ export class SchoolsController {
   @Patch(':id')
   update(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() body: any) {
     return this.schools.update(user, id, body);
+  }
+
+  // ── Academic Years ──────────────────────────────────────────────────────────
+
+  @Get(':id/academic-years')
+  listAcademicYears(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.schools.listAcademicYears(user, id);
+  }
+
+  @Post(':id/academic-years')
+  createAcademicYear(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() body: any) {
+    return this.schools.createAcademicYear(user, { ...body, schoolId: id });
+  }
+
+  @Patch('academic-years/:id/set-current')
+  setCurrentAcademicYear(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.schools.setCurrentAcademicYear(user, id);
+  }
+
+  @Delete('academic-years/:id')
+  deleteAcademicYear(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.schools.deleteAcademicYear(user, id);
+  }
+
+  // ── Class Sections ──────────────────────────────────────────────────────────
+
+  @Get(':id/class-sections')
+  listClassSections(@CurrentUser() user: AuthUser, @Param('id') id: string, @Query('academicYear') academicYear?: string) {
+    return this.schools.listClassSections(user, id, academicYear);
+  }
+
+  @Post(':id/class-sections')
+  createClassSection(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() body: any) {
+    return this.schools.createClassSection(user, { ...body, schoolId: id });
+  }
+
+  @Patch('class-sections/:id')
+  updateClassSection(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() body: any) {
+    return this.schools.updateClassSection(user, id, body);
+  }
+
+  @Delete('class-sections/:id')
+  deleteClassSection(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.schools.deleteClassSection(user, id);
+  }
+
+  @Get('class-sections/:id/assignments')
+  listAssignments(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.schools.listAssignments(user, id);
+  }
+
+  @Post('class-sections/:id/assignments')
+  createAssignment(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() body: any) {
+    return this.schools.createAssignment(user, { ...body, classSectionId: id });
+  }
+
+  @Delete('assignments/:id')
+  deleteAssignment(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.schools.deleteAssignment(user, id);
+  }
+
+  // ── Subjects ────────────────────────────────────────────────────────────────
+
+  @Get(':id/subjects')
+  listSubjects(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.schools.listSubjects(user, id);
+  }
+
+  @Post(':id/subjects')
+  createSubject(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() body: any) {
+    return this.schools.createSubject(user, { ...body, schoolId: id });
+  }
+
+  @Patch('subjects/:id')
+  updateSubject(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() body: any) {
+    return this.schools.updateSubject(user, id, body);
+  }
+
+  @Delete('subjects/:id')
+  deleteSubject(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.schools.deleteSubject(user, id);
   }
 }

@@ -1,6 +1,6 @@
 -- CreateTable
 CREATE TABLE "Holiday" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "title" TEXT NOT NULL,
     "description" TEXT,
     "startDate" TEXT NOT NULL,
@@ -9,14 +9,12 @@ CREATE TABLE "Holiday" (
     "scopeId" TEXT NOT NULL,
     "createdBy" TEXT NOT NULL,
     "createdByName" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "Holiday_pkey" PRIMARY KEY ("id")
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- CreateTable
 CREATE TABLE "LeaveRequest" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "studentId" TEXT NOT NULL,
     "studentName" TEXT,
     "schoolId" TEXT NOT NULL,
@@ -27,12 +25,10 @@ CREATE TABLE "LeaveRequest" (
     "status" TEXT NOT NULL DEFAULT 'PENDING',
     "approvedBy" TEXT,
     "approvedByName" TEXT,
-    "approvedAt" TIMESTAMP(3),
+    "approvedAt" DATETIME,
     "approverRemarks" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "LeaveRequest_pkey" PRIMARY KEY ("id")
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
 );
 
 -- CreateIndex

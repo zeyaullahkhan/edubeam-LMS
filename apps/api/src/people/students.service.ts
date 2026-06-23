@@ -382,16 +382,21 @@ export class StudentsService {
     return { ok: true };
   }
 
-  /** Promote all non-dropout students one grade up; grade 12 graduates (deactivated). Tender §6.2.8.15. */
-  async promote(user: AuthUser, schoolId?: string) {
+  /** Promote non-dropout students one grade up; grade 12 graduates (deactivated). Tender §6.2.8.15.
+   *  Optional `grade` narrows to a single class (e.g. promote only Class 10). */
+  async promote(user: AuthUser, schoolId?: string, grade?: number) {
     assertCanWrite(user);
     const resolved = await resolveWritableSchool(user, schoolId);
+    const gradeFilter = grade ? { equals: grade } : { gte: 12 };
     const graduated = await prisma.student.updateMany({
-      where: { schoolId: resolved, isDropout: false, grade: { gte: 12 } },
+      where: { schoolId: resolved, isDropout: false, grade: grade ? { equals: grade, gte: 12 } : { gte: 12 } },
       data: { active: false },
     });
     const promoted = await prisma.student.updateMany({
-      where: { schoolId: resolved, isDropout: false, active: true, grade: { lt: 12 } },
+      where: {
+        schoolId: resolved, isDropout: false, active: true,
+        grade: grade ? { equals: grade, lt: 12 } : { lt: 12 },
+      },
       data: { grade: { increment: 1 } },
     });
     return { promoted: promoted.count, graduated: graduated.count };

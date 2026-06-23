@@ -108,6 +108,10 @@ model School {
   students            Student[]
   staff               Staff[]
   quizzes             Quiz[]
+  notices             Notice[]
+  academicYears       AcademicYear[]
+  classSections       ClassSection[]
+  subjects            Subject[]
 }
 
 // ── Operational / analytics data (seeded from Excel) ────────────────────────
@@ -398,6 +402,28 @@ model Holiday {
   @@index([scope, scopeId])
 }
 
+// ── Events (live school/state events — replaces static EVENTS array) ──────────
+
+// type: "Ceremony" | "Workshop" | "Assessment" | "Meeting" | "Exam" | "Other"
+// scope / scopeId reuse the same pattern as Holiday
+model Event {
+  id            String   @id @default(cuid())
+  title         String
+  description   String?
+  type          String   @default("Other")
+  date          String   // "YYYY-MM-DD"
+  endDate       String?  // optional multi-day
+  urgent        Boolean  @default(false)
+  scope         String   // "SCHOOL" | "BLOCK" | "DISTRICT" | "TENANT"
+  scopeId       String
+  createdBy     String   // userId
+  createdByName String?
+  createdAt     DateTime @default(now())
+
+  @@index([scopeId, date])
+  @@index([scope, scopeId])
+}
+
 // ── Leave Requests ────────────────────────────────────────────────────────────
 
 // status: "PENDING" | "APPROVED" | "REJECTED"
@@ -421,6 +447,100 @@ model LeaveRequest {
 
   @@index([studentId])
   @@index([schoolId, status])
+}
+
+// ── Notice Board ─────────────────────────────────────────────────────────────
+
+// type: "General" | "Academic" | "Event" | "Urgent"
+model Notice {
+  id            String   @id @default(cuid())
+  schoolId      String
+  school        School   @relation(fields: [schoolId], references: [id])
+  title         String
+  description   String?
+  type          String   @default("General")
+  publishDate   String   // "YYYY-MM-DD"
+  expiryDate    String?  // optional "YYYY-MM-DD"
+  createdById   String   // userId
+  createdByName String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([schoolId, publishDate])
+}
+
+// ── Academic Year ─────────────────────────────────────────────────────────────
+
+model AcademicYear {
+  id        String   @id @default(cuid())
+  schoolId  String
+  school    School   @relation(fields: [schoolId], references: [id])
+  label     String   // "2025-26"
+  startDate String   // "YYYY-MM-DD"
+  endDate   String   // "YYYY-MM-DD"
+  isCurrent Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@unique([schoolId, label])
+  @@index([schoolId, isCurrent])
+}
+
+// ── Class & Section Structure ─────────────────────────────────────────────────
+
+model ClassSection {
+  id             String   @id @default(cuid())
+  schoolId       String
+  school         School   @relation(fields: [schoolId], references: [id])
+  academicYear   String   // "2025-26"
+  grade          Int      // 1..12
+  section        String   // "A" | "B" | ...
+  classTeacherId String?  // Staff.id (optional)
+  capacity       Int?
+  stream         String?  // "Science" | "Arts" | "Commerce" (grades 11-12)
+  createdAt      DateTime @default(now())
+
+  subjectAssignments SubjectAssignment[]
+
+  @@unique([schoolId, academicYear, grade, section])
+  @@index([schoolId, academicYear])
+}
+
+// ── Subject Master ────────────────────────────────────────────────────────────
+
+model Subject {
+  id        String   @id @default(cuid())
+  schoolId  String
+  school    School   @relation(fields: [schoolId], references: [id])
+  code      String?  // e.g. "MATH", "ENG"
+  name      String   // e.g. "Mathematics"
+  grade     Int?     // null = applicable to all grades
+  stream    String?  // "Science" | "Arts" | "Commerce" | null for all
+  maxMarks  Float    @default(100)
+  isElective Boolean @default(false)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  subjectAssignments SubjectAssignment[]
+
+  @@unique([schoolId, name, grade])
+  @@index([schoolId, isActive])
+}
+
+// ── Subject Assignment (teacher → class → subject) ───────────────────────────
+
+model SubjectAssignment {
+  id             String   @id @default(cuid())
+  staffId        String   // Staff.id
+  classSectionId String
+  classSection   ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
+  subjectId      String
+  subject        Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  academicYear   String
+  createdAt      DateTime @default(now())
+
+  @@unique([staffId, classSectionId, subjectId, academicYear])
+  @@index([classSectionId])
+  @@index([staffId])
 }
 
 // ── Quiz Engine ──────────────────────────────────────────────────────────────

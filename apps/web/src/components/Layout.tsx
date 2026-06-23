@@ -15,13 +15,19 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 const ADMIN_NAV = [
-  { to: '/',             label: 'Dashboard',  icon: 'fas fa-chart-bar' },
-  { to: '/analytics',    label: 'Analytics',  icon: 'fas fa-chart-line' },
-  { to: '/schools',      label: 'Schools',    icon: 'fas fa-school' },
-  { to: '/people',       label: 'People',     icon: 'fas fa-users' },
-  { to: '/quiz',         label: 'Quiz',       icon: 'fas fa-question-circle' },
-  { to: '/content',      label: 'Content',    icon: 'fas fa-play-circle' },
-  { to: '/planner',      label: 'Planner',    icon: 'fas fa-calendar-alt' },
+  { to: '/',               label: 'Dashboard',       icon: 'fas fa-chart-bar' },
+  { to: '/analytics',      label: 'Analytics',       icon: 'fas fa-chart-line' },
+  { to: '/schools',        label: 'Schools',         icon: 'fas fa-school' },
+  { to: '/people',         label: 'People',          icon: 'fas fa-users' },
+  { to: '/notices',        label: 'Notice Board',    icon: 'fas fa-bullhorn' },
+  { to: '/academic-years', label: 'Academic Years',  icon: 'fas fa-calendar-alt' },
+  { to: '/classes',        label: 'Classes',         icon: 'fas fa-chalkboard-teacher' },
+  { to: '/subjects',       label: 'Subjects',        icon: 'fas fa-book-open' },
+  { to: '/attendance',     label: 'Attendance',      icon: 'fas fa-user-check' },
+  { to: '/report-card',    label: 'Report Cards',    icon: 'fas fa-file-alt' },
+  { to: '/planner',        label: 'Planner',         icon: 'fas fa-calendar-check' },
+  { to: '/quiz',           label: 'Quiz',            icon: 'fas fa-question-circle' },
+  { to: '/content',        label: 'Content',         icon: 'fas fa-play-circle' },
 ];
 
 const STUDENT_NAV = [
