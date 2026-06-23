@@ -216,6 +216,20 @@ async function wipe() {
 
   await prisma.lecture.deleteMany();
   await prisma.contentChannel.deleteMany();
+  await prisma.studentAttempt.deleteMany();
+  await prisma.quizQuestion.deleteMany();
+  await prisma.quiz.deleteMany();
+  await prisma.subjectAssignment.deleteMany();
+  await prisma.subject.deleteMany();
+  await prisma.classSection.deleteMany();
+  await prisma.academicYear.deleteMany();
+  await prisma.notice.deleteMany();
+  await prisma.holiday.deleteMany();
+  await prisma.event.deleteMany();
+  await prisma.leaveRequest.deleteMany();
+  await prisma.examResult.deleteMany();
+  await prisma.attendance.deleteMany();
+  await prisma.staffAttendance.deleteMany();
   await prisma.student.deleteMany();
   await prisma.staff.deleteMany();
   await prisma.enrollment.deleteMany();
