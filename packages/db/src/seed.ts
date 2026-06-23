@@ -802,9 +802,11 @@ async function restoreYoutubeUrls(): Promise<number> {
   const map: Record<string, string> = JSON.parse(readFileSync(urlsFile, 'utf8'));
   const entries = Object.entries(map);
   if (!entries.length) return 0;
-  const CHUNK = 20;
+  const CHUNK = 10;
   let restored = 0;
   for (let i = 0; i < entries.length; i += CHUNK) {
+    // Reconnect each chunk — long-running seeds cause Render PG to close idle connections.
+    await prisma.$disconnect();
     for (const [id, youtubeUrl] of entries.slice(i, i + CHUNK)) {
       await prisma.lecture.updateMany({ where: { id }, data: { youtubeUrl } });
     }
@@ -909,7 +911,10 @@ async function main() {
   // Disconnect and reconnect before restoreYoutubeUrls — after 15+ minutes of bulk
   // inserts the Render PG server closes idle connections (P1017). A fresh connect avoids it.
   await prisma.$disconnect();
-  const urlsRestored = await restoreYoutubeUrls();
+  const urlsRestored = await restoreYoutubeUrls().catch((e) => {
+    console.warn('YouTube URL restore failed (non-fatal):', e.message);
+    return 0;
+  });
 
   // Restore manually-curated school fields (principal, phone, address) saved before wipe
   for (const s of curated) {
