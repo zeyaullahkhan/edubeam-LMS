@@ -5,33 +5,24 @@ interface Props {
   districts: DistrictSummary[];
 }
 
-interface DotConfig {
-  key: string;
-  name: string;
-  cx: number;
-  cy: number;
-}
-
-// Dot positions tuned to stay well inside each district's SVG path
-const DOT_CONFIG: DotConfig[] = [
-  { key: 'uttarkashi',  name: 'Uttarkashi',       cx: 98,  cy: 57  },
-  { key: 'chamoli',     name: 'Chamoli',           cx: 188, cy: 90  },
-  { key: 'pithoragarh', name: 'Pithoragarh',       cx: 256, cy: 175 },
-  { key: 'tehri',       name: 'Tehri Garhwal',     cx: 103, cy: 104 },
-  { key: 'rudraprayag', name: 'Rudraprayag',       cx: 150, cy: 114 },
-  { key: 'dehradun',    name: 'Dehradun',          cx: 55,  cy: 155 },
-  { key: 'pauri',       name: 'Pauri Garhwal',     cx: 155, cy: 155 },
-  { key: 'haridwar',    name: 'Haridwar',          cx: 34,  cy: 165 },
-  { key: 'bageshwar',   name: 'Bageshwar',         cx: 232, cy: 158 },
-  { key: 'almora',      name: 'Almora',            cx: 210, cy: 198 },
-  { key: 'champawat',   name: 'Champawat',         cx: 248, cy: 228 },
-  { key: 'nainital',    name: 'Nainital',          cx: 170, cy: 228 },
-  { key: 'usn',         name: 'Udham Singh Nagar', cx: 135, cy: 252 },
-];
-
-function normKey(s: string) {
-  return s.toLowerCase().replace(/[\s.'-]/g, '');
-}
+// SVG viewBox of the administrative map: 0 0 623.622 666.142
+// Hover-area centers taken from the original number-label positions in the SVG.
+// Colors match the district fills in the SVG (st0–st10 CSS classes, extended for 12 & 13).
+const DISTRICT_CONFIG = [
+  { num: 1,  key: 'uttarkashi',  name: 'Uttarkashi',        cx: 175.6, cy: 123.7, color: '#A8D5A2' },
+  { num: 2,  key: 'chamoli',     name: 'Chamoli',           cx: 345.9, cy: 218.9, color: '#8EC6E6' },
+  { num: 3,  key: 'rudraprayag', name: 'Rudraprayag',       cx: 255.3, cy: 208.8, color: '#F4A7B4' },
+  { num: 4,  key: 'tehri',       name: 'Tehri Garhwal',     cx: 160.0, cy: 232.1, color: '#F9C4A4' },
+  { num: 5,  key: 'dehradun',    name: 'Dehradun',          cx: 54.7,  cy: 226.4, color: '#8DC48D' },
+  { num: 6,  key: 'pauri',       name: 'Pauri Garhwal',     cx: 203.1, cy: 338.4, color: '#B8D9AA' },
+  { num: 7,  key: 'pithoragarh', name: 'Pithoragarh',       cx: 490.2, cy: 284.8, color: '#F0A0B8' },
+  { num: 8,  key: 'bageshwar',   name: 'Bageshwar',         cx: 398.3, cy: 311.7, color: '#A8DCFA' },
+  { num: 9,  key: 'almora',      name: 'Almora',            cx: 328.6, cy: 370.4, color: '#B8AED8' },
+  { num: 10, key: 'champawat',   name: 'Champawat',         cx: 422.9, cy: 450.6, color: '#F0E870' },
+  { num: 11, key: 'nainital',    name: 'Nainital',          cx: 316.3, cy: 443.9, color: '#E8D85A' },
+  { num: 12, key: 'usn',         name: 'Udham Singh Nagar', cx: 329.3, cy: 509.3, color: '#98D898' },
+  { num: 13, key: 'haridwar',    name: 'Haridwar',          cx: 59.8,  cy: 329.1, color: '#D4A8D4' },
+] as const;
 
 const NAME_MAP: Record<string, string> = {
   uttarkashi:       'uttarkashi',
@@ -55,15 +46,15 @@ const NAME_MAP: Record<string, string> = {
   usnagar:          'usn',
 };
 
-interface TooltipState {
-  key: string;
-  x: number;
-  y: number;
+function normKey(s: string) {
+  return s.toLowerCase().replace(/[\s.'-]/g, '');
 }
+
+interface TipState { key: string; x: number; y: number }
 
 export function UttarakhandMap({ districts }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
-  const [tip, setTip] = useState<TooltipState | null>(null);
+  const [tip, setTip] = useState<TipState | null>(null);
 
   const districtByKey: Record<string, DistrictSummary> = {};
   for (const d of districts) {
@@ -71,20 +62,19 @@ export function UttarakhandMap({ districts }: Props) {
     districtByKey[k] = d;
   }
 
-  const maxSchools = Math.max(...districts.map(d => d.schools), 1);
-  const totalSchools = districts.reduce((s, d) => s + d.schools, 0);
+  const totalSchools  = districts.reduce((s, d) => s + d.schools, 0);
   const totalStudents = districts.reduce((s, d) => s + d.totalStudents, 0);
-
-  const hovered = tip ? districtByKey[tip.key] : null;
   const pct = (v: number | null | undefined) =>
     v == null ? '—' : `${(v * 100).toFixed(1)}%`;
+
+  const hovered = tip ? districtByKey[tip.key] : null;
+  const hoveredConfig = tip ? DISTRICT_CONFIG.find(d => d.key === tip.key) : null;
 
   function onEnter(e: React.MouseEvent, key: string) {
     if (!wrapRef.current) return;
     const r = wrapRef.current.getBoundingClientRect();
     setTip({ key, x: e.clientX - r.left, y: e.clientY - r.top });
   }
-
   function onMove(e: React.MouseEvent) {
     if (!tip || !wrapRef.current) return;
     const r = wrapRef.current.getBoundingClientRect();
@@ -106,166 +96,165 @@ export function UttarakhandMap({ districts }: Props) {
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
-            District-wise installation view · {districts.length} districts · hover dots for details
+            District-wise installation view · {districts.length} districts · hover districts for details
           </p>
         </div>
       </div>
 
-      {/* Map area — relative container for HTML tooltip */}
-      <div
-        ref={wrapRef}
-        className="relative bg-gradient-to-br from-green-50 to-blue-50 px-4 py-4 flex justify-center"
-        onMouseLeave={() => setTip(null)}
-      >
-        <style>{`
-          @keyframes ukring {
-            0%   { r: var(--br); opacity: 0.65; }
-            100% { r: var(--er); opacity: 0; }
-          }
-          .ukr { animation: ukring 2.2s ease-out infinite; }
-        `}</style>
+      {/* Map + legend row */}
+      <div className="flex gap-0 bg-gradient-to-br from-slate-50 to-blue-50">
 
-        {/* HTML tooltip — large, readable */}
-        {tip && hovered && (
-          <div
-            className="pointer-events-none absolute z-20 bg-white border border-slate-200 rounded-2xl shadow-xl px-4 py-3"
-            style={{
-              left: tip.x + 16,
-              top: tip.y - 10,
-              minWidth: 220,
-              transform: tip.x > (wrapRef.current?.offsetWidth ?? 600) / 2 ? 'translateX(-110%)' : undefined,
-            }}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <span className="font-bold text-blue-800 text-[15px]">{hovered.district}</span>
-              <span className="bg-emerald-100 text-emerald-700 text-[11px] font-bold px-2 py-0.5 rounded-full">Active</span>
-            </div>
-            <div className="space-y-1 text-[13px] text-slate-700">
-              <div className="flex items-center gap-2">
-                <i className="fas fa-school text-blue-400 w-4" />
-                <span><strong>{hovered.schools}</strong> schools active</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <i className="fas fa-user-graduate text-emerald-400 w-4" />
-                <span><strong>{hovered.totalStudents.toLocaleString()}</strong> students enrolled</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <i className="fas fa-award text-amber-400 w-4" />
-                <span>Pass 10th: <strong>{pct(hovered.avgPass10th)}</strong> · 12th: <strong>{pct(hovered.avgPass12th)}</strong></span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <svg
-          viewBox="-8 -8 326 303"
-          className="w-full drop-shadow-lg"
-          style={{ maxWidth: 780, maxHeight: 500 }}
+        {/* Map area */}
+        <div
+          ref={wrapRef}
+          className="relative flex-1 flex justify-center items-start py-4 px-4"
+          onMouseLeave={() => setTip(null)}
+          onMouseMove={onMove}
         >
-          <defs>
-            <filter id="ukglow" x="-30%" y="-30%" width="160%" height="160%">
-              <feGaussianBlur stdDeviation="2" result="b" />
-              <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
-            </filter>
-            <filter id="uklbl" x="-5%" y="-5%" width="110%" height="110%">
-              <feFlood floodColor="#1e3a5f" floodOpacity="0.55" result="bg" />
-              <feComposite in="bg" in2="SourceGraphic" operator="in" result="bgc" />
-              <feMerge><feMergeNode in="bgc" /><feMergeNode in="SourceGraphic" /></feMerge>
-            </filter>
-          </defs>
-
-          {/* District paths */}
-          <path d="M 114.97,210.67 L 118.76,207.53 L 120.53,205.13 L 120.84,203.11 L 121.17,199.58 L 122.55,198.62 L 124.88,196.33 L 127.12,195.84 L 129.59,195.89 L 131.00,194.64 L 132.40,192.36 L 133.33,190.02 L 133.97,187.86 L 135.95,184.08 L 136.72,179.96 L 136.72,174.51 L 136.00,170.75 L 134.04,168.64 L 132.66,167.17 L 132.82,164.84 L 136.53,162.56 L 138.84,162.23 L 141.07,161.99 L 143.71,159.66 L 144.78,156.08 L 144.19,151.01 L 142.47,146.80 L 141.13,144.36 L 139.04,143.03 L 137.66,141.25 L 136.50,138.08 L 136.05,136.19 L 134.51,133.98 L 132.50,132.58 L 131.01,130.97 L 130.29,129.11 L 130.38,127.04 L 130.07,122.67 L 128.33,119.58 L 126.34,118.79 L 124.30,119.32 L 122.59,120.14 L 121.47,121.98 L 120.54,124.66 L 118.00,127.21 L 115.03,128.45 L 112.08,128.99 L 107.69,129.17 L 102.41,128.54 L 99.96,127.49 L 97.28,127.45 L 95.19,128.33 L 92.99,129.78 L 90.01,132.37 L 86.94,136.79 L 86.29,138.89 L 86.72,142.41 L 86.84,145.26 L 85.28,146.62 L 82.83,146.28 L 78.25,145.92 L 76.03,145.56 L 74.31,144.20 L 73.16,141.67 L 70.32,138.40 L 68.02,137.64 L 65.56,138.36 L 63.36,139.60 L 61.83,141.27 L 59.41,144.64 L 55.90,148.37 L 52.17,152.31 L 49.88,155.23 L 47.31,158.17 L 46.77,160.78 L 46.38,163.76 L 46.69,166.84 L 47.75,169.39 L 49.09,171.42 L 49.37,173.97 L 50.06,175.83 L 50.84,178.45 L 50.72,181.18 L 49.05,183.36 L 47.75,186.79 L 47.69,190.10 L 52.00,189.22 L 56.00,187.86 L 60.25,186.97 L 65.16,186.79 L 68.72,183.61 L 73.09,181.51 L 78.15,182.45 L 80.16,186.39 L 81.76,190.42 L 84.51,194.60 L 88.44,197.39 L 93.01,200.84 L 97.84,202.96 L 102.41,204.79 L 106.16,207.30 L 110.82,209.34 L 114.97,210.67 Z" fill="#4a90c4" stroke="#fff" strokeWidth="0.8" strokeLinejoin="round" />
-          <path d="M 224.44,70.86 L 224.44,71.96 L 224.16,75.41 L 223.16,76.23 L 220.32,77.95 L 218.29,78.14 L 216.19,78.67 L 214.83,80.09 L 215.03,82.52 L 216.09,84.67 L 218.03,86.76 L 220.02,88.52 L 219.69,91.23 L 218.11,93.12 L 217.04,95.68 L 215.94,99.51 L 216.07,101.99 L 217.50,105.78 L 218.50,110.95 L 218.43,113.16 L 216.67,116.16 L 216.59,120.30 L 218.14,122.11 L 220.69,124.81 L 222.09,129.61 L 223.53,131.38 L 224.98,133.03 L 225.50,135.33 L 225.50,140.19 L 224.68,144.77 L 222.53,148.67 L 222.55,151.12 L 222.97,154.69 L 224.78,157.26 L 227.85,158.59 L 229.85,160.12 L 230.19,162.55 L 229.62,164.12 L 227.69,164.35 L 224.00,164.14 L 219.72,163.56 L 217.39,163.99 L 216.19,164.67 L 215.74,166.42 L 215.60,169.28 L 216.16,171.55 L 217.99,173.11 L 218.51,174.64 L 217.78,175.70 L 215.27,176.92 L 211.70,176.21 L 210.22,174.51 L 207.94,174.35 L 207.06,175.00 L 205.81,176.42 L 205.06,177.00 L 203.01,176.89 L 201.34,175.98 L 198.24,175.36 L 197.85,176.34 L 198.38,178.11 L 199.37,178.92 L 201.72,179.37 L 204.06,181.17 L 206.34,183.54 L 209.68,185.51 L 210.88,187.86 L 212.29,192.60 L 213.26,195.11 L 214.47,196.55 L 217.53,199.61 L 221.23,201.48 L 222.72,203.73 L 222.73,204.97 L 221.51,205.45 L 219.16,205.36 L 217.24,206.68 L 216.35,207.55 L 211.72,207.55 L 209.13,208.10 L 205.31,210.56 L 202.63,211.98 L 201.97,214.00 L 201.39,216.30 L 202.22,217.55 L 204.47,218.04 L 205.91,219.04 L 204.94,221.55 L 201.77,223.88 L 200.62,223.89 L 199.22,222.61 L 197.33,221.73 L 196.13,223.34 L 196.47,225.58 L 197.66,227.45 L 198.74,229.63 L 201.13,230.45 L 206.11,232.74 L 206.69,233.75 L 206.00,235.51 L 203.03,237.86 L 203.01,239.20 L 203.88,241.45 L 205.00,243.08 L 207.12,244.41 L 210.44,244.42 L 211.23,244.88 L 211.38,246.69 L 211.94,249.92 L 213.83,250.43 L 215.96,249.97 L 218.06,248.45 L 219.65,247.27 L 223.48,245.60 L 226.75,244.89 L 229.56,245.27 L 232.36,244.78 L 236.06,244.42 L 237.97,241.08 L 237.43,236.27 L 240.53,235.73 L 243.50,234.25 L 242.61,229.88 L 243.28,225.76 L 242.89,220.82 L 239.77,218.11 L 239.03,213.70 L 240.07,209.97 L 242.78,205.64 L 246.03,203.73 L 248.37,200.08 L 252.19,197.36 L 252.19,192.51 L 251.17,188.36 L 248.04,184.06 L 248.38,179.17 L 251.72,176.34 L 254.57,173.95 L 258.97,172.61 L 262.80,171.44 L 266.00,168.95 L 267.44,164.55 L 266.59,160.51 L 270.49,158.83 L 273.56,158.83 L 278.07,158.42 L 281.01,155.84 L 283.31,151.42 L 285.87,148.65 L 289.74,145.87 L 292.22,143.36 L 294.34,139.16 L 294.10,134.69 L 297.50,132.80 L 301.60,134.50 L 305.43,134.97 L 309.16,132.36 L 307.91,127.52 L 303.71,124.98 L 298.56,123.23 L 294.04,121.41 L 290.11,117.87 L 286.50,116.05 L 283.10,113.50 L 279.91,110.96 L 275.91,108.20 L 271.02,104.29 L 267.06,106.86 L 263.41,104.61 L 258.86,102.99 L 253.42,99.83 L 250.06,98.26 L 247.00,96.04 L 243.01,94.01 L 238.63,92.55 L 235.08,89.99 L 232.69,87.82 L 232.91,82.98 L 237.24,81.51 L 238.99,77.86 L 236.06,74.95 L 234.81,71.60 L 232.40,69.16 L 227.59,71.76 L 224.69,71.03 L 224.44,70.86 Z" fill="#5b9bd5" stroke="#fff" strokeWidth="0.8" strokeLinejoin="round" />
-          <path d="M 62.50,140.42 L 62.92,139.97 L 64.91,138.73 L 67.25,137.64 L 69.80,138.08 L 72.61,140.57 L 73.97,143.48 L 75.64,145.37 L 77.42,145.92 L 82.28,146.14 L 84.68,146.64 L 86.81,145.67 L 86.72,143.58 L 86.35,139.49 L 86.67,137.34 L 89.06,133.64 L 92.52,130.30 L 94.54,128.49 L 96.81,127.67 L 99.39,127.26 L 101.66,128.36 L 106.22,129.17 L 110.77,128.76 L 114.42,128.52 L 116.81,127.92 L 120.31,125.27 L 121.13,122.67 L 121.84,121.33 L 121.47,118.85 L 121.88,115.98 L 122.97,114.76 L 124.11,113.71 L 124.66,111.85 L 128.94,109.95 L 128.59,107.33 L 127.55,103.16 L 125.06,96.48 L 123.94,94.26 L 122.46,91.91 L 120.25,89.89 L 117.94,87.80 L 116.90,84.47 L 116.81,81.48 L 117.66,79.92 L 119.66,77.52 L 122.69,76.73 L 125.09,75.18 L 127.89,72.90 L 128.94,70.20 L 129.27,68.68 L 128.65,67.83 L 127.88,65.33 L 126.24,63.52 L 124.49,62.10 L 120.41,61.39 L 118.10,61.11 L 115.04,62.40 L 112.91,64.39 L 112.78,67.25 L 112.53,72.60 L 111.66,75.45 L 109.40,76.95 L 105.75,76.42 L 101.56,75.80 L 99.34,76.18 L 97.11,78.24 L 94.44,79.36 L 92.55,80.56 L 89.79,81.73 L 89.47,85.33 L 87.90,87.22 L 86.06,89.17 L 84.03,91.05 L 81.85,91.40 L 81.22,90.67 L 80.88,89.76 L 79.52,88.82 L 78.25,88.58 L 76.16,89.30 L 75.72,92.04 L 75.89,96.22 L 74.22,100.36 L 72.94,102.43 L 72.09,102.72 L 69.78,100.36 L 66.81,96.54 L 65.13,95.30 L 63.88,93.76 L 62.30,91.58 L 59.15,89.10 L 55.16,85.55 L 51.81,83.76 L 49.73,82.86 L 48.81,82.98 L 47.57,84.69 L 45.77,85.72 L 43.31,85.95 L 40.52,85.24 L 38.91,84.74 L 36.38,85.39 L 35.05,87.86 L 34.76,90.54 L 33.84,91.64 L 32.93,92.53 L 32.83,95.08 L 31.97,96.26 L 30.01,96.48 L 29.14,97.00 L 30.97,98.86 L 33.68,100.65 L 36.98,101.50 L 39.97,102.48 L 43.02,103.89 L 46.63,103.87 L 49.84,103.95 L 53.09,104.71 L 55.50,106.47 L 56.56,108.01 L 56.08,109.76 L 54.46,112.24 L 50.47,115.05 L 49.07,116.83 L 49.07,119.35 L 50.16,119.86 L 53.96,119.55 L 57.22,120.64 L 59.50,122.67 L 60.59,124.01 L 60.33,126.30 L 58.84,128.83 L 57.26,131.31 L 57.03,134.55 L 57.94,136.61 L 59.44,138.48 L 61.89,140.05 L 62.50,140.42 Z" fill="#3d82b8" stroke="#fff" strokeWidth="0.8" strokeLinejoin="round" />
-          <path d="M 26.00,127.05 L 24.90,128.52 L 23.25,132.08 L 22.53,136.39 L 19.60,140.06 L 13.77,142.62 L 11.75,147.39 L 10.03,151.20 L 9.73,155.63 L 7.72,160.11 L 7.50,164.49 L 8.34,168.76 L 10.25,172.61 L 11.31,176.64 L 13.14,180.25 L 15.75,184.48 L 19.96,183.73 L 25.00,183.78 L 28.91,181.30 L 32.54,179.44 L 35.89,181.09 L 39.69,184.26 L 44.23,187.72 L 46.52,189.52 L 47.75,186.80 L 49.05,183.36 L 50.72,181.18 L 50.84,178.45 L 50.06,175.84 L 49.37,173.97 L 49.09,171.42 L 47.75,169.39 L 46.69,166.84 L 46.38,163.76 L 46.77,160.78 L 47.31,158.17 L 49.53,155.61 L 47.48,154.93 L 44.37,151.51 L 42.59,149.05 L 41.61,145.83 L 40.29,143.21 L 37.72,140.89 L 35.66,137.14 L 33.26,132.67 L 31.88,129.42 L 31.50,127.95 L 29.69,127.05 L 26.00,127.05 Z" fill="#6aaed6" stroke="#fff" strokeWidth="0.8" strokeLinejoin="round" />
-          <path d="M 26.00,127.05 L 29.69,127.05 L 31.50,127.95 L 31.88,129.42 L 33.26,132.67 L 35.66,137.14 L 37.72,140.89 L 40.29,143.21 L 41.61,145.83 L 42.59,149.05 L 44.37,151.51 L 47.48,154.93 L 49.53,155.61 L 50.47,154.64 L 53.62,149.86 L 56.66,147.61 L 60.36,143.69 L 62.13,140.83 L 60.66,139.33 L 58.62,137.48 L 57.22,135.66 L 57.06,133.01 L 57.92,129.90 L 59.86,127.60 L 60.66,124.64 L 60.16,123.33 L 58.10,121.52 L 55.69,119.89 L 51.84,119.55 L 49.49,119.80 L 48.97,118.36 L 49.56,115.82 L 52.88,113.82 L 55.38,111.01 L 56.62,108.69 L 56.25,107.38 L 54.34,105.45 L 51.35,104.25 L 48.31,103.78 L 45.06,103.95 L 41.48,103.45 L 38.58,101.78 L 35.47,101.26 L 32.26,99.82 L 29.47,97.69 L 29.38,96.70 L 31.26,96.48 L 32.47,95.92 L 32.78,93.17 L 33.32,92.06 L 34.37,91.18 L 34.88,89.58 L 35.58,86.42 L 37.54,84.80 L 40.06,84.80 L 39.19,83.88 L 39.59,82.89 L 41.41,81.51 L 42.89,80.21 L 43.60,76.72 L 42.03,72.42 L 41.65,70.56 L 39.14,68.65 L 35.88,64.98 L 34.27,61.34 L 33.51,59.17 L 35.03,55.67 L 35.85,53.70 L 35.61,52.43 L 33.97,51.23 L 29.96,49.96 L 27.95,50.60 L 26.34,51.01 L 21.65,51.42 L 18.77,50.99 L 18.31,50.80 L 14.97,49.33 L 12.38,49.29 L 15.13,54.20 L 17.88,56.05 L 16.79,59.77 L 12.78,59.48 L 12.51,63.19 L 10.64,66.75 L 8.78,70.08 L 10.86,73.88 L 12.33,78.56 L 14.50,81.95 L 14.41,85.99 L 13.06,89.33 L 15.13,93.17 L 17.52,96.17 L 14.31,97.61 L 11.53,99.73 L 7.99,101.82 L 4.63,103.81 L 0.50,105.45 L 2.86,107.79 L 6.96,110.38 L 10.03,113.51 L 13.67,116.94 L 17.64,120.06 L 21.28,123.05 L 24.62,125.03 L 26.00,127.05 Z" fill="#4f95c6" stroke="#fff" strokeWidth="0.8" strokeLinejoin="round" />
-          <path d="M 202.62,211.98 L 200.55,211.38 L 195.82,211.36 L 193.37,212.11 L 190.82,212.56 L 186.85,208.90 L 185.28,207.01 L 185.37,204.58 L 184.66,203.04 L 182.87,201.05 L 180.78,199.37 L 177.79,198.79 L 175.09,199.23 L 171.74,200.24 L 170.29,202.49 L 167.91,203.42 L 164.67,202.62 L 162.27,200.07 L 159.81,198.05 L 157.74,197.01 L 156.67,195.24 L 155.31,194.14 L 152.25,193.65 L 148.56,196.39 L 146.38,198.92 L 145.30,199.74 L 143.51,200.20 L 140.63,201.33 L 138.15,200.15 L 134.49,198.14 L 131.22,195.20 L 130.57,195.27 L 129.05,195.92 L 126.47,195.86 L 124.00,197.20 L 122.16,198.81 L 121.03,200.14 L 120.84,203.69 L 120.35,205.51 L 117.88,208.42 L 115.55,210.88 L 116.00,212.72 L 114.69,216.23 L 111.70,219.82 L 106.22,219.62 L 103.69,221.95 L 98.15,221.95 L 99.37,224.39 L 101.78,227.05 L 105.22,230.27 L 109.00,232.91 L 112.16,235.33 L 113.48,239.00 L 117.12,242.95 L 122.09,242.51 L 126.04,241.38 L 130.05,240.74 L 133.13,243.14 L 135.54,247.35 L 137.37,251.41 L 140.53,253.73 L 143.70,255.97 L 146.76,259.17 L 150.72,261.58 L 154.92,262.28 L 159.19,264.04 L 160.88,268.14 L 165.67,270.26 L 170.34,270.26 L 174.44,270.89 L 177.59,273.86 L 182.00,272.80 L 186.72,273.01 L 190.61,271.71 L 195.96,271.16 L 198.16,274.08 L 200.34,278.22 L 204.34,279.20 L 207.28,282.55 L 210.73,285.40 L 215.25,285.14 L 218.28,282.55 L 219.43,279.18 L 221.88,276.63 L 221.87,273.23 L 221.87,268.52 L 222.86,264.74 L 225.28,261.17 L 227.65,258.07 L 228.03,253.78 L 228.66,249.70 L 230.57,246.78 L 229.56,245.27 L 226.75,244.89 L 223.48,245.60 L 219.65,247.27 L 218.06,248.45 L 215.96,249.97 L 213.82,250.43 L 211.94,249.92 L 211.38,246.69 L 211.23,244.88 L 210.44,244.42 L 207.11,244.41 L 205.00,243.08 L 203.87,241.45 L 203.01,239.20 L 203.03,237.86 L 206.00,235.51 L 206.69,233.75 L 206.11,232.74 L 201.12,230.45 L 198.74,229.63 L 197.66,227.45 L 196.47,225.58 L 196.13,223.34 L 197.33,221.73 L 199.22,222.61 L 200.62,223.89 L 201.77,223.88 L 204.94,221.55 L 205.91,219.04 L 204.47,218.04 L 202.22,217.55 L 201.39,216.30 L 201.97,214.00 L 202.62,211.98 Z" fill="#3878ae" stroke="#fff" strokeWidth="0.8" strokeLinejoin="round" />
-          <path d="M 216.56,120.05 L 216.15,120.42 L 212.80,122.61 L 210.37,122.11 L 207.78,122.48 L 205.78,123.86 L 204.16,123.73 L 201.36,122.57 L 199.80,122.54 L 199.12,124.70 L 199.46,127.52 L 199.66,130.12 L 199.06,131.51 L 196.15,135.84 L 195.74,137.92 L 195.03,141.58 L 195.39,144.28 L 199.06,146.95 L 198.75,150.08 L 197.95,151.70 L 195.77,152.73 L 193.06,153.70 L 190.69,154.92 L 188.87,155.12 L 186.59,153.33 L 182.94,152.51 L 180.75,153.26 L 177.56,154.64 L 174.60,153.91 L 171.29,152.20 L 168.50,152.45 L 167.16,152.98 L 167.05,154.83 L 166.41,157.61 L 164.25,158.93 L 161.53,159.63 L 158.63,159.39 L 156.40,158.26 L 154.23,158.52 L 153.16,159.70 L 151.99,160.73 L 150.06,160.83 L 149.28,160.14 L 147.88,157.46 L 145.96,156.70 L 144.66,156.67 L 143.71,159.66 L 141.07,161.99 L 138.84,162.23 L 136.53,162.56 L 132.82,164.84 L 132.66,167.17 L 134.04,168.64 L 136.00,170.75 L 136.72,174.51 L 136.72,179.96 L 135.95,184.08 L 133.97,187.86 L 133.33,190.02 L 132.40,192.36 L 131.00,194.64 L 130.94,194.99 L 132.41,196.58 L 136.75,199.23 L 139.35,201.00 L 142.24,200.95 L 144.53,199.83 L 145.89,199.42 L 147.22,197.73 L 150.81,194.45 L 153.75,193.57 L 156.14,194.66 L 157.03,195.83 L 159.02,197.65 L 161.23,198.96 L 163.41,201.33 L 165.95,203.29 L 169.40,203.22 L 170.91,201.33 L 173.20,199.48 L 176.46,199.05 L 179.28,198.95 L 181.78,199.97 L 183.80,201.93 L 185.12,203.83 L 185.05,205.86 L 185.91,207.96 L 189.47,211.83 L 191.56,212.59 L 194.68,211.73 L 197.56,211.23 L 202.47,211.86 L 202.65,211.99 L 204.09,211.17 L 208.53,208.42 L 211.12,207.55 L 215.31,207.55 L 217.13,207.04 L 218.75,205.38 L 220.81,205.45 L 222.61,205.13 L 222.80,204.16 L 221.72,201.89 L 218.31,200.08 L 215.03,197.29 L 213.84,195.70 L 212.48,193.26 L 211.22,189.25 L 210.06,186.05 L 207.79,184.23 L 204.70,181.83 L 202.19,179.61 L 199.74,179.02 L 198.52,178.39 L 197.91,176.67 L 198.03,175.52 L 200.53,175.58 L 202.56,176.67 L 204.70,177.05 L 205.70,176.60 L 207.06,175.14 L 207.39,174.57 L 209.73,174.22 L 211.31,175.73 L 213.72,176.64 L 217.30,176.18 L 218.37,174.92 L 218.33,173.41 L 216.62,172.16 L 215.59,169.86 L 215.75,167.25 L 216.04,164.95 L 216.81,164.14 L 219.11,163.60 L 222.82,164.14 L 227.06,164.33 L 229.26,164.24 L 230.05,163.17 L 230.16,160.73 L 228.44,158.85 L 225.58,157.81 L 223.16,155.45 L 222.72,151.78 L 222.30,149.13 L 224.22,145.70 L 225.34,141.20 L 225.83,136.65 L 225.12,133.61 L 224.07,131.78 L 222.21,130.06 L 221.25,126.20 L 218.70,122.40 L 216.77,121.01 L 216.56,120.05 Z" fill="#5490c0" stroke="#fff" strokeWidth="0.8" strokeLinejoin="round" />
-          <path d="M 162.63,40.08 L 159.34,42.93 L 156.77,45.17 L 155.84,46.14 L 155.96,47.70 L 156.49,50.80 L 155.94,52.01 L 154.68,52.30 L 151.75,51.87 L 150.00,52.73 L 149.42,53.50 L 150.44,54.78 L 151.34,56.51 L 149.07,61.10 L 147.30,64.59 L 148.81,66.26 L 151.45,68.57 L 152.33,70.40 L 151.75,72.42 L 150.51,73.94 L 147.31,74.11 L 142.66,74.73 L 138.65,74.00 L 135.78,71.96 L 133.34,69.86 L 129.88,69.11 L 129.16,69.75 L 128.06,72.20 L 125.84,74.70 L 123.44,76.47 L 120.56,77.30 L 118.03,79.30 L 116.88,80.96 L 116.81,83.23 L 117.49,87.12 L 119.69,89.47 L 121.94,91.36 L 123.59,93.86 L 124.85,95.65 L 127.16,101.58 L 128.29,106.66 L 129.14,109.15 L 125.34,111.17 L 124.24,113.41 L 123.42,114.54 L 122.09,115.61 L 121.47,117.85 L 121.70,120.70 L 122.25,120.61 L 123.89,119.51 L 125.70,118.80 L 127.97,119.26 L 129.46,121.87 L 130.59,125.97 L 130.25,128.64 L 130.76,130.44 L 132.09,132.37 L 134.03,133.58 L 135.91,135.74 L 136.22,137.52 L 137.34,140.61 L 138.62,142.68 L 140.81,143.99 L 142.03,145.92 L 143.56,150.26 L 144.78,154.85 L 144.66,156.67 L 145.96,156.70 L 147.88,157.46 L 149.28,160.14 L 150.06,160.83 L 151.99,160.73 L 153.16,159.70 L 154.23,158.52 L 156.40,158.26 L 158.63,159.39 L 161.53,159.63 L 164.25,158.93 L 166.41,157.61 L 167.05,154.83 L 167.16,152.98 L 168.50,152.45 L 171.29,152.20 L 174.60,153.91 L 177.56,154.64 L 180.75,153.26 L 182.94,152.51 L 186.59,153.33 L 188.87,155.12 L 190.69,154.92 L 193.06,153.70 L 195.77,152.73 L 197.95,151.70 L 198.75,150.08 L 199.06,146.95 L 195.39,144.28 L 195.03,141.58 L 195.74,137.92 L 196.15,135.84 L 199.06,131.51 L 199.66,130.12 L 199.46,127.52 L 199.12,124.70 L 199.80,122.54 L 201.36,122.57 L 204.16,123.73 L 205.78,123.86 L 207.78,122.48 L 210.37,122.11 L 212.80,122.61 L 216.15,120.42 L 216.56,120.05 L 216.67,116.16 L 218.43,113.16 L 218.50,110.95 L 217.50,105.78 L 216.07,101.99 L 215.94,99.51 L 217.04,95.68 L 218.11,93.12 L 219.69,91.23 L 220.02,88.52 L 218.03,86.76 L 216.09,84.67 L 215.03,82.52 L 214.83,80.09 L 216.19,78.67 L 218.29,78.14 L 220.32,77.95 L 223.16,76.23 L 224.16,75.41 L 224.44,71.96 L 224.44,70.86 L 221.63,68.56 L 218.38,65.67 L 214.69,62.86 L 211.21,60.71 L 207.22,58.85 L 206.41,53.98 L 201.76,51.84 L 197.56,52.52 L 193.06,49.33 L 189.66,51.07 L 185.78,52.03 L 180.78,54.61 L 176.86,52.81 L 173.51,48.80 L 170.62,45.51 L 165.00,45.08 L 164.99,41.72 L 162.63,40.08 Z" fill="#6ab0d8" stroke="#fff" strokeWidth="0.8" strokeLinejoin="round" />
-          <path d="M 132.69,0.58 L 129.97,2.92 L 127.42,7.11 L 124.22,10.33 L 121.63,13.14 L 119.56,17.10 L 119.56,21.76 L 121.43,25.13 L 124.40,28.66 L 125.72,32.17 L 122.09,35.55 L 118.35,35.54 L 114.28,34.48 L 111.27,31.69 L 108.78,26.69 L 105.38,26.23 L 100.56,26.42 L 95.80,26.01 L 91.81,24.51 L 87.27,25.32 L 83.29,26.42 L 78.88,25.58 L 75.78,22.67 L 72.03,20.32 L 67.88,19.01 L 63.65,17.79 L 59.69,19.57 L 56.44,21.98 L 52.21,23.58 L 49.94,24.88 L 48.59,25.39 L 45.25,27.04 L 42.02,29.83 L 36.31,29.39 L 32.06,29.06 L 27.83,27.07 L 26.56,31.95 L 26.22,35.39 L 21.88,36.67 L 20.41,39.98 L 18.31,43.09 L 18.19,47.04 L 18.38,50.79 L 20.60,51.49 L 25.17,51.31 L 27.19,50.79 L 29.43,50.00 L 32.96,50.98 L 35.28,52.08 L 36.01,53.20 L 35.10,55.32 L 33.78,58.64 L 33.97,60.87 L 35.26,63.75 L 38.44,67.95 L 41.50,70.17 L 41.90,71.89 L 43.31,75.58 L 43.15,79.83 L 41.85,81.07 L 39.81,82.70 L 39.21,83.58 L 40.13,85.11 L 43.31,85.95 L 45.77,85.72 L 47.57,84.69 L 48.81,82.98 L 49.73,82.86 L 51.81,83.76 L 55.16,85.54 L 59.15,89.10 L 62.30,91.58 L 63.88,93.76 L 65.13,95.30 L 66.81,96.54 L 69.78,100.36 L 72.09,102.72 L 72.94,102.43 L 74.22,100.36 L 75.89,96.22 L 75.72,92.04 L 76.16,89.29 L 78.25,88.57 L 79.52,88.82 L 80.88,89.76 L 81.22,90.67 L 81.85,91.40 L 84.03,91.04 L 86.06,89.17 L 87.90,87.22 L 89.47,85.33 L 89.79,81.73 L 92.55,80.56 L 94.44,79.36 L 97.11,78.24 L 99.34,76.18 L 101.56,75.79 L 105.75,76.42 L 109.40,76.95 L 111.66,75.45 L 112.53,72.60 L 112.78,67.24 L 112.91,64.39 L 115.04,62.40 L 118.10,61.11 L 120.41,61.39 L 124.49,62.10 L 126.24,63.52 L 127.88,65.33 L 128.65,67.83 L 129.74,69.07 L 133.34,69.86 L 135.78,71.96 L 138.65,74.00 L 142.66,74.73 L 147.31,74.11 L 150.51,73.94 L 151.75,72.42 L 152.33,70.40 L 151.45,68.57 L 148.81,66.26 L 147.30,64.59 L 149.07,61.10 L 151.34,56.51 L 150.44,54.78 L 149.42,53.50 L 150.00,52.73 L 151.75,51.87 L 154.68,52.29 L 155.94,52.01 L 156.49,50.80 L 155.96,47.70 L 155.84,46.14 L 156.77,45.17 L 159.34,42.93 L 162.63,40.08 L 161.02,38.08 L 155.70,35.78 L 153.47,32.36 L 153.03,28.26 L 152.62,24.70 L 148.38,23.04 L 149.95,18.90 L 148.21,17.33 L 146.69,13.73 L 143.07,10.33 L 139.75,7.24 L 136.72,3.36 L 134.84,1.66 L 132.69,0.58 Z" fill="#4285b8" stroke="#fff" strokeWidth="0.8" strokeLinejoin="round" />
-
-          {/* District dots with pulse rings and labels */}
-          {DOT_CONFIG.map((dot, i) => {
-            const data = districtByKey[dot.key];
-            const schools = data?.schools ?? 0;
-            const r = Math.max(3.5, 3.5 + (schools / maxSchools) * 4.5);
-            const ringMax = r * 3.8;
-            const delay = `${i * 0.16}s`;
-            const dur = `${2.0 + i * 0.1}s`;
-            const isActive = tip?.key === dot.key;
-            const anchor = dot.cx > 155 ? 'end' : 'start';
-            const lx = dot.cx > 155 ? dot.cx - r - 2 : dot.cx + r + 2;
-            const ly = dot.cy - r - 2.5;
-
-            return (
-              <g
-                key={dot.key}
-                style={{ cursor: 'pointer' }}
-                onMouseEnter={e => onEnter(e, dot.key)}
-                onMouseMove={onMove}
-                onMouseLeave={() => setTip(null)}
-              >
-                {/* Pulsing ring */}
-                <circle
-                  cx={dot.cx}
-                  cy={dot.cy}
-                  r={0}
-                  fill="none"
-                  stroke={isActive ? '#1e40af' : '#3b82f6'}
-                  strokeWidth="1.5"
-                  opacity={0}
-                  className="ukr"
-                  style={{
-                    '--br': `${r}px`,
-                    '--er': `${ringMax}px`,
-                    animationDelay: delay,
-                    animationDuration: dur,
-                  } as React.CSSProperties}
+          {/* Tooltip */}
+          {tip && hovered && hoveredConfig && (
+            <div
+              className="pointer-events-none absolute z-20 bg-white border border-slate-200 rounded-2xl shadow-xl px-4 py-3"
+              style={{
+                left: tip.x + 16,
+                top: tip.y - 10,
+                minWidth: 220,
+                transform: tip.x > (wrapRef.current?.offsetWidth ?? 600) * 0.55
+                  ? 'translateX(-110%)' : undefined,
+              }}
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <span
+                  className="w-3 h-3 rounded-full border border-white shadow-sm shrink-0"
+                  style={{ background: hoveredConfig.color }}
                 />
-                {/* Solid dot */}
-                <circle
-                  cx={dot.cx}
-                  cy={dot.cy}
-                  r={r}
-                  fill={isActive ? '#1e3a8a' : '#1d4ed8'}
-                  stroke="white"
-                  strokeWidth="1"
-                  filter="url(#ukglow)"
-                />
-                {/* Label with dark background pill */}
-                <rect
-                  x={anchor === 'end' ? lx - (dot.name.length * 3.4) : lx}
-                  y={ly - 6}
-                  width={dot.name.length * 3.4}
-                  height={7}
-                  rx="2"
-                  fill="rgba(15,23,42,0.72)"
-                />
-                <text
-                  x={anchor === 'end' ? lx - (dot.name.length * 3.4) / 2 : lx + (dot.name.length * 3.4) / 2}
-                  y={ly - 1}
-                  fontSize="5.2"
-                  fill="white"
-                  fontWeight="600"
-                  fontFamily="system-ui,sans-serif"
-                  textAnchor="middle"
-                  style={{ pointerEvents: 'none' }}
+                <span className="font-bold text-slate-800 text-[15px]">{hovered.district}</span>
+                <span className="ml-auto bg-emerald-100 text-emerald-700 text-[11px] font-bold px-2 py-0.5 rounded-full">Active</span>
+              </div>
+              <div className="space-y-1 text-[13px] text-slate-700">
+                <div className="flex items-center gap-2">
+                  <i className="fas fa-school text-blue-400 w-4" />
+                  <span><strong>{hovered.schools}</strong> schools active</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <i className="fas fa-user-graduate text-emerald-400 w-4" />
+                  <span><strong>{hovered.totalStudents.toLocaleString()}</strong> students enrolled</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <i className="fas fa-award text-amber-400 w-4" />
+                  <span>Pass 10th: <strong>{pct(hovered.avgPass10th)}</strong> · 12th: <strong>{pct(hovered.avgPass12th)}</strong></span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Base map image */}
+          <div className="relative w-full" style={{ maxWidth: 520 }}>
+            <img
+              src="/uk-map.svg"
+              alt="Uttarakhand districts map"
+              className="w-full h-auto drop-shadow-md select-none"
+              draggable={false}
+            />
+
+            {/* Invisible hover-area overlay — same viewBox as the SVG */}
+            <svg
+              viewBox="0 0 623.622 666.142"
+              className="absolute inset-0 w-full h-full"
+              style={{ top: 0, left: 0 }}
+            >
+              {DISTRICT_CONFIG.map(d => {
+                const isHovered = tip?.key === d.key;
+                return (
+                  <g key={d.key}>
+                    {/* Large invisible hit area */}
+                    <circle
+                      cx={d.cx}
+                      cy={d.cy}
+                      r={32}
+                      fill="transparent"
+                      style={{ cursor: 'pointer' }}
+                      onMouseEnter={e => onEnter(e, d.key)}
+                    />
+                    {/* Visible district marker — colored ring + number */}
+                    <circle
+                      cx={d.cx}
+                      cy={d.cy}
+                      r={isHovered ? 14 : 12}
+                      fill={isHovered ? d.color : `${d.color}CC`}
+                      stroke={isHovered ? '#1e3a5f' : '#fff'}
+                      strokeWidth={isHovered ? 2 : 1.5}
+                      style={{ cursor: 'pointer', transition: 'r 0.15s, stroke 0.15s' }}
+                      onMouseEnter={e => onEnter(e, d.key)}
+                      pointerEvents="none"
+                    />
+                    <text
+                      x={d.cx}
+                      y={d.cy + 4.5}
+                      textAnchor="middle"
+                      fontSize={isHovered ? 11 : 10}
+                      fontWeight="700"
+                      fontFamily="system-ui,sans-serif"
+                      fill={isHovered ? '#1e3a5f' : '#334155'}
+                      pointerEvents="none"
+                      style={{ userSelect: 'none' }}
+                    >
+                      {d.num}
+                    </text>
+                  </g>
+                );
+              })}
+            </svg>
+          </div>
+        </div>
+
+        {/* District legend panel */}
+        <div className="w-52 shrink-0 border-l border-slate-100 py-4 px-3 overflow-y-auto" style={{ maxHeight: 420 }}>
+          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-3">Districts</p>
+          <div className="space-y-1">
+            {DISTRICT_CONFIG.map(d => {
+              const data = districtByKey[d.key];
+              const isHov = tip?.key === d.key;
+              return (
+                <div
+                  key={d.key}
+                  className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-default transition-colors ${
+                    isHov ? 'bg-slate-100' : 'hover:bg-slate-50'
+                  }`}
+                  onMouseEnter={e => {
+                    if (!wrapRef.current) return;
+                    const r = wrapRef.current.getBoundingClientRect();
+                    setTip({ key: d.key, x: e.clientX - r.left - 220, y: e.clientY - r.top });
+                  }}
+                  onMouseLeave={() => setTip(null)}
                 >
-                  {dot.name}
-                </text>
-              </g>
-            );
-          })}
-        </svg>
+                  <span
+                    className="w-3 h-3 rounded-full shrink-0 border border-white shadow-sm"
+                    style={{ background: d.color }}
+                  />
+                  <span className="text-[11px] font-medium text-slate-500 w-4 shrink-0">{d.num}.</span>
+                  <span className={`text-[12px] leading-tight ${isHov ? 'font-bold text-slate-800' : 'text-slate-600'}`}>
+                    {d.name}
+                  </span>
+                  {data && (
+                    <span className="ml-auto text-[11px] font-semibold text-blue-600 shrink-0">
+                      {data.schools}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <p className="text-[10px] text-slate-400 mt-3 text-right">schools →</p>
+        </div>
       </div>
 
       {/* Stats bar */}
       <div className="grid grid-cols-4 border-t border-slate-100">
         {[
-          { icon: 'fas fa-school',         bg: '#eff6ff', color: '#1d4ed8', value: totalSchools.toLocaleString(),   label: 'Active Schools',    sub: 'Across Uttarakhand' },
-          { icon: 'fas fa-map-marker-alt', bg: '#f0fdf4', color: '#15803d', value: String(districts.length),        label: 'Districts',         sub: 'All covered' },
-          { icon: 'fas fa-user-graduate',  bg: '#fffbeb', color: '#d97706', value: totalStudents.toLocaleString(),  label: 'Students Enrolled', sub: '2025–26 session' },
+          { icon: 'fas fa-school',         bg: '#eff6ff', color: '#1d4ed8', value: totalSchools.toLocaleString(),  label: 'Active Schools',    sub: 'Across Uttarakhand' },
+          { icon: 'fas fa-map-marker-alt', bg: '#f0fdf4', color: '#15803d', value: String(districts.length),       label: 'Districts',         sub: 'All covered' },
+          { icon: 'fas fa-user-graduate',  bg: '#fffbeb', color: '#d97706', value: totalStudents.toLocaleString(), label: 'Students Enrolled', sub: '2025–26 session' },
           { icon: 'fas fa-clock',          bg: '#faf5ff', color: '#7c3aed',
             value: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
             label: 'Last Refreshed',
@@ -282,10 +271,6 @@ export function UttarakhandMap({ districts }: Props) {
             </div>
           </div>
         ))}
-      </div>
-
-      <div className="px-5 py-2 border-t border-slate-50 text-[11px] text-slate-400">
-        Pulsing dots = live active school installations · Dot size proportional to school count
       </div>
     </div>
   );
