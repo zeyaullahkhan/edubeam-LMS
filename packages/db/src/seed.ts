@@ -32,6 +32,29 @@ const prisma = new PrismaClient({ datasources: { db: { url: seedUrl() } } });
 const ACADEMIC_YEAR = '2025-26';
 const DATA_DIR = join(__dirname, '..', 'data');
 
+// Render's free PostgreSQL reaps idle connections. During long CPU-bound stretches
+// of the seed (building tens of thousands of rows in memory before the first write),
+// the pooled connection can be closed, so the next query fails with P1017/P1001.
+// withDbRetry transparently reconnects and retries transient connection errors.
+async function withDbRetry<T>(label: string, fn: () => Promise<T>, attempts = 5): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fn();
+    } catch (e: any) {
+      const transient =
+        e?.code === 'P1017' ||
+        e?.code === 'P1001' ||
+        e?.code === 'P1008' ||
+        /closed the connection|Can't reach database/i.test(e?.message ?? '');
+      if (!transient || attempt >= attempts) throw e;
+      console.warn(`  [retry] ${label} hit ${e?.code ?? 'conn error'} — reconnecting (attempt ${attempt}/${attempts})`);
+      await prisma.$disconnect().catch(() => {});
+      await new Promise((r) => setTimeout(r, 400 * attempt));
+      await prisma.$connect().catch(() => {});
+    }
+  }
+}
+
 // ── helpers ─────────────────────────────────────────────────────────────────
 
 const clean = (v: unknown): string =>
@@ -282,24 +305,24 @@ async function persist() {
   }
 
   // ── Bulk insert districts ──────────────────────────────────────────────────
-  await prisma.district.createMany({
+  await withDbRetry('district.createMany', () => prisma.district.createMany({
     data: Array.from(districtId.entries()).map(([name, id]) => ({
       id, tenantId: tenant.id, name: name || 'Unknown',
     })),
     skipDuplicates: true,
-  });
+  }));
 
   // ── Bulk insert blocks ─────────────────────────────────────────────────────
-  await prisma.block.createMany({
+  await withDbRetry('block.createMany', () => prisma.block.createMany({
     data: Array.from(blockId.entries()).map(([bkey, id]) => {
       const [district, block] = bkey.split('||');
       return { id, districtId: districtId.get(district)!, name: block || 'Unknown' };
     }),
     skipDuplicates: true,
-  });
+  }));
 
   // ── Bulk insert schools ────────────────────────────────────────────────────
-  await prisma.school.createMany({
+  await withDbRetry('school.createMany', () => prisma.school.createMany({
     data: Array.from(schools.values()).map((s) => ({
       id: `s_${s.udiseCode}`,
       blockId: blockId.get(`${s.district}||${s.block}`)!,
@@ -311,14 +334,14 @@ async function persist() {
       hasIctLab: s.hasIctLab,
     })),
     skipDuplicates: true,
-  });
+  }));
 
   // ── Bulk insert enrollments ────────────────────────────────────────────────
   const allEnrollments = Array.from(schools.values()).flatMap((s) =>
     s.enrollments.map((e) => ({ schoolId: `s_${s.udiseCode}`, academicYear: ACADEMIC_YEAR, ...e })),
   );
   if (allEnrollments.length) {
-    await prisma.enrollment.createMany({ data: allEnrollments, skipDuplicates: true });
+    await withDbRetry('enrollment.createMany', () => prisma.enrollment.createMany({ data: allEnrollments, skipDuplicates: true }));
   }
 
   // ── Bulk insert board results (dedupe per school) ──────────────────────────
@@ -332,7 +355,7 @@ async function persist() {
     }).map((x) => ({ schoolId: `s_${s.udiseCode}`, academicYear: ACADEMIC_YEAR, ...x }));
   });
   if (allResults.length) {
-    await prisma.boardResult.createMany({ data: allResults, skipDuplicates: true });
+    await withDbRetry('boardResult.createMany', () => prisma.boardResult.createMany({ data: allResults, skipDuplicates: true }));
   }
 
   // ── Bulk insert ICT deployments ────────────────────────────────────────────
@@ -340,7 +363,7 @@ async function persist() {
     .filter((s) => s.ict)
     .map((s) => ({ schoolId: `s_${s.udiseCode}`, academicYear: ACADEMIC_YEAR, ...s.ict! }));
   if (allIct.length) {
-    await prisma.ictDeployment.createMany({ data: allIct, skipDuplicates: true });
+    await withDbRetry('ictDeployment.createMany', () => prisma.ictDeployment.createMany({ data: allIct, skipDuplicates: true }));
   }
 
   return { tenant, districts: districtId.size, blocks: blockId.size };
@@ -374,11 +397,11 @@ async function seedDemoUsers(tenantId: string) {
   for (const u of users) {
     const pw = u.email.split('@')[0];
     const passwordHash = await bcrypt.hash(pw, 10);
-    await prisma.user.upsert({
+    await withDbRetry('user.upsert', () => prisma.user.upsert({
       where: { email: u.email },
       create: { id: `u_${pw.replace(/\./g, '_')}`, ...u, passwordHash },
       update: { passwordHash, name: u.name, role: u.role, tenantId: u.tenantId, districtId: u.districtId ?? null, schoolId: u.schoolId ?? null },
-    });
+    }));
   }
   return users.length;
 }
@@ -426,7 +449,7 @@ async function seedDemoState(
           girls: 15 + grade,
           total: 33 + grade * 2,
         }));
-        await prisma.enrollment.createMany({ data: enrollRows });
+        await withDbRetry('demo enrollment.createMany', () => prisma.enrollment.createMany({ data: enrollRows }));
 
         // Two sample students and staff per school
         const r = mulberry32(hashStr(s.udise));
@@ -435,19 +458,19 @@ async function seedDemoState(
         const boardRows = ['Hindi', 'English', 'Mathematics', 'Science'].map((subject) => ({
           schoolId: school.id, academicYear: ACADEMIC_YEAR, examType: '10TH', subject, passPct: 0.7 + r() * 0.25,
         }));
-        await prisma.boardResult.createMany({ data: boardRows });
-        await prisma.student.createMany({
+        await withDbRetry('demo boardResult.createMany', () => prisma.boardResult.createMany({ data: boardRows }));
+        await withDbRetry('demo student.createMany', () => prisma.student.createMany({
           data: [
             { ...makeStudent(s.udise + 'b', 0, school.id, 9, 'M'), admissionNo: `ADM${s.udise.slice(-4)}01`, rollNo: '1', academicYear: ACADEMIC_YEAR },
             { ...makeStudent(s.udise + 'g', 1, school.id, 9, 'F'), admissionNo: `ADM${s.udise.slice(-4)}02`, rollNo: '2', academicYear: ACADEMIC_YEAR },
           ],
-        });
-        await prisma.staff.createMany({
+        }));
+        await withDbRetry('demo staff.createMany', () => prisma.staff.createMany({
           data: [
             makeStaff(s.udise, 0, school.id, 'PRINCIPAL'),
             makeStaff(s.udise, 1, school.id, 'TEACHER'),
           ],
-        });
+        }));
       }
     }
   }
@@ -473,11 +496,11 @@ async function seedDemoStateUsers() {
   for (const u of users) {
     const pw = u.email.split('@')[0];
     const passwordHash = await bcrypt.hash(pw, 10);
-    await prisma.user.upsert({
+    await withDbRetry('demo user.upsert', () => prisma.user.upsert({
       where: { email: u.email },
       create: { id: `u_${pw.replace(/\./g, '_')}`, ...u, passwordHash },
       update: { passwordHash, name: u.name, tenantId: u.tenantId, districtId: u.districtId ?? null, schoolId: u.schoolId ?? null },
-    });
+    }));
   }
   return users.length;
 }
@@ -537,7 +560,8 @@ async function importYearlyResults() {
 
   // Chunked insert (SQLite has a parameter limit).
   for (let i = 0; i < data.length; i += 500) {
-    await prisma.yearlyResult.createMany({ data: data.slice(i, i + 500) });
+    const chunk = data.slice(i, i + 500);
+    await withDbRetry('yearlyResult.createMany', () => prisma.yearlyResult.createMany({ data: chunk }));
   }
   return { rowsMatched: matched, skippedUnknownSchools: skippedUnknown, inserted: data.length };
 }
@@ -696,10 +720,12 @@ async function seedPeople() {
   }
 
   for (let i = 0; i < students.length; i += 500) {
-    await prisma.student.createMany({ data: students.slice(i, i + 500) });
+    const chunk = students.slice(i, i + 500);
+    await withDbRetry('student.createMany', () => prisma.student.createMany({ data: chunk }));
   }
   for (let i = 0; i < staff.length; i += 500) {
-    await prisma.staff.createMany({ data: staff.slice(i, i + 500) });
+    const chunk = staff.slice(i, i + 500);
+    await withDbRetry('staff.createMany', () => prisma.staff.createMany({ data: chunk }));
   }
   return { students: students.length, staff: staff.length };
 }
@@ -784,14 +810,16 @@ async function seedLectures(): Promise<number> {
     });
 
     if (batch.length >= 500) {
-      await prisma.lecture.createMany({ data: batch });
-      inserted += batch.length;
+      const chunk = batch.slice();
+      await withDbRetry('lecture.createMany', () => prisma.lecture.createMany({ data: chunk }));
+      inserted += chunk.length;
       batch.length = 0;
     }
   }
   if (batch.length) {
-    await prisma.lecture.createMany({ data: batch });
-    inserted += batch.length;
+    const chunk = batch.slice();
+    await withDbRetry('lecture.createMany', () => prisma.lecture.createMany({ data: chunk }));
+    inserted += chunk.length;
   }
   return inserted;
 }
