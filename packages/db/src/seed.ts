@@ -249,8 +249,7 @@ async function wipe() {
 async function persist() {
   const tenant = await prisma.tenant.create({ data: { id: 't_uk', name: 'Uttarakhand', code: 'UK' } });
 
-  // Districts & blocks (deduped from the aggregated schools). Slug ids are made
-  // collision-safe with a deterministic suffix when two names slug identically.
+  // ── Build ID maps (no DB writes yet) ──────────────────────────────────────
   const usedIds = new Set<string>();
   const uniqueId = (base: string): string => {
     let id = base;
@@ -262,61 +261,74 @@ async function persist() {
   const blockId = new Map<string, string>();
   for (const s of schools.values()) {
     if (!districtId.has(s.district)) {
-      const d = await prisma.district.create({
-        data: { id: uniqueId(`d_${slug(s.district)}`), tenantId: tenant.id, name: s.district || 'Unknown' },
-      });
-      districtId.set(s.district, d.id);
+      districtId.set(s.district, uniqueId(`d_${slug(s.district)}`));
     }
     const bkey = `${s.district}||${s.block}`;
     if (!blockId.has(bkey)) {
-      const b = await prisma.block.create({
-        data: {
-          id: uniqueId(`b_${slug(s.district)}__${slug(s.block)}`),
-          districtId: districtId.get(s.district)!,
-          name: s.block || 'Unknown',
-        },
-      });
-      blockId.set(bkey, b.id);
+      blockId.set(bkey, uniqueId(`b_${slug(s.district)}__${slug(s.block)}`));
     }
   }
 
-  // Schools + their child records.
-  for (const s of schools.values()) {
-    const school = await prisma.school.create({
-      data: {
-        id: `s_${s.udiseCode}`,
-        blockId: blockId.get(`${s.district}||${s.block}`)!,
-        name: s.name,
-        udiseCode: s.udiseCode,
-        siteCode: s.siteCode,
-        type: s.type,
-        hasVirtualClassroom: s.hasVirtualClassroom,
-        hasIctLab: s.hasIctLab,
-      },
-    });
-    if (s.enrollments.length) {
-      await prisma.enrollment.createMany({
-        data: s.enrollments.map((e) => ({ schoolId: school.id, academicYear: ACADEMIC_YEAR, ...e })),
-      });
-    }
-    if (s.results.length) {
-      // Dedupe (schoolId, examType, subject) in case a sheet repeats a subject.
-      const seen = new Set<string>();
-      const data = s.results
-        .filter((x) => {
-          const k = `${x.examType}|${x.subject}`;
-          if (seen.has(k)) return false;
-          seen.add(k);
-          return true;
-        })
-        .map((x) => ({ schoolId: school.id, academicYear: ACADEMIC_YEAR, ...x }));
-      await prisma.boardResult.createMany({ data });
-    }
-    if (s.ict) {
-      await prisma.ictDeployment.create({
-        data: { schoolId: school.id, academicYear: ACADEMIC_YEAR, ...s.ict },
-      });
-    }
+  // ── Bulk insert districts ──────────────────────────────────────────────────
+  await prisma.district.createMany({
+    data: Array.from(districtId.entries()).map(([name, id]) => ({
+      id, tenantId: tenant.id, name: name || 'Unknown',
+    })),
+    skipDuplicates: true,
+  });
+
+  // ── Bulk insert blocks ─────────────────────────────────────────────────────
+  await prisma.block.createMany({
+    data: Array.from(blockId.entries()).map(([bkey, id]) => {
+      const [district, block] = bkey.split('||');
+      return { id, districtId: districtId.get(district)!, name: block || 'Unknown' };
+    }),
+    skipDuplicates: true,
+  });
+
+  // ── Bulk insert schools ────────────────────────────────────────────────────
+  await prisma.school.createMany({
+    data: Array.from(schools.values()).map((s) => ({
+      id: `s_${s.udiseCode}`,
+      blockId: blockId.get(`${s.district}||${s.block}`)!,
+      name: s.name,
+      udiseCode: s.udiseCode,
+      siteCode: s.siteCode,
+      type: s.type,
+      hasVirtualClassroom: s.hasVirtualClassroom,
+      hasIctLab: s.hasIctLab,
+    })),
+    skipDuplicates: true,
+  });
+
+  // ── Bulk insert enrollments ────────────────────────────────────────────────
+  const allEnrollments = Array.from(schools.values()).flatMap((s) =>
+    s.enrollments.map((e) => ({ schoolId: `s_${s.udiseCode}`, academicYear: ACADEMIC_YEAR, ...e })),
+  );
+  if (allEnrollments.length) {
+    await prisma.enrollment.createMany({ data: allEnrollments, skipDuplicates: true });
+  }
+
+  // ── Bulk insert board results (dedupe per school) ──────────────────────────
+  const allResults = Array.from(schools.values()).flatMap((s) => {
+    const seen = new Set<string>();
+    return s.results.filter((x) => {
+      const k = `${x.examType}|${x.subject}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    }).map((x) => ({ schoolId: `s_${s.udiseCode}`, academicYear: ACADEMIC_YEAR, ...x }));
+  });
+  if (allResults.length) {
+    await prisma.boardResult.createMany({ data: allResults, skipDuplicates: true });
+  }
+
+  // ── Bulk insert ICT deployments ────────────────────────────────────────────
+  const allIct = Array.from(schools.values())
+    .filter((s) => s.ict)
+    .map((s) => ({ schoolId: `s_${s.udiseCode}`, academicYear: ACADEMIC_YEAR, ...s.ict! }));
+  if (allIct.length) {
+    await prisma.ictDeployment.createMany({ data: allIct, skipDuplicates: true });
   }
 
   return { tenant, districts: districtId.size, blocks: blockId.size };
