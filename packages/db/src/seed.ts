@@ -15,7 +15,19 @@ import { join } from 'node:path';
 import { existsSync, readFileSync } from 'node:fs';
 import * as XLSX from 'xlsx';
 import bcrypt from 'bcryptjs';
-import { prisma } from './client';
+import { PrismaClient } from '@prisma/client';
+
+// Use a dedicated low-connection client so the seed doesn't exhaust the pool
+// when the API service is also running during Render deploy (pool limit ~17).
+function seedUrl() {
+  const base = process.env.DATABASE_URL ?? '';
+  const sep = base.includes('?') ? '&' : '?';
+  // Remove any existing connection_limit/pool_timeout params first, then append ours.
+  const stripped = base.replace(/[?&]connection_limit=\d+/g, '').replace(/[?&]pool_timeout=\d+/g, '');
+  return stripped + sep + 'connection_limit=2&pool_timeout=60';
+}
+
+const prisma = new PrismaClient({ datasources: { db: { url: seedUrl() } } });
 
 const ACADEMIC_YEAR = '2025-26';
 const DATA_DIR = join(__dirname, '..', 'data');
