@@ -906,6 +906,9 @@ async function main() {
   ]);
   const demoStateUserCount = await seedDemoStateUsers();
   const lectureCount = await seedLectures();
+  // Disconnect and reconnect before restoreYoutubeUrls — after 15+ minutes of bulk
+  // inserts the Render PG server closes idle connections (P1017). A fresh connect avoids it.
+  await prisma.$disconnect();
   const urlsRestored = await restoreYoutubeUrls();
 
   // Restore manually-curated school fields (principal, phone, address) saved before wipe
