@@ -46,6 +46,10 @@ const NAME_MAP: Record<string, string> = {
   usnagar:          'usn',
 };
 
+// Single fluorescent-green marker color (markers no longer use per-district fills,
+// which merged into the pastel map background).
+const NEON = '#39FF14';
+
 function normKey(s: string) {
   return s.toLowerCase().replace(/[\s.'-]/g, '');
 }
@@ -165,38 +169,32 @@ export function UttarakhandMap({ districts }: Props) {
             >
               <style>{`
                 @keyframes ukRadar {
-                  0%   { r: 11px; opacity: 0.55; }
+                  0%   { r: 11px; opacity: 0.7; }
                   70%  { opacity: 0; }
                   100% { r: 34px; opacity: 0; }
                 }
                 @keyframes ukRadar2 {
-                  0%   { r: 11px; opacity: 0.4; }
+                  0%   { r: 11px; opacity: 0.5; }
                   70%  { opacity: 0; }
                   100% { r: 28px; opacity: 0; }
                 }
-                @keyframes ukBob {
-                  0%, 100% { opacity: 1; }
-                  50%      { opacity: 0.78; }
-                }
                 @keyframes ukGlow {
-                  0%, 100% { filter: drop-shadow(0 0 1px rgba(0,0,0,0.3)); }
-                  50%      { filter: drop-shadow(0 0 5px var(--gc)); }
+                  0%, 100% { filter: drop-shadow(0 0 2px ${NEON}) drop-shadow(0 0 4px ${NEON}); }
+                  50%      { filter: drop-shadow(0 0 5px ${NEON}) drop-shadow(0 0 9px ${NEON}); }
                 }
                 .uk-radar  { animation: ukRadar  2.4s ease-out infinite; }
                 .uk-radar2 { animation: ukRadar2 2.4s ease-out infinite; }
-                .uk-pin    { animation: ukBob 2.4s ease-in-out infinite, ukGlow 2.4s ease-in-out infinite; }
+                .uk-pin    { animation: ukGlow 1.8s ease-in-out infinite; }
                 .uk-grp:hover .uk-radar,
                 .uk-grp:hover .uk-radar2 { animation-duration: 1.1s; }
               `}</style>
 
               <defs>
-                {DISTRICT_CONFIG.map(d => (
-                  <radialGradient key={d.key} id={`ukg-${d.key}`} cx="35%" cy="30%" r="75%">
-                    <stop offset="0%"  stopColor="#ffffff" stopOpacity="0.95" />
-                    <stop offset="35%" stopColor={d.color} stopOpacity="1" />
-                    <stop offset="100%" stopColor={d.color} stopOpacity="1" />
-                  </radialGradient>
-                ))}
+                <radialGradient id="ukg-neon" cx="38%" cy="32%" r="75%">
+                  <stop offset="0%"   stopColor="#ffffff" stopOpacity="0.95" />
+                  <stop offset="30%"  stopColor="#9dff6b" stopOpacity="1" />
+                  <stop offset="100%" stopColor={NEON} stopOpacity="1" />
+                </radialGradient>
               </defs>
 
               {DISTRICT_CONFIG.map((d, i) => {
@@ -215,32 +213,28 @@ export function UttarakhandMap({ districts }: Props) {
                     {/* Radar pulse rings — the "live location" effect */}
                     <circle
                       cx={d.cx} cy={d.cy} r={11}
-                      fill="none" stroke={d.color} strokeWidth={3}
+                      fill="none" stroke={NEON} strokeWidth={3}
                       className="uk-radar"
                       style={{ animationDelay: delay }}
                       pointerEvents="none"
                     />
                     <circle
                       cx={d.cx} cy={d.cy} r={11}
-                      fill="none" stroke="#fff" strokeWidth={1.5}
+                      fill="none" stroke="#eaffd6" strokeWidth={1.5}
                       className="uk-radar2"
                       style={{ animationDelay: delay }}
                       pointerEvents="none"
                     />
 
-                    {/* Glowing pin */}
+                    {/* Glowing fluorescent-green pin */}
                     <circle
                       cx={d.cx} cy={d.cy}
                       r={isHovered ? 14 : 11}
-                      fill={`url(#ukg-${d.key})`}
-                      stroke={isHovered ? '#1e3a5f' : '#ffffff'}
+                      fill="url(#ukg-neon)"
+                      stroke={isHovered ? '#0a3d0a' : '#ffffff'}
                       strokeWidth={isHovered ? 2.5 : 2}
                       className={isHovered ? undefined : 'uk-pin'}
-                      style={{
-                        ['--gc' as string]: d.color,
-                        animationDelay: delay,
-                        transition: 'r 0.15s',
-                      }}
+                      style={{ animationDelay: delay, transition: 'r 0.15s' }}
                       pointerEvents="none"
                     />
                     <text
@@ -250,7 +244,7 @@ export function UttarakhandMap({ districts }: Props) {
                       fontSize={isHovered ? 12 : 11}
                       fontWeight="800"
                       fontFamily="system-ui,sans-serif"
-                      fill="#1e293b"
+                      fill="#0a3d0a"
                       pointerEvents="none"
                       style={{ userSelect: 'none' }}
                     >
