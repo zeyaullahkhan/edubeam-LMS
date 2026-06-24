@@ -338,22 +338,42 @@ export function Students() {
         </div>
       )}
 
-      {/* Students by Grade — from real enrollment data, Class 6–12 only */}
+      {/* Students by Grade — boys vs girls grouped, Class 6–12 */}
       {enrollment && enrollment.byGrade.length > 0 && (
         <div className="panel p-5">
-          <h2 className="font-heading font-semibold text-navy-700 mb-3">Students by Grade</h2>
-          <ResponsiveContainer width="100%" height={200}>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="font-heading font-semibold text-navy-700">Students by Grade</h2>
+              <p className="text-xs text-slate-400 mt-0.5">Class-wise boys &amp; girls enrolment</p>
+            </div>
+            <div className="flex items-center gap-4 text-xs font-medium text-slate-500">
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-sm inline-block" style={{ background: '#0076BC' }} />Boys
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-sm inline-block" style={{ background: '#EC4899' }} />Girls
+              </span>
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={220}>
             <BarChart
-              data={enrollment.byGrade.filter((g) => g.grade >= 6).map((g) => ({ grade: g.grade, count: g.boys + g.girls }))}
-              margin={{ top: 4, right: 8, bottom: 4, left: -20 }}
+              data={enrollment.byGrade.filter((g) => g.grade >= 6).map((g) => ({
+                grade: g.grade, Boys: g.boys, Girls: g.girls,
+              }))}
+              margin={{ top: 4, right: 8, bottom: 4, left: -16 }}
+              barCategoryGap="30%"
+              barGap={2}
             >
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
               <XAxis dataKey="grade" fontSize={12} tickFormatter={(g) => `Class ${g}`} />
               <YAxis fontSize={12} allowDecimals={false} />
-              <Tooltip labelFormatter={(g) => `Class ${g}`} contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0' }} />
-              <Bar dataKey="count" name="Students" radius={[6, 6, 0, 0]} isAnimationActive={false}>
-                {enrollment.byGrade.filter((g) => g.grade >= 6).map((_, i) => <Cell key={i} fill="#0076BC" />)}
-              </Bar>
+              <Tooltip
+                labelFormatter={(g) => `Class ${g}`}
+                formatter={(v: number, n: string) => [v.toLocaleString(), n]}
+                contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', boxShadow: '0 4px 16px rgba(0,48,135,0.08)' }}
+              />
+              <Bar dataKey="Boys" fill="#0076BC" radius={[4, 4, 0, 0]} isAnimationActive={false} />
+              <Bar dataKey="Girls" fill="#EC4899" radius={[4, 4, 0, 0]} isAnimationActive={false} />
             </BarChart>
           </ResponsiveContainer>
         </div>

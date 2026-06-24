@@ -33,8 +33,6 @@ const ADMIN_GROUPS: NavGroup[] = [
     { to: '/academic-years', label: 'Academic Years', icon: 'fas fa-calendar-alt' },
     { to: '/classes',        label: 'Classes',        icon: 'fas fa-chalkboard-teacher' },
     { to: '/subjects',       label: 'Subjects',       icon: 'fas fa-book-open' },
-    { to: '/attendance',     label: 'Attendance',     icon: 'fas fa-user-check' },
-    { to: '/report-card',    label: 'Report Cards',   icon: 'fas fa-file-alt' },
   ]},
   { heading: 'Engagement', items: [
     { to: '/notices', label: 'Notice Board', icon: 'fas fa-bullhorn' },

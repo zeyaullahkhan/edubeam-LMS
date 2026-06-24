@@ -3,6 +3,7 @@ import type { DistrictSummary } from '@edubeam/shared';
 
 interface Props {
   districts: DistrictSummary[];
+  onDistrictClick?: (districtId: string) => void;
 }
 
 // SVG viewBox of the administrative map: 0 0 623.622 666.142
@@ -31,6 +32,7 @@ const NAME_MAP: Record<string, string> = {
   tehrigarhwal:     'tehri',
   tehrigarhval:     'tehri',
   rudraprayag:      'rudraprayag',
+  rudrapryag:       'rudraprayag',
   dehradun:         'dehradun',
   paurigarhwal:     'pauri',
   paurigarhval:     'pauri',
@@ -56,7 +58,7 @@ function normKey(s: string) {
 
 interface TipState { key: string; x: number; y: number }
 
-export function UttarakhandMap({ districts }: Props) {
+export function UttarakhandMap({ districts, onDistrictClick }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [tip, setTip] = useState<TipState | null>(null);
 
@@ -206,6 +208,10 @@ export function UttarakhandMap({ districts }: Props) {
                     className="uk-grp"
                     style={{ cursor: 'pointer' }}
                     onMouseEnter={e => onEnter(e, d.key)}
+                    onClick={() => {
+                      const data = districtByKey[d.key];
+                      if (data && onDistrictClick) onDistrictClick(data.districtId);
+                    }}
                   >
                     {/* Large invisible hit area */}
                     <circle cx={d.cx} cy={d.cy} r={30} fill="transparent" />

@@ -323,9 +323,6 @@ export function Dashboard() {
         />
       </div>
 
-      {/* ── Uttarakhand map ───────────────────────────────────── */}
-      {districts.length > 0 && <UttarakhandMap districts={districts} />}
-
       {/* ── Drill-down panel (districts / blocks / students / teachers) ── */}
       {drilldown && <DrillPanel
         type={drilldown}
@@ -341,6 +338,22 @@ export function Dashboard() {
         onBackToBlocks={() => { setDrillBlockId(null); setDrillSchools([]); }}
         onClose={closeDrilldown}
       />}
+
+      {/* ── Uttarakhand map — always shown below tabs/drilldown ── */}
+      {districts.length > 0 && (
+        <UttarakhandMap
+          districts={districts}
+          onDistrictClick={async (districtId) => {
+            setDrilldown('schools');
+            if (drillDistrictId !== districtId) {
+              setDrillDistrictId(districtId);
+              setDrillBlockId(null);
+              setDrillSchools([]);
+              setDrillBlocks(await api.blocks(districtId));
+            }
+          }}
+        />
+      )}
 
       {/* ── Student gender ratio (from 500 Virtual2526 enrolment) ── */}
       {enrollment && <GenderPanel data={enrollment} />}

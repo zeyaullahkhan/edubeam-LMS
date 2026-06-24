@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
+import {
+  Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis,
+} from 'recharts';
 import { api, type DistrictMeta, type SchoolFormData, type SchoolRow } from '../api';
+import type { DistrictSummary } from '@edubeam/shared';
 import { exportCsv } from '../export';
 import { useAuth } from '../auth';
 import { stateFor } from '../config/states';
@@ -673,6 +677,7 @@ export function Schools() {
   const [districts, setDistricts] = useState<DistrictMeta[]>([]);
   const [districtId, setDistrictId] = useState('');
   const [blockId, setBlockId] = useState('');
+  const [districtSummaries, setDistrictSummaries] = useState<DistrictSummary[]>([]);
 
   const PAGE_SIZE = 50;
   const totalPages = Math.ceil(rows.length / PAGE_SIZE);
@@ -687,7 +692,10 @@ export function Schools() {
       .then(setRows).finally(() => setLoading(false));
   };
 
-  useEffect(() => { api.schoolDistricts().then(setDistricts); }, []);
+  useEffect(() => {
+    api.schoolDistricts().then(setDistricts);
+    api.districts().then(setDistrictSummaries).catch(() => null);
+  }, []);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [districtId, blockId]);
 
@@ -811,6 +819,113 @@ export function Schools() {
           )}
         </form>
       </div>
+
+      {/* ── District analytics charts ────────────────── */}
+      {districtSummaries.length > 0 && (() => {
+        const sorted = [...districtSummaries].sort((a, b) => b.schools - a.schools);
+        const chartData = sorted.map(d => ({
+          name: d.district.replace(' Garhwal', ' G.').replace('Udham Singh Nagar', 'USN'),
+          Schools: d.schools,
+          Teachers: d.teachers,
+          Boys: d.boys,
+          Girls: d.girls,
+          Students: d.totalStudents,
+        }));
+        const BOYS_C = '#0076BC';
+        const GIRLS_C = '#EC4899';
+        const tip = { borderRadius: 10, border: '1px solid #e2e8f0', boxShadow: '0 4px 16px rgba(0,48,135,0.08)' };
+        return (
+          <div className="panel overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h2 className="font-heading font-semibold text-navy-700">District Overview</h2>
+                <p className="text-xs text-slate-400 mt-0.5">Schools · Teachers · Students by district</p>
+              </div>
+              <span className="text-xs text-slate-400">{districtSummaries.length} districts</span>
+            </div>
+
+            {/* Summary KPI chips */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-slate-100">
+              {[
+                { label: 'Total Schools',   val: districtSummaries.reduce((s, d) => s + d.schools, 0).toLocaleString(),       icon: 'fa-school',               color: 'text-sky-600' },
+                { label: 'Total Teachers',  val: districtSummaries.reduce((s, d) => s + d.teachers, 0).toLocaleString(),      icon: 'fa-chalkboard-teacher',   color: 'text-violet-600' },
+                { label: 'Total Students',  val: districtSummaries.reduce((s, d) => s + d.totalStudents, 0).toLocaleString(), icon: 'fa-user-graduate',        color: 'text-emerald-600' },
+                { label: 'Avg Pass (10th)', val: (() => { const v = districtSummaries.reduce((s, d) => s + (d.avgPass10th ?? 0), 0) / districtSummaries.length; return `${(v * 100).toFixed(1)}%`; })(), icon: 'fa-award', color: 'text-amber-600' },
+              ].map(k => (
+                <div key={k.label} className="bg-white px-5 py-3 flex items-center gap-3">
+                  <i className={`fas ${k.icon} ${k.color} text-lg w-5 text-center`} />
+                  <div>
+                    <div className="font-heading font-bold text-navy-700 text-lg leading-none">{k.val}</div>
+                    <div className="text-[10px] text-slate-400 uppercase tracking-wider mt-0.5">{k.label}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="grid lg:grid-cols-3 gap-0 divide-y lg:divide-y-0 lg:divide-x divide-slate-100">
+              {/* Schools per district */}
+              <div className="p-5">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                  <i className="fas fa-school text-sky-400" />Schools per District
+                </p>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={chartData} margin={{ top: 4, right: 4, bottom: 40, left: -20 }} layout="horizontal">
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="name" fontSize={10} angle={-40} textAnchor="end" interval={0} tick={{ fill: '#64748b' }} />
+                    <YAxis fontSize={11} allowDecimals={false} />
+                    <Tooltip contentStyle={tip} formatter={(v: number) => [v.toLocaleString(), 'Schools']} />
+                    <Bar dataKey="Schools" radius={[4, 4, 0, 0]} isAnimationActive={false}>
+                      {chartData.map((_, i) => <Cell key={i} fill={`hsl(${210 + i * 12},70%,${52 - i * 1}%)`} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Teachers per district */}
+              <div className="p-5">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                  <i className="fas fa-chalkboard-teacher text-violet-400" />Teachers per District
+                </p>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={chartData} margin={{ top: 4, right: 4, bottom: 40, left: -16 }} layout="horizontal">
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="name" fontSize={10} angle={-40} textAnchor="end" interval={0} tick={{ fill: '#64748b' }} />
+                    <YAxis fontSize={11} allowDecimals={false} />
+                    <Tooltip contentStyle={tip} formatter={(v: number) => [v.toLocaleString(), 'Teachers']} />
+                    <Bar dataKey="Teachers" radius={[4, 4, 0, 0]} isAnimationActive={false}>
+                      {chartData.map((_, i) => <Cell key={i} fill={`hsl(${270 + i * 8},60%,${55 - i * 1}%)`} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Students per district — boys vs girls stacked */}
+              <div className="p-5">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                  <i className="fas fa-user-graduate text-emerald-400" />Students per District
+                </p>
+                <div className="flex items-center gap-4 text-xs text-slate-500 mb-2">
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: BOYS_C }} />Boys</span>
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: GIRLS_C }} />Girls</span>
+                </div>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={chartData} margin={{ top: 4, right: 4, bottom: 40, left: -16 }} layout="horizontal">
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="name" fontSize={10} angle={-40} textAnchor="end" interval={0} tick={{ fill: '#64748b' }} />
+                    <YAxis fontSize={11} allowDecimals={false} />
+                    <Tooltip
+                      contentStyle={tip}
+                      formatter={(v: number, n: string) => [v.toLocaleString(), n]}
+                    />
+                    <Bar dataKey="Boys" stackId="s" fill={BOYS_C} isAnimationActive={false} />
+                    <Bar dataKey="Girls" stackId="s" fill={GIRLS_C} radius={[3, 3, 0, 0]} isAnimationActive={false} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Table ─────────────────────────────────────── */}
       <div className="panel overflow-hidden">
