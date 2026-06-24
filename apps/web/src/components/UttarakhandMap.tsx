@@ -106,12 +106,12 @@ export function UttarakhandMap({ districts }: Props) {
       </div>
 
       {/* Map + legend row */}
-      <div className="flex gap-0 bg-gradient-to-br from-slate-50 to-blue-50">
+      <div className="flex gap-0 bg-gradient-to-br from-slate-50 to-blue-50 min-h-0">
 
         {/* Map area */}
         <div
           ref={wrapRef}
-          className="relative flex-1 flex justify-center items-start py-4 px-4"
+          className="relative flex-1 flex justify-center items-start py-4 px-4 min-w-0"
           onMouseLeave={() => setTip(null)}
           onMouseMove={onMove}
         >
@@ -157,7 +157,7 @@ export function UttarakhandMap({ districts }: Props) {
             <img
               src="/uk-map.svg"
               alt="Uttarakhand districts map"
-              className="w-full h-auto drop-shadow-md select-none"
+              className="w-full h-auto select-none"
               draggable={false}
             />
 
@@ -258,7 +258,7 @@ export function UttarakhandMap({ districts }: Props) {
         </div>
 
         {/* District legend panel */}
-        <div className="w-52 shrink-0 border-l border-slate-100 py-4 px-3 overflow-y-auto" style={{ maxHeight: 420 }}>
+        <div className="w-52 shrink-0 border-l border-slate-100 py-4 px-3">
           <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-3">Districts</p>
           <div className="space-y-1">
             {DISTRICT_CONFIG.map(d => {
