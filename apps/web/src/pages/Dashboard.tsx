@@ -41,26 +41,30 @@ interface StatCardProps {
 function StatCard({ label, value, sub, icon, accent, onClick, active }: StatCardProps) {
   return (
     <div
-      className={`stat-card flex items-center gap-3 transition-all ${onClick ? 'cursor-pointer hover:shadow-md' : ''} ${active ? 'ring-2 ring-sky-400' : ''}`}
+      className={`stat-card flex flex-col gap-2 transition-all min-h-[110px] ${onClick ? 'cursor-pointer hover:shadow-md' : ''} ${active ? 'ring-2 ring-sky-400' : ''}`}
       onClick={onClick}
     >
-      <div
-        className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-white text-base shadow-sm"
-        style={{ background: accent }}
-      >
-        <i className={icon} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="text-[11px] uppercase tracking-wider font-bold text-slate-400 leading-none mb-1">
-          {label}
+      {/* Icon row */}
+      <div className="flex items-center justify-between">
+        <div
+          className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-sm shadow-sm shrink-0"
+          style={{ background: accent }}
+        >
+          <i className={icon} />
         </div>
-        <div className="font-heading font-extrabold text-navy-700 text-2xl leading-none">{value}</div>
-        {sub && <div className="text-[11px] text-slate-400 mt-0.5 font-medium">{sub}</div>}
         {onClick && (
-          <div className="text-[10px] text-sky-500 font-semibold mt-1 flex items-center gap-1">
-            <i className="fas fa-table text-[9px]" />View details
-          </div>
+          <span className="text-[10px] text-sky-500 font-semibold flex items-center gap-0.5">
+            <i className="fas fa-table text-[9px]" />
+            <span className="hidden sm:inline">Details</span>
+          </span>
         )}
+      </div>
+
+      {/* Value + label — always at same vertical position */}
+      <div className="flex-1 flex flex-col justify-end">
+        <div className="font-heading font-extrabold text-navy-700 text-[22px] leading-none">{value}</div>
+        <div className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mt-1 leading-tight">{label}</div>
+        {sub && <div className="text-[10px] text-slate-400 mt-0.5 font-medium truncate">{sub}</div>}
       </div>
     </div>
   );
