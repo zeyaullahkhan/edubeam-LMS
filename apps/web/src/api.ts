@@ -207,10 +207,10 @@ export const api = {
   updateSchool: (id: string, body: Partial<SchoolFormData>) =>
     req<SchoolRow>(`/schools/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
 
-  // Academic Years
-  academicYears: (schoolId: string) => req<any[]>(`/schools/${schoolId}/academic-years`),
-  createAcademicYear: (schoolId: string, body: { label: string; startDate: string; endDate: string }) =>
-    req<any>(`/schools/${schoolId}/academic-years`, { method: 'POST', body: JSON.stringify(body) }),
+  // Academic Years (tenant-wide — common for entire state)
+  academicYears: () => req<any[]>(`/schools/academic-years`),
+  createAcademicYear: (body: { label: string; startDate: string; endDate: string }) =>
+    req<any>(`/schools/academic-years`, { method: 'POST', body: JSON.stringify(body) }),
   setCurrentAcademicYear: (id: string) =>
     req<any>(`/schools/academic-years/${id}/set-current`, { method: 'PATCH', body: '{}' }),
   deleteAcademicYear: (id: string) =>
@@ -226,10 +226,10 @@ export const api = {
   deleteClassSection: (id: string) =>
     req<{ ok: boolean }>(`/schools/class-sections/${id}`, { method: 'DELETE' }),
 
-  // Subjects
-  schoolSubjects: (schoolId: string) => req<any[]>(`/schools/${schoolId}/subjects`),
-  createSubject: (schoolId: string, body: any) =>
-    req<any>(`/schools/${schoolId}/subjects`, { method: 'POST', body: JSON.stringify(body) }),
+  // Subjects (tenant-wide — common curriculum for entire state)
+  schoolSubjects: () => req<any[]>(`/schools/subjects`),
+  createSubject: (body: any) =>
+    req<any>(`/schools/subjects`, { method: 'POST', body: JSON.stringify(body) }),
   updateSubject: (id: string, body: any) =>
     req<any>(`/schools/subjects/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   deleteSubject: (id: string) =>

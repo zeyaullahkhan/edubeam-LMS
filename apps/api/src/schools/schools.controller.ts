@@ -39,16 +39,16 @@ export class SchoolsController {
     return this.schools.update(user, id, body);
   }
 
-  // ── Academic Years ──────────────────────────────────────────────────────────
+  // ── Academic Years (tenant-wide — same year for entire state) ──────────────
 
-  @Get(':id/academic-years')
-  listAcademicYears(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.schools.listAcademicYears(user, id);
+  @Get('academic-years')
+  listAcademicYears(@CurrentUser() user: AuthUser) {
+    return this.schools.listAcademicYears(user);
   }
 
-  @Post(':id/academic-years')
-  createAcademicYear(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() body: any) {
-    return this.schools.createAcademicYear(user, { ...body, schoolId: id });
+  @Post('academic-years')
+  createAcademicYear(@CurrentUser() user: AuthUser, @Body() body: any) {
+    return this.schools.createAcademicYear(user, body);
   }
 
   @Patch('academic-years/:id/set-current')
@@ -98,16 +98,16 @@ export class SchoolsController {
     return this.schools.deleteAssignment(user, id);
   }
 
-  // ── Subjects ────────────────────────────────────────────────────────────────
+  // ── Subjects (tenant-wide — same curriculum for entire state) ──────────────
 
-  @Get(':id/subjects')
-  listSubjects(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.schools.listSubjects(user, id);
+  @Get('subjects')
+  listSubjects(@CurrentUser() user: AuthUser) {
+    return this.schools.listSubjects(user);
   }
 
-  @Post(':id/subjects')
-  createSubject(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() body: any) {
-    return this.schools.createSubject(user, { ...body, schoolId: id });
+  @Post('subjects')
+  createSubject(@CurrentUser() user: AuthUser, @Body() body: any) {
+    return this.schools.createSubject(user, body);
   }
 
   @Patch('subjects/:id')

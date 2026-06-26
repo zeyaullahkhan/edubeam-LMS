@@ -16,12 +16,14 @@ datasource db {
 // ── School hierarchy ────────────────────────────────────────────────────────
 
 model Tenant {
-  id        String     @id @default(cuid())
-  name      String
-  code      String     @unique // e.g. "UK" (Uttarakhand)
-  createdAt DateTime   @default(now())
-  districts District[]
-  users     User[]
+  id            String        @id @default(cuid())
+  name          String
+  code          String        @unique // e.g. "UK" (Uttarakhand)
+  createdAt     DateTime      @default(now())
+  districts     District[]
+  users         User[]
+  academicYears AcademicYear[]
+  subjects      Subject[]
 }
 
 model District {
@@ -109,9 +111,7 @@ model School {
   staff               Staff[]
   quizzes             Quiz[]
   notices             Notice[]
-  academicYears       AcademicYear[]
   classSections       ClassSection[]
-  subjects            Subject[]
 }
 
 // ── Operational / analytics data (seeded from Excel) ────────────────────────
@@ -473,16 +473,16 @@ model Notice {
 
 model AcademicYear {
   id        String   @id @default(cuid())
-  schoolId  String
-  school    School   @relation(fields: [schoolId], references: [id])
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
   label     String   // "2025-26"
   startDate String   // "YYYY-MM-DD"
   endDate   String   // "YYYY-MM-DD"
   isCurrent Boolean  @default(false)
   createdAt DateTime @default(now())
 
-  @@unique([schoolId, label])
-  @@index([schoolId, isCurrent])
+  @@unique([tenantId, label])
+  @@index([tenantId, isCurrent])
 }
 
 // ── Class & Section Structure ─────────────────────────────────────────────────
@@ -509,8 +509,8 @@ model ClassSection {
 
 model Subject {
   id        String   @id @default(cuid())
-  schoolId  String
-  school    School   @relation(fields: [schoolId], references: [id])
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
   code      String?  // e.g. "MATH", "ENG"
   name      String   // e.g. "Mathematics"
   grade     Int?     // null = applicable to all grades
@@ -522,8 +522,8 @@ model Subject {
 
   subjectAssignments SubjectAssignment[]
 
-  @@unique([schoolId, name, grade])
-  @@index([schoolId, isActive])
+  @@unique([tenantId, name, grade])
+  @@index([tenantId, isActive])
 }
 
 // ── Subject Assignment (teacher → class → subject) ───────────────────────────

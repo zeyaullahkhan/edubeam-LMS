@@ -251,16 +251,18 @@ export class SchoolsService {
     return sid;
   }
 
-  async listAcademicYears(user: AuthUser, schoolId?: string) {
-    const sid = this.resolveSchoolId(user, schoolId);
-    return prisma.academicYear.findMany({ where: { schoolId: sid }, orderBy: { label: 'desc' } });
+  async listAcademicYears(user: AuthUser) {
+    const tid = user.tenantId;
+    if (!tid) throw new ForbiddenException('Tenant ID required');
+    return prisma.academicYear.findMany({ where: { tenantId: tid }, orderBy: { label: 'desc' } });
   }
 
-  async createAcademicYear(user: AuthUser, dto: { label: string; startDate: string; endDate: string; schoolId?: string }) {
+  async createAcademicYear(user: AuthUser, dto: { label: string; startDate: string; endDate: string }) {
     const WRITE_ROLES = ['ADMIN', 'STATE_OFFICIAL', 'PRINCIPAL'];
     if (!WRITE_ROLES.includes(user.role)) throw new ForbiddenException('Not authorized');
-    const sid = this.resolveSchoolId(user, dto.schoolId);
-    return prisma.academicYear.create({ data: { schoolId: sid, label: dto.label, startDate: dto.startDate, endDate: dto.endDate } });
+    const tid = user.tenantId;
+    if (!tid) throw new ForbiddenException('Tenant ID required');
+    return prisma.academicYear.create({ data: { tenantId: tid, label: dto.label, startDate: dto.startDate, endDate: dto.endDate } });
   }
 
   async setCurrentAcademicYear(user: AuthUser, id: string) {
@@ -268,12 +270,12 @@ export class SchoolsService {
     if (!WRITE_ROLES.includes(user.role)) throw new ForbiddenException('Not authorized');
     const year = await prisma.academicYear.findUnique({ where: { id } });
     if (!year) throw new NotFoundException('Academic year not found');
-    await prisma.academicYear.updateMany({ where: { schoolId: year.schoolId }, data: { isCurrent: false } });
+    await prisma.academicYear.updateMany({ where: { tenantId: year.tenantId }, data: { isCurrent: false } });
     return prisma.academicYear.update({ where: { id }, data: { isCurrent: true } });
   }
 
   async deleteAcademicYear(user: AuthUser, id: string) {
-    if (!['ADMIN', 'PRINCIPAL'].includes(user.role)) throw new ForbiddenException('Not authorized');
+    if (!['ADMIN', 'STATE_OFFICIAL', 'PRINCIPAL'].includes(user.role)) throw new ForbiddenException('Not authorized');
     await prisma.academicYear.delete({ where: { id } });
     return { ok: true };
   }
@@ -314,20 +316,22 @@ export class SchoolsService {
 
   // ── Subject Master ───────────────────────────────────────────────────────────
 
-  async listSubjects(user: AuthUser, schoolId?: string) {
-    const sid = this.resolveSchoolId(user, schoolId);
-    return prisma.subject.findMany({ where: { schoolId: sid, isActive: true }, orderBy: { name: 'asc' } });
+  async listSubjects(user: AuthUser) {
+    const tid = user.tenantId;
+    if (!tid) throw new ForbiddenException('Tenant ID required');
+    return prisma.subject.findMany({ where: { tenantId: tid, isActive: true }, orderBy: { name: 'asc' } });
   }
 
   async createSubject(user: AuthUser, dto: {
     name: string; code?: string; grade?: number; stream?: string;
-    maxMarks?: number; isElective?: boolean; schoolId?: string;
+    maxMarks?: number; isElective?: boolean;
   }) {
     const WRITE_ROLES = ['ADMIN', 'STATE_OFFICIAL', 'PRINCIPAL'];
     if (!WRITE_ROLES.includes(user.role)) throw new ForbiddenException('Not authorized');
-    const sid = this.resolveSchoolId(user, dto.schoolId);
+    const tid = user.tenantId;
+    if (!tid) throw new ForbiddenException('Tenant ID required');
     return prisma.subject.create({
-      data: { schoolId: sid, name: dto.name, code: dto.code, grade: dto.grade, stream: dto.stream, maxMarks: dto.maxMarks ?? 100, isElective: dto.isElective ?? false },
+      data: { tenantId: tid, name: dto.name, code: dto.code, grade: dto.grade, stream: dto.stream, maxMarks: dto.maxMarks ?? 100, isElective: dto.isElective ?? false },
     });
   }
 

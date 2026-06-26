@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import { useAuth } from '../auth';
-import { ScopeBar, type Scope } from '../components/ScopeBar';
 
 const WRITE_ROLES = ['ADMIN', 'STATE_OFFICIAL', 'PRINCIPAL'];
 const GRADES = Array.from({ length: 12 }, (_, i) => i + 1);
@@ -26,7 +25,6 @@ export function SubjectMaster() {
   const { user } = useAuth();
   const canWrite = WRITE_ROLES.includes(user?.role ?? '');
 
-  const [scope, setScope] = useState<Scope>({});
   const [subjects, setSubjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -37,15 +35,12 @@ export function SubjectMaster() {
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
 
-  const schoolId = scope.schoolId ?? user?.schoolId ?? '';
-
   const load = useCallback(async () => {
-    if (!schoolId) { setSubjects([]); return; }
     setLoading(true);
-    try { setSubjects(await api.schoolSubjects(schoolId)); }
+    try { setSubjects(await api.schoolSubjects()); }
     catch (e: any) { setErr(e.message); }
     finally { setLoading(false); }
-  }, [schoolId]);
+  }, []);
 
   useEffect(() => { load(); }, [load]);
 
@@ -54,7 +49,6 @@ export function SubjectMaster() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr(''); setMsg('');
-    if (!schoolId) { setErr('Select a school first.'); return; }
     setSaving(true);
     try {
       const payload = {
@@ -69,7 +63,7 @@ export function SubjectMaster() {
         await api.updateSubject(editSubject.id, payload);
         setMsg('Subject updated.');
       } else {
-        await api.createSubject(schoolId, payload);
+        await api.createSubject(payload);
         setMsg('Subject created.');
       }
       resetForm();
@@ -116,9 +110,7 @@ export function SubjectMaster() {
         )}
       </div>
 
-      <ScopeBar value={scope} onChange={setScope} />
-
-      {msg && <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl px-4 py-3 text-sm"><i className="fas fa-check-circle" />{msg}</div>}
+      {msg &&<div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl px-4 py-3 text-sm"><i className="fas fa-check-circle" />{msg}</div>}
       {err && <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm"><i className="fas fa-exclamation-circle" />{err}</div>}
 
       {/* Create / Edit form */}
@@ -186,13 +178,7 @@ export function SubjectMaster() {
       )}
 
       {/* Empty states */}
-      {!schoolId && (
-        <div className="py-12 text-center panel text-slate-400">
-          <i className="fas fa-school text-3xl mb-2 block text-slate-300" />
-          <p className="font-semibold text-slate-500">Select a school to view subjects</p>
-        </div>
-      )}
-      {schoolId && !loading && subjects.length === 0 && (
+      {!loading && subjects.length === 0 && (
         <div className="py-12 text-center panel text-slate-400">
           <i className="fas fa-book-open text-3xl mb-2 block text-slate-300" />
           <p className="font-semibold text-slate-500">No subjects defined yet</p>

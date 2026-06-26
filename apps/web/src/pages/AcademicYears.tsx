@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
 import { useAuth } from '../auth';
-import { ScopeBar, type Scope } from '../components/ScopeBar';
 
 const inputCls = 'w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sky-300/50 focus:border-sky-300 transition-colors';
 const WRITE_ROLES = ['ADMIN', 'STATE_OFFICIAL', 'PRINCIPAL'];
@@ -14,7 +13,6 @@ function fmtRange(start: string, end: string) {
 export function AcademicYears() {
   const { user } = useAuth();
   const canWrite = WRITE_ROLES.includes(user?.role ?? '');
-  const [scope, setScope] = useState<Scope>({});
   const [years, setYears] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -23,25 +21,21 @@ export function AcademicYears() {
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
 
-  const schoolId = scope.schoolId ?? user?.schoolId ?? '';
-
   const load = useCallback(async () => {
-    if (!schoolId) { setYears([]); return; }
     setLoading(true);
-    try { setYears(await api.academicYears(schoolId)); }
+    try { setYears(await api.academicYears()); }
     catch (e: any) { setErr(e.message); }
     finally { setLoading(false); }
-  }, [schoolId]);
+  }, []);
 
   useEffect(() => { load(); }, [load]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr(''); setMsg('');
-    if (!schoolId) { setErr('Select a school first.'); return; }
     setSaving(true);
     try {
-      await api.createAcademicYear(schoolId, form);
+      await api.createAcademicYear(form);
       setMsg('Academic year created.');
       setShowForm(false);
       setForm({ label: '', startDate: '', endDate: '' });
@@ -78,9 +72,7 @@ export function AcademicYears() {
         )}
       </div>
 
-      <ScopeBar value={scope} onChange={setScope} />
-
-      {msg && <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl px-4 py-3 text-sm"><i className="fas fa-check-circle" />{msg}</div>}
+      {msg &&<div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl px-4 py-3 text-sm"><i className="fas fa-check-circle" />{msg}</div>}
       {err && <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm"><i className="fas fa-exclamation-circle" />{err}</div>}
 
       {/* Current year banner */}
@@ -125,14 +117,7 @@ export function AcademicYears() {
       )}
 
       {/* Table */}
-      {!schoolId && (
-        <div className="py-12 text-center panel text-slate-400">
-          <i className="fas fa-school text-3xl mb-2 block text-slate-300" />
-          <p className="font-semibold text-slate-500">Select a school to view academic years</p>
-        </div>
-      )}
-
-      {schoolId && !loading && years.length === 0 && (
+      {!loading && years.length === 0 && (
         <div className="py-12 text-center panel text-slate-400">
           <i className="fas fa-calendar-alt text-3xl mb-2 block text-slate-300" />
           <p className="font-semibold text-slate-500">No academic years defined yet</p>

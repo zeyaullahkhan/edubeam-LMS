@@ -41,7 +41,7 @@ export function ClassManagement() {
     try {
       const [secs, yrs] = await Promise.all([
         api.classSections(schoolId, yearFilter || undefined),
-        api.academicYears(schoolId),
+        api.academicYears(),
       ]);
       setSections(secs);
       setYears(yrs);
