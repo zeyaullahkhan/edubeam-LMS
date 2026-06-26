@@ -63,63 +63,62 @@ export function Analytics() {
     </div>
   );
 
+  const scopeFilter = canPickDistrict && (
+    <div className="no-print panel px-5 py-4">
+      <div className="flex flex-wrap gap-3 items-center">
+        <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 uppercase tracking-widest">
+          <i className="fas fa-filter" />
+          Drill down
+        </div>
+        <select
+          className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sky-300/50 focus:border-sky-300 transition-colors"
+          value={sel.districtId ?? ''}
+          onChange={(e) => setSel({ districtId: e.target.value || undefined })}
+        >
+          <option value="">All districts (statewide)</option>
+          {districts.map((d) => (
+            <option key={d.districtId} value={d.districtId}>{d.district}</option>
+          ))}
+        </select>
+        <select
+          className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sky-300/50 focus:border-sky-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          disabled={!sel.districtId}
+          value={sel.blockId ?? ''}
+          onChange={(e) => setSel((s) => ({ districtId: s.districtId, blockId: e.target.value || undefined }))}
+        >
+          <option value="">All blocks</option>
+          {blocks.map((b) => (
+            <option key={b.blockId} value={b.blockId}>{b.block}</option>
+          ))}
+        </select>
+        <select
+          className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sky-300/50 focus:border-sky-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          disabled={!sel.districtId && !sel.blockId}
+          value={sel.schoolId ?? ''}
+          onChange={(e) =>
+            setSel((s) => ({ districtId: s.districtId, blockId: s.blockId, schoolId: e.target.value || undefined }))
+          }
+        >
+          <option value="">All schools</option>
+          {schools.map((s) => (
+            <option key={s.id} value={s.id}>{s.name}</option>
+          ))}
+        </select>
+        {(sel.districtId || sel.blockId || sel.schoolId) && (
+          <button
+            onClick={() => setSel({})}
+            className="flex items-center gap-1.5 text-sm text-sky-600 hover:text-sky-700 font-medium"
+          >
+            <i className="fas fa-times-circle text-xs" />
+            Reset
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
-      {/* ── Scope selector (always first so filter change is immediately visible) ── */}
-      {canPickDistrict && (
-        <div className="no-print panel px-5 py-4">
-          <div className="flex flex-wrap gap-3 items-center">
-            <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 uppercase tracking-widest">
-              <i className="fas fa-filter" />
-              Drill down
-            </div>
-            <select
-              className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sky-300/50 focus:border-sky-300 transition-colors"
-              value={sel.districtId ?? ''}
-              onChange={(e) => setSel({ districtId: e.target.value || undefined })}
-            >
-              <option value="">All districts (statewide)</option>
-              {districts.map((d) => (
-                <option key={d.districtId} value={d.districtId}>{d.district}</option>
-              ))}
-            </select>
-            <select
-              className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sky-300/50 focus:border-sky-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-              disabled={!sel.districtId}
-              value={sel.blockId ?? ''}
-              onChange={(e) => setSel((s) => ({ districtId: s.districtId, blockId: e.target.value || undefined }))}
-            >
-              <option value="">All blocks</option>
-              {blocks.map((b) => (
-                <option key={b.blockId} value={b.blockId}>{b.block}</option>
-              ))}
-            </select>
-            <select
-              className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sky-300/50 focus:border-sky-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-              disabled={!sel.districtId && !sel.blockId}
-              value={sel.schoolId ?? ''}
-              onChange={(e) =>
-                setSel((s) => ({ districtId: s.districtId, blockId: s.blockId, schoolId: e.target.value || undefined }))
-              }
-            >
-              <option value="">All schools</option>
-              {schools.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
-            {(sel.districtId || sel.blockId || sel.schoolId) && (
-              <button
-                onClick={() => setSel({})}
-                className="flex items-center gap-1.5 text-sm text-sky-600 hover:text-sky-700 font-medium"
-              >
-                <i className="fas fa-times-circle text-xs" />
-                Reset
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* ── Page header ───────────────────────────────────────── */}
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
@@ -212,6 +211,9 @@ export function Analytics() {
           </ResponsiveContainer>
         </div>
       )}
+
+      {/* ── Scope selector — sits just above the KPI tabs so changing it immediately updates the data below ── */}
+      {scopeFilter}
 
       {/* ── Category tabs ─────────────────────────────────────── */}
       <div className="no-print">
