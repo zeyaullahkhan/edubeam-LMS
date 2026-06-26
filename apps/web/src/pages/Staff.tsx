@@ -98,6 +98,22 @@ export function Staff() {
       const rows = file.name.endsWith('.csv')
         ? parseCsv(await readFileText(file)).map(r => Object.fromEntries(Object.entries(r).map(([k, v]) => [k.toLowerCase().replace(/[^a-z0-9]/g, ''), String(v)])))
         : await parseUploadFile(file);
+      // Validate required fields
+      const validationErrors: string[] = [];
+      rows.forEach((r, i) => {
+        const rowNum = i + 3;
+        if (!r.fullname && !r.name) validationErrors.push(`Row ${rowNum}: Name is required`);
+        const gv = (r.gender || '').toUpperCase().charAt(0);
+        if (gv !== 'M' && gv !== 'F') validationErrors.push(`Row ${rowNum}: Gender must be M or F`);
+        if (!(r.stafftype || r.type || '').trim()) validationErrors.push(`Row ${rowNum}: Staff Type is required`);
+      });
+      if (validationErrors.length > 0) {
+        const shown = validationErrors.slice(0, 8);
+        const more = validationErrors.length - shown.length;
+        setErr(shown.join('\n') + (more > 0 ? `\n…and ${more} more issue(s)` : ''));
+        return;
+      }
+
       const parsed = rows.map((r) => ({
         name: r.fullname || r.name,
         gender: (r.gender || 'M').toUpperCase().startsWith('F') ? 'F' : 'M',
@@ -193,7 +209,7 @@ export function Staff() {
       <ScopeBar value={scope} onChange={setScope} />
 
       {msg && <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl px-4 py-3 text-sm"><i className="fas fa-check-circle" />{msg}</div>}
-      {err && <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm"><i className="fas fa-exclamation-circle" />{err}</div>}
+      {err && <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm"><i className="fas fa-exclamation-circle mt-0.5 shrink-0" /><span className="whitespace-pre-line">{err}</span></div>}
 
       {/* Real ICT teacher stats */}
       {teacherStats && (

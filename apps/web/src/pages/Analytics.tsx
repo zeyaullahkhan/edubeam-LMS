@@ -65,27 +65,7 @@ export function Analytics() {
 
   return (
     <div className="space-y-6">
-      {/* ── Page header ───────────────────────────────────────── */}
-      <div className="flex items-start justify-between flex-wrap gap-3">
-        <div>
-          <div className="section-tag mb-2">
-            <i className="fas fa-chart-line" />
-            Analytics Hub
-          </div>
-          <h1 className="font-heading font-bold text-navy-700 text-2xl">
-            KPI Analytics
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Scope: <span className="font-semibold text-navy-600">{data?.scope.label ?? '…'}</span>
-          </p>
-        </div>
-        <button onClick={printPdf} className="btn-outline no-print">
-          <i className="fas fa-file-pdf" />
-          Export PDF
-        </button>
-      </div>
-
-      {/* ── Scope selector ────────────────────────────────────── */}
+      {/* ── Scope selector (always first so filter change is immediately visible) ── */}
       {canPickDistrict && (
         <div className="no-print panel px-5 py-4">
           <div className="flex flex-wrap gap-3 items-center">
@@ -139,6 +119,26 @@ export function Analytics() {
           </div>
         </div>
       )}
+
+      {/* ── Page header ───────────────────────────────────────── */}
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <div className="section-tag mb-2">
+            <i className="fas fa-chart-line" />
+            Analytics Hub
+          </div>
+          <h1 className="font-heading font-bold text-navy-700 text-2xl">
+            KPI Analytics
+          </h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Scope: <span className="font-semibold text-navy-600">{data?.scope.label ?? '…'}</span>
+          </p>
+        </div>
+        <button onClick={printPdf} className="btn-outline no-print">
+          <i className="fas fa-file-pdf" />
+          Export PDF
+        </button>
+      </div>
 
       {/* ── Students by District — Boys / Girls / Total ─────── */}
       {districts.length > 0 && (

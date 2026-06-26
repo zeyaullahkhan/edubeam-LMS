@@ -135,6 +135,9 @@ export function Dashboard() {
     </div>
   );
 
+  const isSchoolScoped = ['PRINCIPAL', 'TEACHER', 'STUDENT', 'PARENT'].includes(user?.role ?? '');
+  const districtLabel = districts[0]?.district ?? null;
+
   return (
     <div className="space-y-6">
       {/* ── Page header ───────────────────────────────────────── */}
@@ -271,30 +274,34 @@ export function Dashboard() {
       )}
 
       {/* ── KPI stat cards ────────────────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className={`grid gap-4 grid-cols-2 ${isSchoolScoped ? 'md:grid-cols-2 lg:grid-cols-4' : 'md:grid-cols-3 lg:grid-cols-6'}`}>
+        {!isSchoolScoped && (
+          <StatCard
+            label="Districts"
+            value={overview.totalDistricts.toLocaleString()}
+            icon="fas fa-map"
+            accent="linear-gradient(135deg,#1e3a8a,#3b82f6)"
+            onClick={() => setDrilldown(drilldown === 'districts' ? null : 'districts')}
+            active={drilldown === 'districts'}
+          />
+        )}
+        {!isSchoolScoped && (
+          <StatCard
+            label="Blocks"
+            value={overview.totalBlocks.toLocaleString()}
+            icon="fas fa-th-large"
+            accent="linear-gradient(135deg,#5b21b6,#8b5cf6)"
+            onClick={() => setDrilldown(drilldown === 'blocks' ? null : 'blocks')}
+            active={drilldown === 'blocks'}
+          />
+        )}
         <StatCard
-          label="Districts"
-          value={overview.totalDistricts.toLocaleString()}
-          icon="fas fa-map"
-          accent="linear-gradient(135deg,#1e3a8a,#3b82f6)"
-          onClick={() => setDrilldown(drilldown === 'districts' ? null : 'districts')}
-          active={drilldown === 'districts'}
-        />
-        <StatCard
-          label="Blocks"
-          value={overview.totalBlocks.toLocaleString()}
-          icon="fas fa-th-large"
-          accent="linear-gradient(135deg,#5b21b6,#8b5cf6)"
-          onClick={() => setDrilldown(drilldown === 'blocks' ? null : 'blocks')}
-          active={drilldown === 'blocks'}
-        />
-        <StatCard
-          label="Schools"
-          value={overview.schools.toLocaleString()}
-          sub={`${overview.virtualClassroomSchools.toLocaleString()} with Virtual`}
+          label={isSchoolScoped ? 'Your School' : 'Schools'}
+          value={isSchoolScoped ? '1 School' : overview.schools.toLocaleString()}
+          sub={isSchoolScoped && districtLabel ? `District: ${districtLabel}` : `${overview.virtualClassroomSchools.toLocaleString()} with Virtual`}
           icon="fas fa-school"
           accent="linear-gradient(135deg,#003087,#0076BC)"
-          onClick={() => setDrilldown(drilldown === 'schools' ? null : 'schools')}
+          onClick={isSchoolScoped ? undefined : () => setDrilldown(drilldown === 'schools' ? null : 'schools')}
           active={drilldown === 'schools'}
         />
         <StatCard

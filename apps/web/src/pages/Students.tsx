@@ -315,6 +315,29 @@ export function Students() {
       const rows = file.name.endsWith('.csv')
         ? parseCsv(await readFileText(file)).map(r => Object.fromEntries(Object.entries(r).map(([k, v]) => [k.toLowerCase().replace(/[^a-z0-9]/g, ''), String(v)])))
         : await parseUploadFile(file);
+      // Validate required fields before mapping
+      const validationErrors: string[] = [];
+      rows.forEach((r, i) => {
+        const rowNum = i + 3;
+        if (!r.fullname && !r.name) validationErrors.push(`Row ${rowNum}: Name is required`);
+        const g = Number(r.gradeclass || r.grade || r.class);
+        if (!g || g < 6 || g > 12) validationErrors.push(`Row ${rowNum}: Grade (6–12) is required`);
+        const gv = (r.gender || '').toUpperCase().charAt(0);
+        if (gv !== 'M' && gv !== 'F') validationErrors.push(`Row ${rowNum}: Gender must be M or F`);
+        if (!r.rollno && !r.roll) validationErrors.push(`Row ${rowNum}: Roll No is required`);
+        if (!r.section) validationErrors.push(`Row ${rowNum}: Section is required`);
+        if (!r.category) validationErrors.push(`Row ${rowNum}: Category is required`);
+        if (!r.fathersname && !r.fathername) validationErrors.push(`Row ${rowNum}: Father's Name is required`);
+        if (!r.guardianname && !r.fathersname && !r.fathername) validationErrors.push(`Row ${rowNum}: Guardian/Father name is required`);
+        if (!r.phone && !r.fathersphone && !r.fatherphone && !r.guardianphone) validationErrors.push(`Row ${rowNum}: Phone is required`);
+      });
+      if (validationErrors.length > 0) {
+        const shown = validationErrors.slice(0, 8);
+        const more = validationErrors.length - shown.length;
+        setErr(shown.join('\n') + (more > 0 ? `\n…and ${more} more issue(s)` : ''));
+        return;
+      }
+
       const parsed = rows.map((r) => ({
         name: r.fullname || r.name,
         gender: (r.gender || 'M').toUpperCase().startsWith('F') ? 'F' : 'M',
@@ -614,7 +637,7 @@ export function Students() {
       <ScopeBar value={scope} onChange={setScope} />
 
       {msg && <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl px-4 py-3 text-sm"><i className="fas fa-check-circle" />{msg}</div>}
-      {err && <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm"><i className="fas fa-exclamation-circle" />{err}</div>}
+      {err && <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm"><i className="fas fa-exclamation-circle mt-0.5 shrink-0" /><span className="whitespace-pre-line">{err}</span></div>}
 
       {/* Add form */}
       {showForm && canWrite && (
