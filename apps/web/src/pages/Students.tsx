@@ -9,6 +9,7 @@ import { useAuth } from '../auth';
 import { FileUpload } from '../components/FileUpload';
 import { exportCsv } from '../export';
 import { parseCsv, readFileText } from '../csv';
+import { downloadStudentTemplate, parseUploadFile } from '../excel';
 import { ScopeBar, type Scope } from '../components/ScopeBar';
 import { Attendance } from './Attendance';
 import { ReportCard } from './ReportCard';
@@ -102,6 +103,140 @@ const emptyStudent: Partial<Student> = {
   religion: 'Hindu', isRte: false,
 };
 
+// ── Indian states list ────────────────────────────────────────────────────────
+const INDIA_STATES = [
+  'Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh','Goa','Gujarat',
+  'Haryana','Himachal Pradesh','Jharkhand','Karnataka','Kerala','Madhya Pradesh',
+  'Maharashtra','Manipur','Meghalaya','Mizoram','Nagaland','Odisha','Punjab',
+  'Rajasthan','Sikkim','Tamil Nadu','Telangana','Tripura','Uttar Pradesh','Uttarakhand',
+  'West Bengal','Andaman & Nicobar Islands','Chandigarh','Dadra & Nagar Haveli','Daman & Diu',
+  'Delhi','Jammu & Kashmir','Ladakh','Lakshadweep','Puducherry',
+];
+
+// ── Uttarakhand districts → blocks (from DB — fetched at runtime) ─────────────
+function AddressTab({ form, upd, inputCls }: {
+  form: Partial<Student>;
+  upd: (patch: Partial<Student>) => void;
+  inputCls: string;
+}) {
+  const [districts, setDistricts] = useState<{ id: string; name: string; blocks: { id: string; name: string }[] }[]>([]);
+  const [sameAsPermAddr, setSameAsPermAddr] = useState(false);
+
+  useEffect(() => {
+    import('../api').then(m => m.api.schoolDistricts().then(setDistricts).catch(() => null));
+  }, []);
+
+  const isUK = (form.stateAddr ?? '').toLowerCase().includes('uttarakhand');
+  const selDist = districts.find(d => d.name.toLowerCase() === (form.districtAddr ?? '').toLowerCase());
+  const blocks = selDist?.blocks ?? [];
+
+  const buildAddress = (patch: Partial<Student>) => {
+    const f = { ...form, ...patch };
+    const parts = [f.village, f.blockAddr, f.districtAddr, f.stateAddr, f.pinCode].filter(Boolean);
+    return parts.join(', ');
+  };
+
+  const handleState = (val: string) => {
+    const patch: Partial<Student> = { stateAddr: val || null, districtAddr: null, blockAddr: null };
+    upd({ ...patch, permanentAddress: (buildAddress(patch) || form.permanentAddress) ?? null });
+  };
+
+  const handleDistrict = (val: string) => {
+    const patch: Partial<Student> = { districtAddr: val || null, blockAddr: null };
+    upd({ ...patch, permanentAddress: (buildAddress(patch) || form.permanentAddress) ?? null });
+  };
+
+  const handleBlock = (val: string) => {
+    const patch: Partial<Student> = { blockAddr: val || null };
+    upd({ ...patch, permanentAddress: (buildAddress(patch) || form.permanentAddress) ?? null });
+  };
+
+  const handleVillage = (val: string) => {
+    const patch: Partial<Student> = { village: val || null };
+    upd({ ...patch, permanentAddress: (buildAddress(patch) || form.permanentAddress) ?? null });
+  };
+
+  const handleSameAs = (checked: boolean) => {
+    setSameAsPermAddr(checked);
+    if (checked) upd({ correspondenceAddress: form.permanentAddress ?? null });
+  };
+
+  return (
+    <>
+      <div className="grid md:grid-cols-3 gap-4">
+        {/* State */}
+        <Field label="State">
+          <select className={inputCls} value={form.stateAddr ?? ''} onChange={e => handleState(e.target.value)}>
+            <option value="">— Select State —</option>
+            {INDIA_STATES.map(s => <option key={s}>{s}</option>)}
+          </select>
+        </Field>
+
+        {/* District — dropdown for UK, free-text otherwise */}
+        <Field label="District">
+          {isUK && districts.length > 0 ? (
+            <select className={inputCls} value={form.districtAddr ?? ''} onChange={e => handleDistrict(e.target.value)}>
+              <option value="">— Select District —</option>
+              {districts.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+            </select>
+          ) : (
+            <input className={inputCls} value={form.districtAddr ?? ''} onChange={e => handleDistrict(e.target.value)} placeholder="District" />
+          )}
+        </Field>
+
+        {/* Block — dropdown when UK district selected, free-text otherwise */}
+        <Field label="Block">
+          {blocks.length > 0 ? (
+            <select className={inputCls} value={form.blockAddr ?? ''} onChange={e => handleBlock(e.target.value)}>
+              <option value="">— Select Block —</option>
+              {blocks.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
+            </select>
+          ) : (
+            <input className={inputCls} value={form.blockAddr ?? ''} onChange={e => handleBlock(e.target.value)} placeholder="Block / Tehsil" />
+          )}
+        </Field>
+
+        <Field label="Village / Town">
+          <input className={inputCls} value={form.village ?? ''} onChange={e => handleVillage(e.target.value)} placeholder="Village or town name" />
+        </Field>
+        <Field label="PIN Code">
+          <input className={inputCls} maxLength={6} value={form.pinCode ?? ''} onChange={e => upd({ pinCode: e.target.value || null })} placeholder="6-digit PIN" />
+        </Field>
+      </div>
+
+      <Field label="Permanent Address">
+        <textarea
+          rows={3} className={inputCls}
+          value={form.permanentAddress ?? ''}
+          onChange={e => { upd({ permanentAddress: e.target.value || null }); if (sameAsPermAddr) upd({ correspondenceAddress: e.target.value || null }); }}
+          placeholder="Full permanent address (auto-filled from above selections)"
+        />
+      </Field>
+
+      <div className="flex items-center gap-2 -mt-1">
+        <input
+          type="checkbox" id="sameAddr" checked={sameAsPermAddr}
+          onChange={e => handleSameAs(e.target.checked)}
+          className="w-4 h-4 rounded accent-sky-600"
+        />
+        <label htmlFor="sameAddr" className="text-sm text-slate-600 cursor-pointer select-none">
+          Same as Permanent Address
+        </label>
+      </div>
+
+      <Field label="Correspondence Address">
+        <textarea
+          rows={3} className={inputCls}
+          value={form.correspondenceAddress ?? ''}
+          onChange={e => { setSameAsPermAddr(false); upd({ correspondenceAddress: e.target.value || null }); }}
+          placeholder="Leave blank if same as permanent address"
+          disabled={sameAsPermAddr}
+        />
+      </Field>
+    </>
+  );
+}
+
 export function Students() {
   const { user } = useAuth();
   const canWrite = WRITE_ROLES.includes(user?.role ?? '');
@@ -177,20 +312,51 @@ export function Students() {
   const onBulk = async (file: File) => {
     setErr(''); setMsg('');
     try {
-      const text = await readFileText(file);
-      const parsed = parseCsv(text).map((r) => ({
-        name: r.name,
+      const rows = file.name.endsWith('.csv')
+        ? parseCsv(await readFileText(file)).map(r => Object.fromEntries(Object.entries(r).map(([k, v]) => [k.toLowerCase().replace(/[^a-z0-9]/g, ''), String(v)])))
+        : await parseUploadFile(file);
+      const parsed = rows.map((r) => ({
+        name: r.fullname || r.name,
         gender: (r.gender || 'M').toUpperCase().startsWith('F') ? 'F' : 'M',
-        grade: Number(r.grade || r.class),
+        grade: Number(r.gradeclass || r.grade || r.class),
         section: r.section,
-        rollNo: r.rollno || r['roll no'] || r.roll,
-        admissionNo: r.admissionno || r['admission no'],
-        guardianName: r.guardianname || r['guardian name'] || r.father || r.parent,
-        guardianPhone: r.guardianphone || r['guardian phone'] || r.phone || r.mobile,
-        guardianRelation: r.guardianrelation || r['guardian relation'],
+        rollNo: r.rollno || r.roll,
+        admissionNo: r.admissionno,
+        dateOfBirth: r.dateofbirth || null,
+        aadhaarNo: r.aadhaarno || null,
+        bloodGroup: r.bloodgroup || null,
+        nationality: r.nationality || null,
+        motherTongue: r.mothertongue || null,
         category: (r.category || 'GEN').toUpperCase(),
-        religion: r.religion,
-        isRte: /^(y|yes|true|1)$/i.test(r.isrte || r.rte || ''),
+        religion: r.religion || null,
+        isRte: /^(y|yes|true|1)$/i.test(r.rteyesno || r.isrte || r.rte || ''),
+        admissionDate: r.admissiondate || null,
+        house: r.house || null,
+        fatherName: r.fathersname || r.fathername || null,
+        fatherPhone: r.fathersphone || r.fatherphone || null,
+        fatherOccupation: r.fathersoccupation || r.fatheroccupation || null,
+        fatherEducation: r.fatherseducation || r.fathereducation || null,
+        motherName: r.mothersname || r.mothername || null,
+        motherPhone: r.mothersphone || r.motherphone || null,
+        motherOccupation: r.mothersoccupation || r.motheroccupation || null,
+        motherEducation: r.motherseducation || r.mothereducation || null,
+        guardianName: r.guardianname || null,
+        guardianPhone: r.guardianphone || null,
+        guardianRelation: r.guardianrelation || 'Father',
+        stateAddr: r.state || null,
+        districtAddr: r.district || null,
+        blockAddr: r.block || null,
+        village: r.villageetown || r.village || null,
+        pinCode: r.pincode || null,
+        permanentAddress: r.permanentaddress || null,
+        correspondenceAddress: r.correspondenceaddress || null,
+        previousSchool: r.previousschool || null,
+        medium: r.mediumofinstruction || r.medium || null,
+        subjectsOpted: r.subjectsopted || null,
+        height: r.heightcm ? Number(r.heightcm) : null,
+        weight: r.weightkg ? Number(r.weightkg) : null,
+        vaccinationStatus: r.vaccinationstatus || null,
+        hostelRequired: /^(y|yes|true|1)$/i.test(r.hostelrequiredyesno || r.hostelrequired || ''),
       }));
       const res = await api.students.bulk(scope.schoolId, parsed as Partial<Student>[]);
       setMsg(`Imported ${res.inserted} students${res.skipped ? `, skipped ${res.skipped}` : ''}.`);
@@ -304,10 +470,12 @@ export function Students() {
         <div className="flex gap-2 flex-wrap">
           {canWrite && (
             <>
-              <label className="btn-outline cursor-pointer">
-                <i className="fas fa-file-import" />
-                Bulk Upload
-                <input type="file" accept=".csv" className="hidden" onChange={(e) => e.target.files?.[0] && onBulk(e.target.files[0])} />
+              <button onClick={downloadStudentTemplate} className="btn-outline" title="Download Excel template">
+                <i className="fas fa-file-excel text-emerald-600" />Template
+              </button>
+              <label className="btn-outline cursor-pointer" title="Upload filled Excel template">
+                <i className="fas fa-file-import" />Bulk Upload
+                <input type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={(e) => e.target.files?.[0] && onBulk(e.target.files[0])} />
               </label>
               <button onClick={() => setConfirmPromote(true)} className="btn-outline"><i className="fas fa-level-up-alt" />Promote</button>
               <button onClick={() => setShowForm((s) => !s)} className={showForm ? 'btn-outline' : 'btn-navy'}>
@@ -972,21 +1140,7 @@ function StudentModal({
             </>}
 
             {/* TAB 3 — Address */}
-            {tab === 'address' && <>
-              <div className="grid md:grid-cols-3 gap-4">
-                <Field label="State"><input className={inputCls} value={editForm.stateAddr ?? ''} onChange={e => upd({ stateAddr: e.target.value || null })} /></Field>
-                <Field label="District"><input className={inputCls} value={editForm.districtAddr ?? ''} onChange={e => upd({ districtAddr: e.target.value || null })} /></Field>
-                <Field label="Block"><input className={inputCls} value={editForm.blockAddr ?? ''} onChange={e => upd({ blockAddr: e.target.value || null })} /></Field>
-                <Field label="Village / Town"><input className={inputCls} value={editForm.village ?? ''} onChange={e => upd({ village: e.target.value || null })} /></Field>
-                <Field label="PIN Code"><input className={inputCls} maxLength={6} value={editForm.pinCode ?? ''} onChange={e => upd({ pinCode: e.target.value || null })} /></Field>
-              </div>
-              <Field label="Permanent Address">
-                <textarea rows={3} className={inputCls} value={editForm.permanentAddress ?? ''} onChange={e => upd({ permanentAddress: e.target.value || null })} />
-              </Field>
-              <Field label="Correspondence Address">
-                <textarea rows={3} className={inputCls} value={editForm.correspondenceAddress ?? ''} onChange={e => upd({ correspondenceAddress: e.target.value || null })} />
-              </Field>
-            </>}
+            {tab === 'address' && <AddressTab form={editForm} upd={upd} inputCls={inputCls} />}
 
             {/* TAB 4 — Academic */}
             {tab === 'academic' && <>

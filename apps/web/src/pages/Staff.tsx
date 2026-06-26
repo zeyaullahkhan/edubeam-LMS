@@ -7,6 +7,7 @@ import { api } from '../api';
 import { useAuth } from '../auth';
 import { exportCsv } from '../export';
 import { parseCsv, readFileText } from '../csv';
+import { downloadStaffTemplate, parseUploadFile } from '../excel';
 import { ScopeBar, type Scope } from '../components/ScopeBar';
 import { Attendance } from './Attendance';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -94,19 +95,30 @@ export function Staff() {
   const onBulk = async (file: File) => {
     setErr(''); setMsg('');
     try {
-      const text = await readFileText(file);
-      const parsed = parseCsv(text).map((r) => ({
-        name: r.name,
+      const rows = file.name.endsWith('.csv')
+        ? parseCsv(await readFileText(file)).map(r => Object.fromEntries(Object.entries(r).map(([k, v]) => [k.toLowerCase().replace(/[^a-z0-9]/g, ''), String(v)])))
+        : await parseUploadFile(file);
+      const parsed = rows.map((r) => ({
+        name: r.fullname || r.name,
         gender: (r.gender || 'M').toUpperCase().startsWith('F') ? 'F' : 'M',
-        staffType: (r.stafftype || r.type || 'TEACHER').toUpperCase().replace(/\s+/g, '_'),
-        designation: r.designation,
-        qualification: r.qualification || r.qual,
-        subjects: r.subjects || r.subject,
-        phone: r.phone || r.mobile,
-        email: r.email,
-        department: r.department || r.dept,
-        salaryGroup: r.salarygroup || r['salary group'],
-        employeeId: r.employeeid || r['employee id'] || r.empid,
+        staffType: (r.stafftype || r.type || 'TEACHER').toUpperCase().replace(/[\s-]+/g, '_'),
+        designation: r.designation || null,
+        qualification: r.qualification || null,
+        subjects: r.subjects || null,
+        phone: r.phone || null,
+        email: r.email || null,
+        department: r.department || null,
+        salaryGroup: r.salarygroup || null,
+        employeeId: r.employeeid || null,
+        aadhaarNo: r.aadhaarno || null,
+        dateOfBirth: r.dateofbirth || null,
+        joiningDate: r.joiningdate || null,
+        contractType: r.contracttype || null,
+        isClassTeacher: /^(y|yes|true|1)$/i.test(r.classteacheryesno || r.isclassteacher || ''),
+        classTeacherOf: r.classteacherof || null,
+        address: r.address || null,
+        bankAccount: r.bankaccountno || r.bankaccount || null,
+        ifscCode: r.ifsccode || null,
       }));
       const res = await api.staff.bulk(scope.schoolId, parsed as Partial<StaffMember>[]);
       setMsg(`Imported ${res.inserted} staff${res.skipped ? `, skipped ${res.skipped}` : ''}.`);
@@ -152,9 +164,12 @@ export function Staff() {
         <div className="flex gap-2 flex-wrap">
           {canWrite && (
             <>
-              <label className="btn-outline cursor-pointer">
+              <button onClick={downloadStaffTemplate} className="btn-outline" title="Download Excel template">
+                <i className="fas fa-file-excel text-emerald-600" />Template
+              </button>
+              <label className="btn-outline cursor-pointer" title="Upload filled Excel template">
                 <i className="fas fa-file-import" />Bulk Upload
-                <input type="file" accept=".csv" className="hidden" onChange={(e) => e.target.files?.[0] && onBulk(e.target.files[0])} />
+                <input type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={(e) => e.target.files?.[0] && onBulk(e.target.files[0])} />
               </label>
               <button onClick={() => setShowForm((s) => !s)} className={showForm ? 'btn-outline' : 'btn-navy'}>
                 {showForm ? <><i className="fas fa-times" />Cancel</> : <><i className="fas fa-user-plus" />Add Staff</>}

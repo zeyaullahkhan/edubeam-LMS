@@ -140,29 +140,45 @@ export function Analytics() {
         </div>
       )}
 
-      {/* ── Students by District bar chart (real data) ───────── */}
+      {/* ── Students by District — Boys / Girls / Total ─────── */}
       {districts.length > 0 && (
         <div className="panel p-5">
-          <div className="flex items-center gap-3 mb-1">
-            <h2 className="font-heading font-semibold text-navy-700">Total Students — District Wise</h2>
-            <span className="badge-real">Live</span>
+          <div className="flex items-center justify-between mb-1 flex-wrap gap-3">
+            <div className="flex items-center gap-3">
+              <h2 className="font-heading font-semibold text-navy-700">Students — District Wise</h2>
+              <span className="badge-real">Live</span>
+            </div>
+            <div className="flex items-center gap-4 text-xs font-medium text-slate-500">
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm inline-block bg-[#0076BC]" />Boys</span>
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm inline-block bg-[#EC4899]" />Girls</span>
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm inline-block bg-[#059669]" />Total</span>
+            </div>
           </div>
           <p className="text-xs text-slate-400 mb-4">
             Enrollment from Virtual Classroom data{state ? ` · all districts — ${state.name}` : ' · all states'}
           </p>
-          <ResponsiveContainer width="100%" height={280}>
+          <ResponsiveContainer width="100%" height={300}>
             <BarChart
-              data={[...districts].sort((a, b) => b.totalStudents - a.totalStudents)}
-              margin={{ top: 8, right: 16, bottom: 60, left: 0 }}
+              data={[...districts].sort((a, b) => b.totalStudents - a.totalStudents).map(d => ({
+                district: d.district,
+                Boys: d.boys,
+                Girls: d.girls,
+                Total: d.totalStudents,
+              }))}
+              margin={{ top: 8, right: 16, bottom: 64, left: 0 }}
+              barCategoryGap="25%"
+              barGap={1}
             >
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-              <XAxis dataKey="district" fontSize={11} angle={-35} textAnchor="end" interval={0} />
+              <XAxis dataKey="district" fontSize={10} angle={-35} textAnchor="end" interval={0} />
               <YAxis fontSize={12} tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v)} />
               <Tooltip
-                formatter={(v) => [(v as number).toLocaleString(), 'Students']}
+                formatter={(v: number, n: string) => [v.toLocaleString(), n]}
                 contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', boxShadow: '0 4px 16px rgba(0,48,135,0.10)' }}
               />
-              <Bar dataKey="totalStudents" name="Students" fill="#059669" radius={[4, 4, 0, 0]} isAnimationActive={false} />
+              <Bar dataKey="Boys"  fill="#0076BC" radius={[3, 3, 0, 0]} isAnimationActive={false} />
+              <Bar dataKey="Girls" fill="#EC4899" radius={[3, 3, 0, 0]} isAnimationActive={false} />
+              <Bar dataKey="Total" fill="#059669" radius={[3, 3, 0, 0]} isAnimationActive={false} />
             </BarChart>
           </ResponsiveContainer>
         </div>
