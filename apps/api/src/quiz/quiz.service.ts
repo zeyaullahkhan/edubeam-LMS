@@ -14,17 +14,43 @@ function canManageQuiz(role: string) {
 export class QuizService {
   // ── Create quiz ─────────────────────────────────────────────────────────
   async create(user: AuthUser, dto: {
-    schoolId?: string; title: string; description?: string;
+    schoolId?: string; scope?: string; blockId?: string; districtId?: string;
+    title: string; description?: string;
     subject: string; grade: number; section?: string; dueDate?: string;
   }) {
     if (!canManageQuiz(user.role)) throw new ForbiddenException();
 
-    const schoolId = user.schoolId ?? dto.schoolId;
-    if (!schoolId) throw new BadRequestException('schoolId required');
+    const scope = dto.scope ?? 'school';
+
+    // Resolve IDs based on scope
+    let schoolId: string | null = null;
+    let blockId: string | null = null;
+    let districtId: string | null = null;
+    let tenantId: string | null = null;
+
+    if (scope === 'school') {
+      schoolId = user.schoolId ?? dto.schoolId ?? null;
+      if (!schoolId) throw new BadRequestException('schoolId required for school-scoped quiz');
+    } else if (scope === 'block') {
+      blockId = dto.blockId ?? user.blockId ?? null;
+      if (!blockId) throw new BadRequestException('blockId required for block-scoped quiz');
+    } else if (scope === 'district') {
+      districtId = dto.districtId ?? user.districtId ?? null;
+      if (!districtId) throw new BadRequestException('districtId required for district-scoped quiz');
+    } else if (scope === 'all') {
+      tenantId = user.tenantId ?? null;
+      if (!tenantId) throw new BadRequestException('tenantId required');
+    } else {
+      throw new BadRequestException('scope must be school | block | district | all');
+    }
 
     return prisma.quiz.create({
       data: {
         schoolId,
+        scope,
+        blockId,
+        districtId,
+        tenantId,
         title: dto.title,
         description: dto.description,
         subject: dto.subject,
@@ -64,9 +90,30 @@ export class QuizService {
     });
   }
 
-  // ── List quizzes (teacher/admin: all for school; student: active + not yet attempted) ─
+  // ── Build OR conditions to find all quizzes visible to a given school ────
+  private async buildSchoolVisibilityFilter(schoolId: string, grade?: number) {
+    const school = await prisma.school.findUnique({
+      where: { id: schoolId },
+      select: { blockId: true, block: { select: { districtId: true, district: { select: { tenantId: true } } } } },
+    });
+    const blockId = school?.blockId ?? null;
+    const districtId = school?.block?.districtId ?? null;
+    const tenantId = school?.block?.district?.tenantId ?? null;
+
+    const gradeFilter = grade ? { grade } : {};
+    return {
+      OR: [
+        { schoolId, scope: 'school', ...gradeFilter },
+        ...(blockId   ? [{ blockId,    scope: 'block',    ...gradeFilter }] : []),
+        ...(districtId ? [{ districtId, scope: 'district', ...gradeFilter }] : []),
+        ...(tenantId  ? [{ tenantId,   scope: 'all',      ...gradeFilter }] : []),
+      ],
+    };
+  }
+
+  // ── List quizzes (teacher/admin: all visible for school; student: active + not yet attempted) ─
   async list(user: AuthUser, params: { schoolId?: string; grade?: number }) {
-    let schoolId = user.schoolId ?? params.schoolId;
+    const schoolId = user.schoolId ?? params.schoolId;
 
     if (user.role === 'STUDENT') {
       if (!user.schoolId) throw new ForbiddenException();
@@ -74,12 +121,13 @@ export class QuizService {
         ? await prisma.student.findUnique({ where: { id: user.studentId }, select: { grade: true } })
         : null;
 
+      const visibilityFilter = await this.buildSchoolVisibilityFilter(
+        user.schoolId,
+        student?.grade,
+      );
+
       const quizzes = await prisma.quiz.findMany({
-        where: {
-          schoolId: user.schoolId,
-          isActive: true,
-          ...(student ? { grade: student.grade } : {}),
-        },
+        where: { ...visibilityFilter, isActive: true },
         include: {
           questions: { select: { id: true }, orderBy: { orderNo: 'asc' } },
           attempts: { where: { studentId: user.studentId ?? '' }, select: { score: true, maxScore: true, completedAt: true } },
@@ -98,11 +146,10 @@ export class QuizService {
 
     if (!schoolId) throw new BadRequestException('schoolId required');
 
+    const visibilityFilter = await this.buildSchoolVisibilityFilter(schoolId, params.grade);
+
     const quizzes = await prisma.quiz.findMany({
-      where: {
-        schoolId,
-        ...(params.grade ? { grade: params.grade } : {}),
-      },
+      where: visibilityFilter,
       include: {
         questions: { select: { id: true } },
         attempts: { select: { id: true } },

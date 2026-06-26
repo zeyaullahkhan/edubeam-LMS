@@ -301,6 +301,8 @@ export const api = {
   attendance: {
     markStudents: (body: { schoolId?: string; date?: string; academicYear: string; records: { studentId: string; status: string }[] }) =>
       req<{ marked: number; date: string }>('/attendance/students/mark', { method: 'POST', body: JSON.stringify(body) }),
+    clearStudents: (body: { schoolId?: string; date: string; studentIds?: string[]; grade?: number }) =>
+      req<{ cleared: number; date: string }>('/attendance/students/clear', { method: 'POST', body: JSON.stringify(body) }),
     byDate: (schoolId: string, date: string, grade?: number) =>
       req<any>(`/attendance/students/date?schoolId=${schoolId}&date=${date}${grade ? `&grade=${grade}` : ''}`),
     calendar: (studentId: string, month: string) =>
@@ -375,7 +377,7 @@ export const api = {
     list: (params: { schoolId?: string; grade?: number } = {}) =>
       req<any[]>(`/quiz${qstr(params)}`),
     get: (id: string) => req<any>(`/quiz/${id}`),
-    create: (body: { schoolId?: string; title: string; description?: string; subject: string; grade: number; section?: string; dueDate?: string }) =>
+    create: (body: { schoolId?: string; scope?: string; blockId?: string; districtId?: string; title: string; description?: string; subject: string; grade: number; section?: string; dueDate?: string }) =>
       req<any>('/quiz', { method: 'POST', body: JSON.stringify(body) }),
     setQuestions: (id: string, questions: { question: string; options: string[]; correct: number; marks?: number }[]) =>
       req<any>(`/quiz/${id}/questions`, { method: 'POST', body: JSON.stringify({ questions }) }),

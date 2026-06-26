@@ -98,6 +98,20 @@ function MarkStudents({ schoolId }: { schoolId: string }) {
     }
   };
 
+  const clearOne = async (studentId: string) => {
+    setStatuses(p => { const n = { ...p }; delete n[studentId]; return n; });
+    await api.attendance.clearStudents({ schoolId, date, studentIds: [studentId] });
+    load();
+  };
+
+  const clearAll = async () => {
+    if (!data?.students?.length) return;
+    if (!confirm(`Remove all attendance for Class ${grade} on ${date}? Records will show as "Not Marked".`)) return;
+    setStatuses({});
+    await api.attendance.clearStudents({ schoolId, date, grade });
+    load();
+  };
+
   return (
     <div className="space-y-4">
       {/* Controls */}
@@ -114,13 +128,19 @@ function MarkStudents({ schoolId }: { schoolId: string }) {
             {GRADES.map(g => <option key={g} value={g}>Class {g}</option>)}
           </select>
         </div>
-        <div className="flex gap-2 ml-auto">
+        <div className="flex gap-2 ml-auto flex-wrap">
           {Object.entries(STATUS_CONFIG).map(([s, c]) => (
             <button key={s} onClick={() => markAll(s)}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium ${c.bg} ${c.text} hover:opacity-80`}>
               All {c.label}
             </button>
           ))}
+          {data?.students?.length > 0 && (
+            <button onClick={clearAll}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 text-slate-500 hover:bg-rose-50 hover:text-rose-600 border border-slate-200 hover:border-rose-200 transition-colors">
+              <i className="fas fa-eraser mr-1" />Clear All
+            </button>
+          )}
         </div>
       </div>
 
@@ -152,11 +172,12 @@ function MarkStudents({ schoolId }: { schoolId: string }) {
                 <th className="px-4 py-3 text-left">Section</th>
                 <th className="px-4 py-3 text-left">Gender</th>
                 <th className="px-4 py-3 text-center">Attendance</th>
+                <th className="px-4 py-3 text-center w-10"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {data.students.map((s: any, i: number) => (
-                <tr key={s.id} className="hover:bg-slate-50/50">
+                <tr key={s.id} className="hover:bg-slate-50/50 group">
                   <td className="px-4 py-3 text-slate-400">{i + 1}</td>
                   <td className="px-4 py-3 font-medium text-slate-800">{s.name}</td>
                   <td className="px-4 py-3 text-slate-500">{s.rollNo || '—'}</td>
@@ -176,6 +197,16 @@ function MarkStudents({ schoolId }: { schoolId: string }) {
                         </button>
                       ))}
                     </div>
+                  </td>
+                  <td className="px-2 py-3 text-center">
+                    {statuses[s.id] && (
+                      <button
+                        onClick={() => clearOne(s.id)}
+                        title="Clear attendance for this student"
+                        className="opacity-0 group-hover:opacity-100 p-1 rounded text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-all">
+                        <i className="fas fa-times text-xs" />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

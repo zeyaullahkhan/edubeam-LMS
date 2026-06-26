@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards, Patch } from '@nestjs/common';
 import type { AuthUser } from '@edubeam/shared';
 import { JwtGuard } from '../auth/jwt.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -14,6 +14,11 @@ export class AttendanceController {
   @Post('students/mark')
   markStudents(@CurrentUser() user: AuthUser, @Body() dto: any) {
     return this.svc.markStudents(user, dto);
+  }
+
+  @Post('students/clear')
+  clearStudents(@CurrentUser() user: AuthUser, @Body() dto: any) {
+    return this.svc.clearStudents(user, dto);
   }
 
   @Get('students/date')

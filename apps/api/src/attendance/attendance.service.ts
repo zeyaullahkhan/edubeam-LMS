@@ -52,6 +52,33 @@ export class AttendanceService {
     return { marked: dto.records.length, date, schoolId };
   }
 
+  async clearStudents(user: AuthUser, dto: {
+    schoolId?: string; date: string;
+    studentIds?: string[]; // if omitted, clear entire grade
+    grade?: number;
+  }) {
+    const schoolId = await this.resolveSchoolId(user, dto.schoolId);
+
+    if (dto.studentIds?.length) {
+      // Clear specific students
+      await prisma.attendance.deleteMany({
+        where: { date: dto.date, studentId: { in: dto.studentIds }, schoolId },
+      });
+      return { cleared: dto.studentIds.length, date: dto.date };
+    }
+
+    // Clear whole grade (or whole school for that date)
+    const students = await prisma.student.findMany({
+      where: { schoolId, ...(dto.grade ? { grade: dto.grade } : {}), active: true },
+      select: { id: true },
+    });
+    const ids = students.map(s => s.id);
+    const { count } = await prisma.attendance.deleteMany({
+      where: { date: dto.date, studentId: { in: ids } },
+    });
+    return { cleared: count, date: dto.date };
+  }
+
   async getByDate(user: AuthUser, schoolId: string, date: string, grade?: number) {
     const students = await prisma.student.findMany({
       where: { schoolId, ...(grade ? { grade } : {}), active: true },

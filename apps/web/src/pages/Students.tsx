@@ -507,12 +507,20 @@ export function Students() {
             </>
           )}
           <button
-            onClick={() => exportCsv('students', rows.map((s) => ({
-              Name: s.name, Roll: s.rollNo ?? '', Grade: s.grade, Section: s.section ?? '',
-              Gender: GENDER_LABELS[s.gender], Category: s.category, Religion: s.religion ?? '',
-              RTE: s.isRte ? 'Yes' : 'No', Guardian: s.guardianName ?? '', Phone: s.guardianPhone ?? '',
-              Status: s.isDropout ? 'Dropout' : 'Active', School: s.school ?? '',
-            })))}
+            onClick={() => exportCsv('students', rows.map((s) => {
+              const key = (s.admissionNo || s.rollNo || s.id).replace(/\s+/g, '').toLowerCase();
+              return {
+                Name: s.name, Roll: s.rollNo ?? '', AdmissionNo: s.admissionNo ?? '',
+                Grade: s.grade, Section: s.section ?? '',
+                Gender: GENDER_LABELS[s.gender], Category: s.category, Religion: s.religion ?? '',
+                RTE: s.isRte ? 'Yes' : 'No', Guardian: s.guardianName ?? '', Phone: s.guardianPhone ?? '',
+                Status: s.isDropout ? 'Dropout' : 'Active', School: s.school ?? '',
+                'Student Login': `st${key}@edubeam.com`,
+                'Student Password': `st${key}`,
+                'Parent Login': `pr${key}@edubeam.com`,
+                'Parent Password': `pr${key}`,
+              };
+            }))}
             className="btn-outline"
           >
             <i className="fas fa-download" />Export

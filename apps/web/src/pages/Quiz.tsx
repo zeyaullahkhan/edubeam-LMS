@@ -9,18 +9,31 @@ const SUBJECTS = ['Hindi', 'English', 'Mathematics', 'Science', 'Social Science'
 const GRADES = [6, 7, 8, 9, 10, 11, 12];
 const CAN_MANAGE = ['ADMIN', 'STATE_OFFICIAL', 'DISTRICT_OFFICIAL', 'BLOCK_OFFICIAL', 'PRINCIPAL', 'TEACHER'];
 
+const SCOPE_LABELS: Record<string, { label: string; icon: string; color: string }> = {
+  school:   { label: 'This School',    icon: 'fa-school',    color: 'bg-sky-100 text-sky-700'     },
+  block:    { label: 'Block-wide',     icon: 'fa-city',      color: 'bg-violet-100 text-violet-700'},
+  district: { label: 'District-wide',  icon: 'fa-map',       color: 'bg-amber-100 text-amber-700' },
+  all:      { label: 'All 500 Schools',icon: 'fa-globe',     color: 'bg-emerald-100 text-emerald-700'},
+};
+
 // ── Quiz card shown in the list ───────────────────────────────────────────────
 function QuizCard({ quiz, onSelect, onToggle, onDelete, canManage }: {
   quiz: any; onSelect: () => void; onToggle?: () => void; onDelete?: () => void; canManage: boolean;
 }) {
+  const scopeCfg = SCOPE_LABELS[quiz.scope ?? 'school'];
   return (
     <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5 hover:border-sky-200 transition-colors">
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0 cursor-pointer" onClick={onSelect}>
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${quiz.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
               {quiz.isActive ? 'Active' : 'Archived'}
             </span>
+            {scopeCfg && (
+              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${scopeCfg.color}`}>
+                <i className={`fas ${scopeCfg.icon} mr-1 text-[10px]`} />{scopeCfg.label}
+              </span>
+            )}
             <span className="text-xs text-slate-400">Class {quiz.grade}{quiz.section ? `-${quiz.section}` : ''}</span>
             <span className="text-xs text-slate-400">·</span>
             <span className="text-xs text-slate-400">{quiz.subject}</span>
@@ -136,11 +149,30 @@ function QuestionBuilder({ questions, onChange }: {
 }
 
 // ── Create / Edit quiz form ───────────────────────────────────────────────────
-function CreateQuizView({ schoolId, onCreated }: { schoolId: string; onCreated: () => void }) {
-  const [form, setForm] = useState({ title: '', description: '', subject: 'Mathematics', grade: 9, section: '', dueDate: '' });
+function CreateQuizView({ schoolId, user, onCreated }: { schoolId: string; user: any; onCreated: () => void }) {
+  const [form, setForm] = useState({
+    title: '', description: '', subject: 'Mathematics', grade: 9, section: '', dueDate: '',
+    scope: 'school',
+  });
   const [questions, setQuestions] = useState<any[]>([{ question: '', options: ['', '', '', ''], correct: 0, marks: 1 }]);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
+
+  // Determine which scopes are available based on user role
+  const availableScopes = (() => {
+    const role = user?.role ?? '';
+    const scopes: { value: string; label: string; desc: string }[] = [
+      { value: 'school', label: 'This School', desc: 'Visible to students in the selected school only' },
+    ];
+    if (['ADMIN', 'STATE_OFFICIAL', 'BLOCK_OFFICIAL', 'DISTRICT_OFFICIAL'].includes(role)) {
+      scopes.push({ value: 'block', label: 'Block-wide', desc: 'Visible to all schools in the block' });
+      scopes.push({ value: 'district', label: 'District-wide', desc: 'Visible to all schools in the district' });
+      scopes.push({ value: 'all', label: 'All 500 Schools', desc: 'Visible to every school in the state' });
+    } else if (role === 'PRINCIPAL') {
+      // Principals can only publish to their school
+    }
+    return scopes;
+  })();
 
   const save = async () => {
     if (!form.title.trim()) { setErr('Title is required'); return; }
@@ -149,7 +181,15 @@ function CreateQuizView({ schoolId, onCreated }: { schoolId: string; onCreated: 
     setSaving(true);
     setErr('');
     try {
-      const quiz = await api.quiz.create({ schoolId, ...form, grade: Number(form.grade) });
+      const payload: any = {
+        ...form,
+        grade: Number(form.grade),
+        scope: form.scope,
+        schoolId: form.scope === 'school' ? schoolId : undefined,
+        blockId: form.scope === 'block' ? (user?.blockId ?? undefined) : undefined,
+        districtId: (form.scope === 'district' || form.scope === 'block') ? (user?.districtId ?? undefined) : undefined,
+      };
+      const quiz = await api.quiz.create(payload);
       await api.quiz.setQuestions(quiz.id, questions);
       onCreated();
     } catch (e: any) {
@@ -159,47 +199,70 @@ function CreateQuizView({ schoolId, onCreated }: { schoolId: string; onCreated: 
     }
   };
 
+  const inputCls = 'w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white';
+
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-4">
         <h2 className="font-semibold text-slate-800">Quiz Details</h2>
+
+        {/* Scope selector — only shown for roles that have options */}
+        {availableScopes.length > 1 && (
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-2">Publish To *</label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {availableScopes.map(s => {
+                const cfg = SCOPE_LABELS[s.value];
+                return (
+                  <button key={s.value} type="button"
+                    onClick={() => setForm(p => ({ ...p, scope: s.value }))}
+                    className={`flex flex-col items-center gap-1 p-3 rounded-xl border-2 text-center transition-all ${
+                      form.scope === s.value
+                        ? 'border-sky-500 bg-sky-50'
+                        : 'border-slate-200 hover:border-slate-300 bg-white'
+                    }`}>
+                    <i className={`fas ${cfg.icon} text-lg ${form.scope === s.value ? 'text-sky-600' : 'text-slate-400'}`} />
+                    <span className={`text-xs font-semibold ${form.scope === s.value ? 'text-sky-700' : 'text-slate-600'}`}>{s.label}</span>
+                    <span className="text-[10px] text-slate-400 leading-tight">{s.desc}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-4">
           <div className="col-span-2">
             <label className="block text-xs text-slate-500 mb-1">Title *</label>
             <input value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
-              placeholder="e.g. Unit Test 1 — Algebra"
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white" />
+              placeholder="e.g. Unit Test 1 — Algebra" className={inputCls} />
           </div>
           <div className="col-span-2">
             <label className="block text-xs text-slate-500 mb-1">Description</label>
             <input value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
-              placeholder="Optional instructions for students"
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white" />
+              placeholder="Optional instructions for students" className={inputCls} />
           </div>
           <div>
             <label className="block text-xs text-slate-500 mb-1">Subject</label>
-            <select value={form.subject} onChange={e => setForm(p => ({ ...p, subject: e.target.value }))}
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white">
+            <select value={form.subject} onChange={e => setForm(p => ({ ...p, subject: e.target.value }))} className={inputCls}>
               {SUBJECTS.map(s => <option key={s}>{s}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-xs text-slate-500 mb-1">Class</label>
-            <select value={form.grade} onChange={e => setForm(p => ({ ...p, grade: Number(e.target.value) }))}
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white">
+            <select value={form.grade} onChange={e => setForm(p => ({ ...p, grade: Number(e.target.value) }))} className={inputCls}>
               {GRADES.map(g => <option key={g} value={g}>Class {g}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-xs text-slate-500 mb-1">Section (optional)</label>
             <input value={form.section} onChange={e => setForm(p => ({ ...p, section: e.target.value }))}
-              placeholder="A, B, C…"
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white" />
+              placeholder="A, B, C…" className={inputCls} />
           </div>
           <div>
             <label className="block text-xs text-slate-500 mb-1">Due Date (optional)</label>
             <input type="date" value={form.dueDate} onChange={e => setForm(p => ({ ...p, dueDate: e.target.value }))}
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white" />
+              className={inputCls} />
           </div>
         </div>
       </div>
@@ -459,7 +522,7 @@ export function Quiz() {
           <p className="text-xs font-semibold tracking-widest text-sky-600 uppercase mb-1">QUIZ ENGINE</p>
           <h1 className="text-2xl font-bold text-slate-800">Create Quiz</h1>
         </div>
-        <CreateQuizView schoolId={schoolId} onCreated={() => { setView('list'); }} />
+        <CreateQuizView schoolId={schoolId} user={user} onCreated={() => { setView('list'); }} />
       </div>
     );
   }

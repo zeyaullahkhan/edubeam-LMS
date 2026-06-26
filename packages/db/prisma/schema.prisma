@@ -547,10 +547,15 @@ model SubjectAssignment {
 
 // A quiz/test created by a teacher or principal for a class.
 // isActive: false means it's archived. dueDate "YYYY-MM-DD" when submissions close.
+// scope: "school" | "block" | "district" | "all" — controls which schools see this quiz.
 model Quiz {
   id           String         @id @default(cuid())
-  schoolId     String
-  school       School         @relation(fields: [schoolId], references: [id])
+  schoolId     String?        // null when scope != "school"
+  school       School?        @relation(fields: [schoolId], references: [id])
+  scope        String         @default("school") // school | block | district | all
+  blockId      String?        // populated when scope = "block"
+  districtId   String?        // populated when scope = "district"
+  tenantId     String?        // populated when scope = "all" (entire state)
   title        String
   description  String?
   subject      String
@@ -565,6 +570,9 @@ model Quiz {
   attempts     StudentAttempt[]
 
   @@index([schoolId, grade, academicYear])
+  @@index([tenantId, grade, academicYear])
+  @@index([districtId, grade, academicYear])
+  @@index([blockId, grade, academicYear])
 }
 
 // One MCQ question inside a quiz.
