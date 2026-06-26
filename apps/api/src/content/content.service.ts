@@ -31,10 +31,14 @@ export class ContentService {
     const where: Record<string, unknown> = { standard, subject };
     if (opts.date) where.date = opts.date;
     if (opts.search) {
-      where.OR = [
-        { topic: { contains: opts.search } },
-        { teacherName: { contains: opts.search } },
-      ];
+      const terms = opts.search.trim().split(/\s+/).filter(Boolean);
+      where.AND = terms.map(term => ({
+        OR: [
+          { topic:       { contains: term, mode: 'insensitive' } },
+          { teacherName: { contains: term, mode: 'insensitive' } },
+          { subject:     { contains: term, mode: 'insensitive' } },
+        ],
+      }));
     }
 
     const [total, lectures] = await Promise.all([

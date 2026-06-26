@@ -584,7 +584,7 @@ export function Students() {
                       <Cell key={i} fill={['#0076BC','#3AAAC5','#F59E0B','#EF4444'][i % 4]} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(v: number) => [v, 'Students']} contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', fontSize: 12 }} />
+                  <Tooltip formatter={(v: number, name: string) => [v.toLocaleString(), name]} contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', fontSize: 12 }} />
                   <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} formatter={(v) => v} />
                 </PieChart>
               </ResponsiveContainer>
@@ -601,7 +601,7 @@ export function Students() {
                       <Cell key={i} fill={['#8B5CF6','#10B981','#F59E0B','#EF4444','#EC4899','#6B7280'][i % 6]} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(v: number) => [v, 'Students']} contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', fontSize: 12 }} />
+                  <Tooltip formatter={(v: number, name: string) => [v.toLocaleString(), name]} contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', fontSize: 12 }} />
                   <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} formatter={(v) => v} />
                 </PieChart>
               </ResponsiveContainer>

@@ -2,13 +2,16 @@ import { useState } from 'react';
 import { useAuth } from '../auth';
 import { GLOBAL_STATS } from '../config/states';
 
+const REMEMBER_KEY = 'edubeam_remembered_email';
+
 export function Login() {
   const { login } = useAuth();
-  const [email, setEmail]       = useState('');
-  const [password, setPassword] = useState('');
-  const [showPw, setShowPw]     = useState(false);
-  const [error, setError]       = useState('');
-  const [busy, setBusy]         = useState(false);
+  const [email, setEmail]         = useState(() => localStorage.getItem(REMEMBER_KEY) ?? '');
+  const [password, setPassword]   = useState('');
+  const [showPw, setShowPw]       = useState(false);
+  const [rememberMe, setRememberMe] = useState(() => !!localStorage.getItem(REMEMBER_KEY));
+  const [error, setError]         = useState('');
+  const [busy, setBusy]           = useState(false);
 
   const submit = async (ev: React.FormEvent) => {
     ev.preventDefault();
@@ -16,6 +19,8 @@ export function Login() {
     setError('');
     try {
       await login(email, password);
+      if (rememberMe) localStorage.setItem(REMEMBER_KEY, email);
+      else localStorage.removeItem(REMEMBER_KEY);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -145,6 +150,19 @@ export function Login() {
                     <i className={`fas ${showPw ? 'fa-eye-slash' : 'fa-eye'} text-xs`} />
                   </button>
                 </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="rememberMe"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-400 cursor-pointer"
+                />
+                <label htmlFor="rememberMe" className="text-sm text-slate-600 cursor-pointer select-none">
+                  Remember me
+                </label>
               </div>
 
               {error && (
