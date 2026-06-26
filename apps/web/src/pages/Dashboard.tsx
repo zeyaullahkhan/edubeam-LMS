@@ -88,6 +88,9 @@ export function Dashboard() {
   const [error, setError] = useState('');
   const [todayAtt, setTodayAtt] = useState<any>(null);
   const [upcomingHolidays, setUpcomingHolidays] = useState<any[]>([]);
+  const [attDrilldown, setAttDrilldown] = useState<any[] | null>(null);
+  const [attDrillMetric, setAttDrillMetric] = useState<'present' | 'absent' | 'late' | null>(null);
+  const [attDrillLoading, setAttDrillLoading] = useState(false);
 
   useEffect(() => {
     Promise.all([api.overview(), api.districts(), api.enrollment(), api.teacherStats()])
@@ -96,6 +99,17 @@ export function Dashboard() {
     api.attendance.today().then(setTodayAtt).catch(() => null);
     api.planner.upcoming(3).then(setUpcomingHolidays).catch(() => null);
   }, []);
+
+  const openAttDrilldown = async (metric: 'present' | 'absent' | 'late') => {
+    if (attDrillMetric === metric) { setAttDrilldown(null); setAttDrillMetric(null); return; }
+    setAttDrillMetric(metric);
+    setAttDrillLoading(true);
+    try {
+      const rows = await api.attendance.todayDrilldown();
+      setAttDrilldown(rows);
+    } catch { setAttDrilldown([]); }
+    finally { setAttDrillLoading(false); }
+  };
 
   const selectDrillDistrict = async (id: string) => {
     if (drillDistrictId === id) { setDrillDistrictId(null); setDrillBlocks([]); setDrillBlockId(null); setDrillSchools([]); return; }
@@ -237,17 +251,23 @@ export function Dashboard() {
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-1.5">
                 <i className="fas fa-user-graduate text-emerald-500" />Students
+                <span className="text-[10px] text-slate-300 font-normal ml-1">(click to see school breakdown)</span>
               </p>
               <div className="grid grid-cols-3 gap-2">
-                {[
-                  { label: 'Present', val: todayAtt.students.present, cls: 'text-emerald-600 bg-emerald-50' },
-                  { label: 'Absent',  val: todayAtt.students.absent,  cls: 'text-red-600 bg-red-50' },
-                  { label: 'Late',    val: todayAtt.students.late,    cls: 'text-amber-600 bg-amber-50' },
-                ].map(item => (
-                  <div key={item.label} className={`rounded-lg p-2 text-center ${item.cls}`}>
+                {([
+                  { label: 'Present', val: todayAtt.students.present, cls: 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100', metric: 'present' as const },
+                  { label: 'Absent',  val: todayAtt.students.absent,  cls: 'text-red-600 bg-red-50 hover:bg-red-100',             metric: 'absent'  as const },
+                  { label: 'Late',    val: todayAtt.students.late,    cls: 'text-amber-600 bg-amber-50 hover:bg-amber-100',        metric: 'late'    as const },
+                ]).map(item => (
+                  <button key={item.label}
+                    onClick={() => openAttDrilldown(item.metric)}
+                    className={`rounded-lg p-2 text-center transition-all cursor-pointer ${item.cls} ${attDrillMetric === item.metric ? 'ring-2 ring-offset-1 ring-current scale-105' : ''}`}>
                     <div className="text-xl font-bold">{item.val}</div>
-                    <div className="text-[10px] font-medium">{item.label}</div>
-                  </div>
+                    <div className="text-[10px] font-medium flex items-center justify-center gap-1">
+                      {item.label}
+                      <i className="fas fa-chevron-down text-[8px] opacity-60" />
+                    </div>
+                  </button>
                 ))}
               </div>
             </div>
@@ -270,6 +290,68 @@ export function Dashboard() {
               </div>
             </div>
           </div>
+
+          {/* ── School-wise drilldown panel ── */}
+          {attDrillMetric && (
+            <div className="mt-4 border-t border-slate-100 pt-4">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-bold text-slate-600 uppercase tracking-wide">
+                  School-wise — {attDrillMetric === 'present' ? 'Present' : attDrillMetric === 'absent' ? 'Absent' : 'Late'} Count
+                  {attDrilldown && <span className="ml-2 text-slate-400 font-normal">({attDrilldown.filter(r => r[attDrillMetric!] > 0).length} schools)</span>}
+                </p>
+                <button onClick={() => { setAttDrilldown(null); setAttDrillMetric(null); }}
+                  className="text-slate-400 hover:text-slate-600 p-1">
+                  <i className="fas fa-times text-xs" />
+                </button>
+              </div>
+              {attDrillLoading ? (
+                <div className="text-center py-6 text-slate-400 text-sm"><i className="fas fa-circle-notch fa-spin mr-2" />Loading…</div>
+              ) : !attDrilldown?.length ? (
+                <div className="text-center py-4 text-slate-400 text-sm">No attendance data for today.</div>
+              ) : (
+                <div className="overflow-x-auto rounded-lg border border-slate-100 max-h-80 overflow-y-auto">
+                  <table className="w-full text-xs">
+                    <thead className="bg-slate-50 sticky top-0">
+                      <tr className="text-slate-500 uppercase tracking-wide">
+                        <th className="px-3 py-2 text-left">#</th>
+                        <th className="px-3 py-2 text-left">School</th>
+                        <th className="px-3 py-2 text-left">District / Block</th>
+                        <th className="px-3 py-2 text-center text-emerald-600">Present</th>
+                        <th className="px-3 py-2 text-center text-red-600">Absent</th>
+                        <th className="px-3 py-2 text-center text-amber-600">Late</th>
+                        <th className="px-3 py-2 text-center text-slate-400">Not Marked</th>
+                        <th className="px-3 py-2 text-center">Marked %</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {attDrilldown
+                        .filter(r => r[attDrillMetric!] > 0 || r.present > 0 || r.absent > 0)
+                        .map((row, i) => (
+                          <tr key={row.schoolId} className={`hover:bg-slate-50 ${row[attDrillMetric!] > 0 ? '' : 'opacity-50'}`}>
+                            <td className="px-3 py-2 text-slate-400">{i + 1}</td>
+                            <td className="px-3 py-2 font-medium text-slate-800 max-w-[160px] truncate">{row.name}</td>
+                            <td className="px-3 py-2 text-slate-400">{row.district}{row.block ? ` / ${row.block}` : ''}</td>
+                            <td className="px-3 py-2 text-center font-semibold text-emerald-600">{row.present || '—'}</td>
+                            <td className="px-3 py-2 text-center font-semibold text-red-600">{row.absent || '—'}</td>
+                            <td className="px-3 py-2 text-center font-semibold text-amber-600">{row.late || '—'}</td>
+                            <td className="px-3 py-2 text-center text-slate-400">{row.notMarked}</td>
+                            <td className="px-3 py-2 text-center">
+                              <span className={`px-2 py-0.5 rounded-full font-semibold ${
+                                row.markedPct >= 80 ? 'bg-emerald-100 text-emerald-700' :
+                                row.markedPct >= 50 ? 'bg-amber-100 text-amber-700' :
+                                row.markedPct > 0 ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-400'
+                              }`}>
+                                {row.markedPct > 0 ? `${row.markedPct}%` : '—'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

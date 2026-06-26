@@ -133,15 +133,38 @@ export class PlannerService {
 
   // ── Notices ──────────────────────────────────────────────────────────────────
 
+  /** Build OR filter so a school sees its own + broader-scope notices */
+  private async noticeVisibilityWhere(schoolId: string) {
+    const school = await prisma.school.findUnique({
+      where: { id: schoolId },
+      select: { blockId: true, block: { select: { districtId: true, district: { select: { tenantId: true } } } } },
+    });
+    const blockId    = school?.blockId ?? null;
+    const districtId = school?.block?.districtId ?? null;
+    const tenantId   = school?.block?.district?.tenantId ?? null;
+
+    return {
+      OR: [
+        { scope: 'school', schoolId },
+        ...(blockId    ? [{ scope: 'block',    blockId    }] : []),
+        ...(districtId ? [{ scope: 'district', districtId }] : []),
+        ...(tenantId   ? [{ scope: 'all',      tenantId   }] : []),
+      ],
+    };
+  }
+
   async getNotices(user: AuthUser, schoolId?: string): Promise<any[]> {
     const today = this.today();
     const sid = schoolId ?? user.schoolId;
     if (!sid) return [];
+    const visWhere = await this.noticeVisibilityWhere(sid);
     return prisma.notice.findMany({
       where: {
-        schoolId: sid,
-        publishDate: { lte: today },
-        OR: [{ expiryDate: null }, { expiryDate: { gte: today } }],
+        AND: [
+          visWhere,
+          { publishDate: { lte: today } },
+          { OR: [{ expiryDate: null }, { expiryDate: { gte: today } }] },
+        ],
       },
       orderBy: { publishDate: 'desc' },
     });
@@ -150,23 +173,48 @@ export class PlannerService {
   async getAllNotices(user: AuthUser, schoolId?: string): Promise<any[]> {
     const sid = schoolId ?? user.schoolId;
     if (!sid) return [];
+    const visWhere = await this.noticeVisibilityWhere(sid);
     return prisma.notice.findMany({
-      where: { schoolId: sid },
+      where: visWhere,
       orderBy: { publishDate: 'desc' },
     });
   }
 
   async createNotice(user: AuthUser, dto: {
     title: string; description?: string; type?: string;
-    publishDate: string; expiryDate?: string; schoolId?: string;
+    publishDate: string; expiryDate?: string;
+    scope?: string; schoolId?: string; blockId?: string; districtId?: string;
   }) {
     const WRITE_ROLES = ['ADMIN', 'STATE_OFFICIAL', 'DISTRICT_OFFICIAL', 'PRINCIPAL'];
     if (!WRITE_ROLES.includes(user.role)) throw new ForbiddenException('Not authorized to create notices');
-    const sid = dto.schoolId ?? user.schoolId;
-    if (!sid) throw new ForbiddenException('No school ID');
+
+    const scope = dto.scope ?? 'school';
+    let schoolId: string | null = null;
+    let blockId: string | null = null;
+    let districtId: string | null = null;
+    let tenantId: string | null = null;
+
+    if (scope === 'school') {
+      schoolId = dto.schoolId ?? user.schoolId ?? null;
+      if (!schoolId) throw new ForbiddenException('schoolId required for school-scoped notice');
+    } else if (scope === 'block') {
+      blockId = dto.blockId ?? user.blockId ?? null;
+      if (!blockId) throw new ForbiddenException('blockId required');
+    } else if (scope === 'district') {
+      districtId = dto.districtId ?? user.districtId ?? null;
+      if (!districtId) throw new ForbiddenException('districtId required');
+    } else if (scope === 'all') {
+      tenantId = user.tenantId ?? null;
+      if (!tenantId) throw new ForbiddenException('tenantId required');
+    }
+
     return prisma.notice.create({
       data: {
-        schoolId: sid,
+        scope,
+        schoolId,
+        blockId,
+        districtId,
+        tenantId,
         title: dto.title,
         description: dto.description,
         type: dto.type ?? 'General',

@@ -531,6 +531,77 @@ export class AttendanceService {
 
   // ── DASHBOARD TODAY SUMMARY ─────────────────────────────────────────────
 
+  async todayDrilldown(user: AuthUser) {
+    const date = today();
+
+    // Group attendance by school+status for today
+    const attRows = await prisma.attendance.groupBy({
+      by: ['schoolId', 'status'],
+      where: { date },
+      _count: { status: true },
+    });
+
+    // Group student totals per school
+    const studentTotals = await prisma.student.groupBy({
+      by: ['schoolId'],
+      where: { active: true },
+      _count: { id: true },
+    });
+
+    // Get school names + district/block info
+    const schoolIds = [...new Set([
+      ...attRows.map(r => r.schoolId),
+      ...studentTotals.map(r => r.schoolId),
+    ])];
+
+    const schools = await prisma.school.findMany({
+      where: { id: { in: schoolIds } },
+      select: {
+        id: true, name: true,
+        block: { select: { name: true, district: { select: { name: true } } } },
+      },
+    });
+
+    const schoolMap = Object.fromEntries(schools.map(s => [s.id, s]));
+    const totalMap = Object.fromEntries(studentTotals.map(r => [r.schoolId, (r._count as any).id]));
+
+    // Aggregate per school
+    const bySchool: Record<string, any> = {};
+    for (const r of attRows) {
+      if (!bySchool[r.schoolId]) {
+        bySchool[r.schoolId] = { present: 0, absent: 0, late: 0, halfDay: 0 };
+      }
+      const count = (r._count as any).status;
+      if (r.status === 'P')  bySchool[r.schoolId].present  += count;
+      if (r.status === 'A')  bySchool[r.schoolId].absent   += count;
+      if (r.status === 'L')  bySchool[r.schoolId].late     += count;
+      if (r.status === 'HD') bySchool[r.schoolId].halfDay  += count;
+    }
+
+    return schoolIds
+      .filter(id => schoolMap[id])
+      .map(id => {
+        const sc = schoolMap[id];
+        const att = bySchool[id] ?? { present: 0, absent: 0, late: 0, halfDay: 0 };
+        const total = totalMap[id] ?? 0;
+        const marked = att.present + att.absent + att.late + att.halfDay;
+        return {
+          schoolId: id,
+          name: sc.name,
+          block: sc.block?.name ?? '',
+          district: sc.block?.district?.name ?? '',
+          total,
+          present: att.present,
+          absent: att.absent,
+          late: att.late,
+          halfDay: att.halfDay,
+          notMarked: Math.max(0, total - marked),
+          markedPct: total > 0 ? Math.round((marked / total) * 100) : 0,
+        };
+      })
+      .sort((a, b) => b.present - a.present);
+  }
+
   async todaySummary(user: AuthUser, schoolId?: string) {
     const date = today();
     const where = schoolId ? { schoolId, date } : { date };

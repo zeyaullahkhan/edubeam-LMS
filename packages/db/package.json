@@ -6,7 +6,7 @@
   "types": "src/index.ts",
   "scripts": {
     "generate": "prisma generate",
-    "push": "prisma db push --skip-generate",
+    "push": "prisma db push --skip-generate --accept-data-loss",
     "reset": "prisma db push --force-reset --skip-generate",
     "seed": "tsx src/seed.ts",
     "seed:force": "tsx src/seed.ts --force",

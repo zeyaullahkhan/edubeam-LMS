@@ -115,6 +115,11 @@ export class AttendanceController {
     return this.svc.todaySummary(user, schoolId);
   }
 
+  @Get('today-drilldown')
+  todayDrilldown(@CurrentUser() user: AuthUser) {
+    return this.svc.todayDrilldown(user);
+  }
+
   // ── Holidays ────────────────────────────────────────────────────────────
 
   @Post('holidays')

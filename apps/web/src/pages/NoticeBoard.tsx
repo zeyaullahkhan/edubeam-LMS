@@ -29,6 +29,9 @@ const TYPE_ICON: Record<NoticeType, string> = {
 
 const WRITE_ROLES = ['ADMIN', 'STATE_OFFICIAL', 'DISTRICT_OFFICIAL', 'PRINCIPAL'];
 
+// Roles that can publish beyond a single school
+const BROAD_SCOPE_ROLES = ['ADMIN', 'STATE_OFFICIAL', 'DISTRICT_OFFICIAL', 'BLOCK_OFFICIAL'];
+
 const today = new Date().toISOString().slice(0, 10);
 
 function fmtDate(d: string) {
@@ -37,9 +40,27 @@ function fmtDate(d: string) {
 
 const inputCls = 'w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sky-300/50 focus:border-sky-300 transition-colors';
 
+const PUBLISH_SCOPES = [
+  { value: 'school',   label: 'Single School',    icon: 'fa-school',   color: 'border-sky-400 bg-sky-50',      active: 'border-sky-500 bg-sky-100 text-sky-700'      },
+  { value: 'block',    label: 'Block Schools',     icon: 'fa-city',     color: 'border-violet-400 bg-violet-50', active: 'border-violet-500 bg-violet-100 text-violet-700' },
+  { value: 'district', label: 'District Schools',  icon: 'fa-map',      color: 'border-amber-400 bg-amber-50',  active: 'border-amber-500 bg-amber-100 text-amber-700'   },
+  { value: 'all',      label: 'All 500 Schools',   icon: 'fa-globe',    color: 'border-emerald-400 bg-emerald-50', active: 'border-emerald-500 bg-emerald-100 text-emerald-700' },
+];
+
+const SCOPE_BADGE: Record<string, string> = {
+  school:   'bg-sky-100 text-sky-700',
+  block:    'bg-violet-100 text-violet-700',
+  district: 'bg-amber-100 text-amber-700',
+  all:      'bg-emerald-100 text-emerald-700',
+};
+const SCOPE_LABEL: Record<string, string> = {
+  school: 'Single School', block: 'Block-wide', district: 'District-wide', all: 'All Schools',
+};
+
 export function NoticeBoard() {
   const { user } = useAuth();
   const canWrite = WRITE_ROLES.includes(user?.role ?? '');
+  const canBroadcast = BROAD_SCOPE_ROLES.includes(user?.role ?? '');
 
   const [scope, setScope] = useState<Scope>({});
   const [notices, setNotices] = useState<any[]>([]);
@@ -47,6 +68,7 @@ export function NoticeBoard() {
   const [filter, setFilter] = useState<string>('all');
   const [showForm, setShowForm] = useState(false);
   const [editNotice, setEditNotice] = useState<any | null>(null);
+  const [publishScope, setPublishScope] = useState<string>('school');
   const [form, setForm] = useState({ title: '', description: '', type: 'General', publishDate: today, expiryDate: '' });
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
@@ -71,20 +93,32 @@ export function NoticeBoard() {
 
   const urgentCount = notices.filter(n => n.type === 'Urgent').length;
 
-  const resetForm = () => { setForm({ title: '', description: '', type: 'General', publishDate: today, expiryDate: '' }); setEditNotice(null); setShowForm(false); };
+  const resetForm = () => {
+    setForm({ title: '', description: '', type: 'General', publishDate: today, expiryDate: '' });
+    setPublishScope('school');
+    setEditNotice(null);
+    setShowForm(false);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr(''); setMsg('');
-    if (!schoolId) { setErr('Select a school first.'); return; }
+    // School scope requires a school to be selected; broader scopes don't
+    if (publishScope === 'school' && !schoolId) { setErr('Select a school first.'); return; }
     setSaving(true);
     try {
       if (editNotice) {
         await api.updateNotice(editNotice.id, form);
         setMsg('Notice updated.');
       } else {
-        await api.createNotice({ ...form, schoolId });
-        setMsg('Notice created.');
+        await api.createNotice({
+          ...form,
+          scope: publishScope,
+          schoolId: publishScope === 'school' ? schoolId : undefined,
+          blockId: publishScope === 'block' ? scope.blockId : undefined,
+          districtId: publishScope === 'district' ? scope.districtId : undefined,
+        });
+        setMsg(`Notice posted to ${SCOPE_LABEL[publishScope]}.`);
       }
       resetForm();
       load();
@@ -129,6 +163,32 @@ export function NoticeBoard() {
       {showForm && canWrite && (
         <form onSubmit={handleSubmit} className="panel p-5 space-y-4 border-l-4 border-l-sky-500">
           <h2 className="font-semibold text-slate-700"><i className="fas fa-edit text-sky-500 mr-1.5" />{editNotice ? 'Edit Notice' : 'New Notice'}</h2>
+
+          {/* Publish scope — only for broad-scope roles, only on new notices */}
+          {!editNotice && canBroadcast && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-2">Publish To *</label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {PUBLISH_SCOPES.map(s => (
+                  <button key={s.value} type="button"
+                    onClick={() => setPublishScope(s.value)}
+                    className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 text-center transition-all ${
+                      publishScope === s.value ? s.active + ' border-current' : 'border-slate-200 hover:border-slate-300 bg-white text-slate-600'
+                    }`}>
+                    <i className={`fas ${s.icon} text-lg`} />
+                    <span className="text-xs font-semibold leading-tight">{s.label}</span>
+                  </button>
+                ))}
+              </div>
+              {publishScope !== 'school' && (
+                <p className="text-xs text-amber-600 mt-2 bg-amber-50 rounded-lg px-3 py-2">
+                  <i className="fas fa-info-circle mr-1" />
+                  This notice will be visible to all schools in the selected {publishScope === 'all' ? 'state' : publishScope}.
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="grid md:grid-cols-2 gap-4">
             <div className="md:col-span-2">
               <label className="block text-xs font-semibold text-slate-600 mb-1">Title *</label>
@@ -212,6 +272,11 @@ export function NoticeBoard() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-bold text-slate-800">{n.title}</span>
                     <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${colorCls}`}>{type}</span>
+                    {n.scope && n.scope !== 'school' && (
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${SCOPE_BADGE[n.scope] ?? 'bg-slate-100 text-slate-600'}`}>
+                        <i className="fas fa-globe mr-0.5" />{SCOPE_LABEL[n.scope] ?? n.scope}
+                      </span>
+                    )}
                     {isExpired && <span className="text-[10px] text-slate-400 font-medium">Expired</span>}
                     {n.type === 'Urgent' && !isExpired && (
                       <span className="text-[10px] font-bold text-rose-600 animate-pulse">⚠ URGENT</span>

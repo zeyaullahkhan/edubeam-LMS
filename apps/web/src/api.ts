@@ -245,7 +245,8 @@ export const api = {
 
   // Notices
   notices: (schoolId: string) => req<any[]>(`/planner/notices?schoolId=${schoolId}`),
-  createNotice: (body: any) => req<any>('/planner/notices', { method: 'POST', body: JSON.stringify(body) }),
+  createNotice: (body: { title: string; description?: string; type?: string; publishDate: string; expiryDate?: string; scope?: string; schoolId?: string; blockId?: string; districtId?: string }) =>
+    req<any>('/planner/notices', { method: 'POST', body: JSON.stringify(body) }),
   updateNotice: (id: string, body: any) =>
     req<any>(`/planner/notices/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   deleteNotice: (id: string) =>
@@ -325,6 +326,8 @@ export const api = {
       req<any>(`/attendance/results/class?schoolId=${schoolId}&grade=${grade}&examType=${examType}&year=${year}${section ? `&section=${section}` : ''}`),
     today: (schoolId?: string) =>
       req<any>(`/attendance/today${schoolId ? `?schoolId=${schoolId}` : ''}`),
+    todayDrilldown: () =>
+      req<any[]>('/attendance/today-drilldown'),
     studentMe: () =>
       req<any>('/attendance/students/me'),
     children: () =>
