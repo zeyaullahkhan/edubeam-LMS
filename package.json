@@ -18,8 +18,8 @@
     "dev:web": "npm --workspace apps/web run dev",
     "build": "npm --workspace apps/web run build",
     "start:prod": "npm --workspace packages/db run seed && npm --workspace apps/api run start",
-    "render:build": "npm --workspace packages/db run use-postgres && npm --workspace packages/db run generate && npm --workspace packages/db run push && npm --workspace packages/db run seed && npm --workspace packages/db run migrate-blocks && node scripts/seed-logins.mjs && npm --workspace apps/web run build",
-    "render:start": "npm --workspace apps/api run start"
+    "render:build": "npm --workspace packages/db run use-postgres && npm --workspace packages/db run generate && npm --workspace packages/db run push && npm --workspace apps/web run build",
+    "render:start": "npm --workspace packages/db run seed && npm --workspace packages/db run migrate-blocks && node scripts/seed-logins.mjs && npm --workspace apps/api run start"
   },
   "devDependencies": {
     "better-sqlite3": "^12.11.1",
