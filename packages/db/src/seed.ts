@@ -679,7 +679,7 @@ function makeStaff(seed: string, idx: number, schoolId: string, type: 'PRINCIPAL
  */
 async function seedPeople() {
   const DEMO_UDISE = '5090104505';
-  const CAP = 30; // max students per gender per grade
+  const CAP = 8; // max students per gender per grade (keeps DB writes frequent)
 
   const allSchools = await prisma.school.findMany({
     select: {
@@ -688,42 +688,39 @@ async function seedPeople() {
     },
   });
 
-  const students: GenStudent[] = [];
-  const staff: GenStaff[] = [];
+  let totalStudents = 0;
+  let totalStaff = 0;
 
+  // Process one school at a time so the DB connection stays active.
   for (const s of allSchools) {
     const r = mulberry32(hashStr(s.udiseCode));
     let idx = 0;
 
-    // Use real enrollment data for every school; fall back to 2/grade if missing.
     const enrollments = s.enrollments.length > 0
       ? s.enrollments
       : [6, 7, 8, 9, 10, 11, 12].map(g => ({ grade: g, boys: 2, girls: 2 }));
 
+    const students: GenStudent[] = [];
     for (const e of enrollments) {
       const boys  = Math.min(e.boys,  CAP);
       const girls = Math.min(e.girls, CAP);
       for (let i = 0; i < boys;  i++) students.push(makeStudent(s.udiseCode + 'b', idx++, s.id, e.grade, 'M'));
       for (let i = 0; i < girls; i++) students.push(makeStudent(s.udiseCode + 'g', idx++, s.id, e.grade, 'F'));
     }
+    await withDbRetry('student.createMany', () => prisma.student.createMany({ data: students }));
+    totalStudents += students.length;
 
-    // Demo school gets a full teaching staff; others get a realistic smaller set.
     const isDemo = s.udiseCode === DEMO_UDISE;
+    const staff: GenStaff[] = [];
     staff.push(makeStaff(s.udiseCode, 0, s.id, 'PRINCIPAL'));
     const nTeachers = isDemo ? 12 : 3 + Math.floor(r() * 3);
     for (let i = 1; i <= nTeachers; i++) staff.push(makeStaff(s.udiseCode, i, s.id, 'TEACHER'));
     if (s.hasIctLab || isDemo) staff.push(makeStaff(s.udiseCode, 99, s.id, 'LAB_ASSISTANT'));
+    await withDbRetry('staff.createMany', () => prisma.staff.createMany({ data: staff }));
+    totalStaff += staff.length;
   }
 
-  for (let i = 0; i < students.length; i += 500) {
-    const chunk = students.slice(i, i + 500);
-    await withDbRetry('student.createMany', () => prisma.student.createMany({ data: chunk }));
-  }
-  for (let i = 0; i < staff.length; i += 500) {
-    const chunk = staff.slice(i, i + 500);
-    await withDbRetry('staff.createMany', () => prisma.staff.createMany({ data: chunk }));
-  }
-  return { students: students.length, staff: staff.length };
+  return { students: totalStudents, staff: totalStaff };
 }
 
 // ── Content channels & lecture import ───────────────────────────────────────
