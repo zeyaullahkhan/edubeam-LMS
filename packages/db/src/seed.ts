@@ -673,50 +673,46 @@ function makeStaff(seed: string, idx: number, schoolId: string, type: 'PRINCIPAL
 }
 
 /**
- * Generates and inserts sample students & staff. GIC Barechhina (the principal
- * demo school) gets a full roster derived from its real enrollment; every other
- * school gets a small deterministic sample so demographics roll up at all scopes.
+ * Generates and inserts students & staff for all schools using their real
+ * enrollment data (capped per grade) so that attendance, student list, and
+ * school overview counts are consistent across the system.
  */
 async function seedPeople() {
-  const demoSchool = await prisma.school.findUnique({
-    where: { udiseCode: '5090104505' },
-    include: { enrollments: true },
-  });
+  const DEMO_UDISE = '5090104505';
+  const CAP = 30; // max students per gender per grade
+
   const allSchools = await prisma.school.findMany({
-    select: { id: true, udiseCode: true, hasIctLab: true },
+    select: {
+      id: true, udiseCode: true, hasIctLab: true,
+      enrollments: { select: { grade: true, boys: true, girls: true } },
+    },
   });
 
   const students: GenStudent[] = [];
   const staff: GenStaff[] = [];
 
-  // Full roster for the demo school from real enrollment grade/gender counts (capped per grade).
-  if (demoSchool) {
-    let idx = 0;
-    for (const e of demoSchool.enrollments) {
-      const boys = Math.min(e.boys, 18);
-      const girls = Math.min(e.girls, 18);
-      for (let i = 0; i < boys; i++) students.push(makeStudent(demoSchool.udiseCode + 'b', idx++, demoSchool.id, e.grade, 'M'));
-      for (let i = 0; i < girls; i++) students.push(makeStudent(demoSchool.udiseCode + 'g', idx++, demoSchool.id, e.grade, 'F'));
-    }
-    staff.push(makeStaff(demoSchool.udiseCode, 0, demoSchool.id, 'PRINCIPAL'));
-    for (let i = 1; i <= 12; i++) staff.push(makeStaff(demoSchool.udiseCode, i, demoSchool.id, 'TEACHER'));
-    staff.push(makeStaff(demoSchool.udiseCode, 13, demoSchool.id, 'LAB_ASSISTANT'));
-  }
-
-  // Small deterministic sample for every other school.
   for (const s of allSchools) {
-    if (demoSchool && s.id === demoSchool.id) continue;
     const r = mulberry32(hashStr(s.udiseCode));
     let idx = 0;
-    for (let g = 6; g <= 12; g++) {
-      // 1 boy + 1 girl per grade for a 14-student sample roster.
-      students.push(makeStudent(s.udiseCode + 'b', idx++, s.id, g, 'M'));
-      students.push(makeStudent(s.udiseCode + 'g', idx++, s.id, g, 'F'));
+
+    // Use real enrollment data for every school; fall back to 2/grade if missing.
+    const enrollments = s.enrollments.length > 0
+      ? s.enrollments
+      : [6, 7, 8, 9, 10, 11, 12].map(g => ({ grade: g, boys: 2, girls: 2 }));
+
+    for (const e of enrollments) {
+      const boys  = Math.min(e.boys,  CAP);
+      const girls = Math.min(e.girls, CAP);
+      for (let i = 0; i < boys;  i++) students.push(makeStudent(s.udiseCode + 'b', idx++, s.id, e.grade, 'M'));
+      for (let i = 0; i < girls; i++) students.push(makeStudent(s.udiseCode + 'g', idx++, s.id, e.grade, 'F'));
     }
+
+    // Demo school gets a full teaching staff; others get a realistic smaller set.
+    const isDemo = s.udiseCode === DEMO_UDISE;
     staff.push(makeStaff(s.udiseCode, 0, s.id, 'PRINCIPAL'));
-    const nTeachers = 3 + Math.floor(r() * 3);
+    const nTeachers = isDemo ? 12 : 3 + Math.floor(r() * 3);
     for (let i = 1; i <= nTeachers; i++) staff.push(makeStaff(s.udiseCode, i, s.id, 'TEACHER'));
-    if (s.hasIctLab) staff.push(makeStaff(s.udiseCode, 99, s.id, 'LAB_ASSISTANT'));
+    if (s.hasIctLab || isDemo) staff.push(makeStaff(s.udiseCode, 99, s.id, 'LAB_ASSISTANT'));
   }
 
   for (let i = 0; i < students.length; i += 500) {
