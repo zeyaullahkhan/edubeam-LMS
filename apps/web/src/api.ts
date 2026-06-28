@@ -77,6 +77,7 @@ export interface SchoolRow {
   address: string | null;
   principalName: string | null;
   phone: string | null;
+  phone2: string | null;
   teachers: number | null;
   students: number | null;
   enrolledStudents: number | null;

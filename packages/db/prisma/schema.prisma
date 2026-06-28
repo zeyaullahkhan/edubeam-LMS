@@ -61,6 +61,7 @@ model School {
   address             String?
   principalName       String?
   phone               String?
+  phone2              String?
   // ── Infrastructure ─────────────────────────────────────────────────────────
   campusArea          Float?   // acres / sq-m (free text unit stored separately)
   campusAreaUnit      String?  // "acres" | "sqm"

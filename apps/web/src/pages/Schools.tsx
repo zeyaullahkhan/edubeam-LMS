@@ -121,6 +121,7 @@ const TABS: Tab[] = [
 const COMPLETION_FIELDS: { key: string; label: string }[] = [
   { key: 'principalName',         label: 'Principal Name' },
   { key: 'phone',                 label: 'Contact Number' },
+  { key: 'phone2',                label: 'Contact Number 2' },
   { key: 'email',                 label: 'Email' },
   { key: 'address',               label: 'Address' },
   { key: 'registrationNumber',    label: 'Registration Number' },
@@ -206,6 +207,7 @@ function SchoolModal({ school, onClose, onSaved, readonlyIdentity }: SchoolModal
     // General
     principalName: s?.principalName ?? '',
     phone: s?.phone ?? '',
+    phone2: s?.phone2 ?? '',
     email: s?.email ?? '',
     address: s?.address ?? '',
     registrationNumber: s?.registrationNumber ?? '',
@@ -487,6 +489,10 @@ function SchoolModal({ school, onClose, onSaved, readonlyIdentity }: SchoolModal
                   <div>
                     <label className="form-label">Contact Number</label>
                     <input value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="Mobile Number" className="form-input" />
+                  </div>
+                  <div>
+                    <label className="form-label">Contact Number 2</label>
+                    <input value={form.phone2} onChange={e => set('phone2', e.target.value)} placeholder="Second mobile (optional)" className="form-input" />
                   </div>
                   <div>
                     <label className="form-label">Email</label>
@@ -922,6 +928,7 @@ export function Schools() {
                   Block: s.block,
                   Principal: s.principalName ?? '',
                   Phone: s.phone ?? '',
+                  'Phone 2': s.phone2 ?? '',
                   Address: s.address ?? '',
                   'Virtual Classroom': s.hasVirtualClassroom ? 'Yes' : 'No',
                   'ICT Lab': s.hasIctLab ? 'Yes' : 'No',

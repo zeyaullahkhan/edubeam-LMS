@@ -59,6 +59,7 @@ export class SchoolsService {
       address: s.address,
       principalName: s.principalName,
       phone: s.phone,
+      phone2: s.phone2,
       teachers: s.ictDeployment?.teacherCount ?? null,
       students: s.ictDeployment?.studentCount ?? null,
       enrolledStudents: enrollMap.get(s.id) ?? null,
@@ -197,7 +198,7 @@ export class SchoolsService {
   async create(user: AuthUser, body: any) {
     if (user.role !== 'ADMIN') throw new ForbiddenException('Admin only');
     const { blockId, name, udiseCode, siteCode, type, hasVirtualClassroom, hasIctLab,
-            address, principalName, phone } = body;
+            address, principalName, phone, phone2 } = body;
 
     const block = await prisma.block.findUnique({ where: { id: blockId } });
     if (!block) throw new NotFoundException('Block not found');
@@ -214,6 +215,7 @@ export class SchoolsService {
         address: address ? String(address).trim() : null,
         principalName: principalName ? String(principalName).trim() : null,
         phone: phone ? String(phone).trim() : null,
+        phone2: phone2 ? String(phone2).trim() : null,
       },
       include: { block: { include: { district: true } } },
     });
@@ -231,7 +233,7 @@ export class SchoolsService {
 
     const {
       name, udiseCode, siteCode, blockId, type, hasVirtualClassroom, hasIctLab,
-      address, principalName, phone,
+      address, principalName, phone, phone2,
       campusArea, campusAreaUnit, builtUpArea, numBuildings, numClassrooms,
       hasPlayground, hasBoundaryWall, hasLibrary, hasLaboratory, hasComputerLab,
       hasSmartClassroom, hasElectricity, hasInternet, hasCctv,
@@ -277,6 +279,7 @@ export class SchoolsService {
         ...(address !== undefined && { address: nullStr(address) }),
         ...(principalName !== undefined && { principalName: nullStr(principalName) }),
         ...(phone !== undefined && { phone: nullStr(phone) }),
+        ...(phone2 !== undefined && { phone2: nullStr(phone2) }),
         // Infrastructure
         ...(campusArea !== undefined && { campusArea: nullFlt(campusArea) }),
         ...(campusAreaUnit !== undefined && { campusAreaUnit: nullStr(campusAreaUnit) }),
