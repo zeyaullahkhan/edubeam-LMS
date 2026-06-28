@@ -95,13 +95,39 @@ export function Dashboard() {
   const [mySchool, setMySchool] = useState<SchoolRow | null>(null);
 
   useEffect(() => {
-    Promise.all([api.overview(), api.districts(), api.enrollment(), api.teacherStats()])
-      .then(([o, d, e, ts]) => { setOverview(o); setDistricts(d); setEnrollment(e); setTeacherStats(ts); })
+    const CACHE_KEY = 'dash_snapshot_v1';
+    const CACHE_TTL = 2 * 60 * 1000; // 2 min — matches server cache
+
+    // Paint from cache immediately (zero spinner on repeat visits)
+    try {
+      const cached = JSON.parse(localStorage.getItem(CACHE_KEY) ?? 'null');
+      if (cached && Date.now() - cached.ts < CACHE_TTL) {
+        const s = cached.data;
+        setOverview(s.overview);
+        setDistricts(s.districts);
+        setMapDistricts(s.mapDistricts);
+        setEnrollment(s.enrollment);
+        setTeacherStats(s.teacherStats);
+        if (s.todayAtt) setTodayAtt(s.todayAtt);
+        if (s.holidays?.length) setUpcomingHolidays(s.holidays);
+      }
+    } catch { /* ignore */ }
+
+    // Single round-trip: server runs all queries in parallel
+    api.snapshot()
+      .then((s) => {
+        setOverview(s.overview);
+        setDistricts(s.districts);
+        setMapDistricts(s.mapDistricts);
+        setEnrollment(s.enrollment);
+        setTeacherStats(s.teacherStats);
+        if (s.todayAtt) setTodayAtt(s.todayAtt);
+        if (s.holidays?.length) setUpcomingHolidays(s.holidays);
+        try { localStorage.setItem(CACHE_KEY, JSON.stringify({ data: s, ts: Date.now() })); } catch { /* ignore */ }
+      })
       .catch((e) => setError((e as Error).message));
-    api.mapDistricts().then(setMapDistricts).catch(() => null);
-    if (user?.schoolId) api.schools({ q: '' }).then(rows => setMySchool(rows[0] ?? null)).catch(() => null);
-    api.attendance.today().then(setTodayAtt).catch(() => null);
-    api.planner.upcoming(3).then(setUpcomingHolidays).catch(() => null);
+
+    if (user?.schoolId) api.school(user.schoolId).then(setMySchool).catch(() => null);
   }, []);
 
   const openAttDrilldown = async (metric: 'present' | 'absent' | 'late') => {

@@ -181,6 +181,15 @@ export const api = {
       body: JSON.stringify({ email, password }),
     }),
   me: () => req<AuthUser>('/auth/me'),
+  snapshot: () => req<{
+    overview: Overview;
+    districts: DistrictSummary[];
+    mapDistricts: DistrictSummary[];
+    enrollment: EnrollmentDemographics;
+    teacherStats: TeacherStats;
+    todayAtt: any;
+    holidays: any[];
+  }>('/analytics/snapshot'),
   overview: () => req<Overview>('/analytics/overview'),
   districts: () => req<DistrictSummary[]>('/analytics/districts'),
   mapDistricts: () => req<DistrictSummary[]>('/analytics/map-districts'),

@@ -4,6 +4,12 @@ import { JwtGuard } from '../auth/jwt.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { AnalyticsService } from './analytics.service';
 import { KpiService } from './kpi.service';
+import { AttendanceService } from '../attendance/attendance.service';
+import { PlannerService } from '../planner/planner.service';
+
+// In-memory cache: key = role+tenantId+districtId+schoolId, TTL = 2 min
+const snapshotCache = new Map<string, { data: any; ts: number }>();
+const SNAPSHOT_TTL = 2 * 60 * 1000;
 
 @Controller('analytics')
 @UseGuards(JwtGuard)
@@ -11,6 +17,8 @@ export class AnalyticsController {
   constructor(
     private readonly analytics: AnalyticsService,
     private readonly kpi: KpiService,
+    private readonly attendanceSvc: AttendanceService,
+    private readonly plannerSvc: PlannerService,
   ) {}
 
   @Get('kpis')
@@ -21,6 +29,27 @@ export class AnalyticsController {
     @Query('schoolId') schoolId?: string,
   ) {
     return this.kpi.kpis(user, { districtId, blockId, schoolId });
+  }
+
+  @Get('snapshot')
+  async snapshot(@CurrentUser() user: AuthUser) {
+    const key = `${user.role}|${user.tenantId}|${user.districtId}|${user.schoolId}`;
+    const cached = snapshotCache.get(key);
+    if (cached && Date.now() - cached.ts < SNAPSHOT_TTL) return cached.data;
+
+    const [overview, districts, mapDistricts, enrollment, teacherStats, todayAtt, holidays] = await Promise.all([
+      this.analytics.overview(user),
+      this.analytics.districtSummaries(user),
+      this.analytics.allDistrictSummaries(user),
+      this.analytics.enrollmentDemographics(user),
+      this.analytics.teacherStats(user),
+      this.attendanceSvc.todaySummary(user).catch(() => null),
+      this.plannerSvc.getUpcoming(user, 3).catch(() => []),
+    ]);
+
+    const data = { overview, districts, mapDistricts, enrollment, teacherStats, todayAtt, holidays };
+    snapshotCache.set(key, { data, ts: Date.now() });
+    return data;
   }
 
   @Get('overview')
