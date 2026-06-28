@@ -183,6 +183,7 @@ export const api = {
   me: () => req<AuthUser>('/auth/me'),
   overview: () => req<Overview>('/analytics/overview'),
   districts: () => req<DistrictSummary[]>('/analytics/districts'),
+  mapDistricts: () => req<DistrictSummary[]>('/analytics/map-districts'),
   blocks: (districtId: string) => req<BlockSummary[]>(`/analytics/blocks?districtId=${districtId}`),
   subjects: (examType: '10TH' | '12TH') =>
     req<SubjectAverage[]>(`/analytics/subjects?examType=${examType}`),
@@ -201,6 +202,7 @@ export const api = {
     ).toString();
     return req<SchoolRow[]>(`/schools${qs ? `?${qs}` : ''}`);
   },
+  school: (id: string) => req<SchoolRow>(`/schools/${id}`),
   schoolDistricts: () => req<DistrictMeta[]>('/schools/meta/districts'),
   createSchool: (body: SchoolFormData) =>
     req<SchoolRow>('/schools', { method: 'POST', body: JSON.stringify(body) }),

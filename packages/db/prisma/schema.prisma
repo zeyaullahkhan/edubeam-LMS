@@ -98,6 +98,85 @@ model School {
   hasSecurityGuard    Boolean?
   emergencyContact    String?
 
+  // ── General Info (extended) ──────────────────────────────────────────────────
+  registrationNumber  String?
+  email               String?
+  yearEstablished     Int?
+  assemblyConstituency String?
+  gramPanchayat       String?
+  managedBy           String?  // "Govt" | "Private" | "Aided" | "Unaided" | "Other"
+  mediumOfInstruction String?  // "Hindi" | "English" | "Bilingual" | "Other"
+
+  // ── Land Record ────────────────────────────────────────────────────────────────
+  totalLand           Float?
+  totalLandUnit       String?  // "acres" | "sqm" | "sqft"
+  hasGarden           Boolean?
+  landInSchoolName    Boolean?
+
+  // ── Building ───────────────────────────────────────────────────────────────────
+  buildingType        String?  // "Pucca" | "Semi-Pucca" | "Kuchcha" | "Rented"
+  hasHmRoom           Boolean?
+  hasOfficeRoom       Boolean?
+  hasCommonRoom       Boolean?
+  hasComputerRoom     Boolean?
+  hasArtCraftRoom     Boolean?
+
+  // ── Furniture (per room: chairs / tables / cupboards) ─────────────────────────
+  hmChairs            Int?
+  hmTables            Int?
+  hmCupboards         Int?
+  officeChairs        Int?
+  officeTables        Int?
+  officeCupboards     Int?
+  commonChairs        Int?
+  commonTables        Int?
+  commonCupboards     Int?
+  classChairs         Int?
+  classTables         Int?
+  classCupboards      Int?
+  computerChairs      Int?
+  computerTables      Int?
+  computerCupboards   Int?
+  libraryChairs       Int?
+  libraryTables       Int?
+  libraryCupboards    Int?
+  artChairs           Int?
+  artTables           Int?
+  artCupboards        Int?
+  vcChairs            Int?
+  vcTables            Int?
+  vcCupboards         Int?
+
+  // ── Water (additional) ────────────────────────────────────────────────────────
+  hasOverheadTank     Boolean?
+  waterQuantity       Float?   // litres per day
+  hasWaterPurifier    Boolean?
+  purifierInstallDate String?  // ISO date "YYYY-MM-DD"
+
+  // ── Toilets (detailed counts) ──────────────────────────────────────────────────
+  numUsableToilets    Int?
+  numUnusableToilets  Int?
+  numStaffToilets     Int?
+  numCwsnToilets      Int?
+  numOtherToilets     Int?
+
+  // ── Electricity ────────────────────────────────────────────────────────────────
+  electricityAvailability String?  // "24hrs" | "Partial" | "Solar" | "None"
+
+  // ── Computer Lab ──────────────────────────────────────────────────────────────
+  numDesktopPCs       Int?
+  hasUPS              Boolean?
+  hasInternetConnectivity Boolean?
+
+  // ── Hostel ─────────────────────────────────────────────────────────────────────
+  numHostelStudentRooms   Int?
+  hostelStudentCapacity   Int?
+  numHostelStudents       Int?
+  numHostelStaffRooms     Int?
+  hostelStaffCapacity     Int?
+
+  //
+
   // ── Profile tracking ─────────────────────────────────────────────────────
   profileUpdatedBy    String?
   profileUpdatedAt    DateTime?
@@ -452,10 +531,15 @@ model LeaveRequest {
 // ── Notice Board ─────────────────────────────────────────────────────────────
 
 // type: "General" | "Academic" | "Event" | "Urgent"
+// scope: "school" | "block" | "district" | "all" — who this notice is visible to
 model Notice {
   id            String   @id @default(cuid())
-  schoolId      String
-  school        School   @relation(fields: [schoolId], references: [id])
+  scope         String   @default("school") // school | block | district | all
+  schoolId      String?  // set when scope = "school"
+  school        School?  @relation(fields: [schoolId], references: [id])
+  blockId       String?  // set when scope = "block"
+  districtId    String?  // set when scope = "district"
+  tenantId      String?  // set when scope = "all"
   title         String
   description   String?
   type          String   @default("General")
@@ -467,6 +551,9 @@ model Notice {
   updatedAt     DateTime @updatedAt
 
   @@index([schoolId, publishDate])
+  @@index([blockId, publishDate])
+  @@index([districtId, publishDate])
+  @@index([tenantId, publishDate])
 }
 
 // ── Academic Year ─────────────────────────────────────────────────────────────

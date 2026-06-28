@@ -68,8 +68,14 @@ export function UttarakhandMap({ districts, onDistrictClick }: Props) {
     districtByKey[k] = d;
   }
 
-  const totalSchools  = districts.reduce((s, d) => s + d.schools, 0);
-  const totalStudents = districts.reduce((s, d) => s + d.totalStudents, 0);
+  // Only count districts that match this map's known UK districts
+  const knownKeys = new Set<string>(DISTRICT_CONFIG.map(d => d.key));
+  const mappedDistricts = districts.filter(d => {
+    const k = NAME_MAP[normKey(d.district)] ?? normKey(d.district);
+    return knownKeys.has(k);
+  });
+  const totalSchools  = mappedDistricts.reduce((s, d) => s + d.schools, 0);
+  const totalStudents = mappedDistricts.reduce((s, d) => s + d.totalStudents, 0);
   const pct = (v: number | null | undefined) =>
     v == null ? '—' : `${(v * 100).toFixed(1)}%`;
 
@@ -308,7 +314,7 @@ export function UttarakhandMap({ districts, onDistrictClick }: Props) {
       <div className="grid grid-cols-4 border-t border-slate-100">
         {[
           { icon: 'fas fa-school',         bg: '#eff6ff', color: '#1d4ed8', value: totalSchools.toLocaleString(),  label: 'Active Schools',    sub: 'Across Uttarakhand' },
-          { icon: 'fas fa-map-marker-alt', bg: '#f0fdf4', color: '#15803d', value: String(districts.length),       label: 'Districts',         sub: 'All covered' },
+          { icon: 'fas fa-map-marker-alt', bg: '#f0fdf4', color: '#15803d', value: String(mappedDistricts.length), label: 'Districts',         sub: 'All covered' },
           { icon: 'fas fa-user-graduate',  bg: '#fffbeb', color: '#d97706', value: totalStudents.toLocaleString(), label: 'Students Enrolled', sub: '2025–26 session' },
           { icon: 'fas fa-clock',          bg: '#faf5ff', color: '#7c3aed',
             value: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),

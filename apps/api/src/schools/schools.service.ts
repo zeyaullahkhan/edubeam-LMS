@@ -102,6 +102,58 @@ export class SchoolsService {
       // Profile tracking
       profileUpdatedBy: s.profileUpdatedBy,
       profileUpdatedAt: s.profileUpdatedAt?.toISOString() ?? null,
+      // General Info (extended)
+      registrationNumber: s.registrationNumber,
+      email: s.email,
+      yearEstablished: s.yearEstablished,
+      assemblyConstituency: s.assemblyConstituency,
+      gramPanchayat: s.gramPanchayat,
+      managedBy: s.managedBy,
+      mediumOfInstruction: s.mediumOfInstruction,
+      // Land Record
+      totalLand: s.totalLand,
+      totalLandUnit: s.totalLandUnit,
+      hasGarden: s.hasGarden,
+      landInSchoolName: s.landInSchoolName,
+      // Building
+      buildingType: s.buildingType,
+      hasHmRoom: s.hasHmRoom,
+      hasOfficeRoom: s.hasOfficeRoom,
+      hasCommonRoom: s.hasCommonRoom,
+      hasComputerRoom: s.hasComputerRoom,
+      hasArtCraftRoom: s.hasArtCraftRoom,
+      // Furniture
+      hmChairs: s.hmChairs, hmTables: s.hmTables, hmCupboards: s.hmCupboards,
+      officeChairs: s.officeChairs, officeTables: s.officeTables, officeCupboards: s.officeCupboards,
+      commonChairs: s.commonChairs, commonTables: s.commonTables, commonCupboards: s.commonCupboards,
+      classChairs: s.classChairs, classTables: s.classTables, classCupboards: s.classCupboards,
+      computerChairs: s.computerChairs, computerTables: s.computerTables, computerCupboards: s.computerCupboards,
+      libraryChairs: s.libraryChairs, libraryTables: s.libraryTables, libraryCupboards: s.libraryCupboards,
+      artChairs: s.artChairs, artTables: s.artTables, artCupboards: s.artCupboards,
+      vcChairs: s.vcChairs, vcTables: s.vcTables, vcCupboards: s.vcCupboards,
+      // Water (additional)
+      hasOverheadTank: s.hasOverheadTank,
+      waterQuantity: s.waterQuantity,
+      hasWaterPurifier: s.hasWaterPurifier,
+      purifierInstallDate: s.purifierInstallDate,
+      // Toilets (detailed)
+      numUsableToilets: s.numUsableToilets,
+      numUnusableToilets: s.numUnusableToilets,
+      numStaffToilets: s.numStaffToilets,
+      numCwsnToilets: s.numCwsnToilets,
+      numOtherToilets: s.numOtherToilets,
+      // Electricity
+      electricityAvailability: s.electricityAvailability,
+      // Computer Lab
+      numDesktopPCs: s.numDesktopPCs,
+      hasUPS: s.hasUPS,
+      hasInternetConnectivity: s.hasInternetConnectivity,
+      // Hostel
+      numHostelStudentRooms: s.numHostelStudentRooms,
+      hostelStudentCapacity: s.hostelStudentCapacity,
+      numHostelStudents: s.numHostelStudents,
+      numHostelStaffRooms: s.numHostelStaffRooms,
+      hostelStaffCapacity: s.hostelStaffCapacity,
     }));
   }
 
@@ -168,9 +220,14 @@ export class SchoolsService {
   }
 
   async update(user: AuthUser, id: string, body: any) {
-    if (user.role !== 'ADMIN') throw new ForbiddenException('Admin only');
+    const isPrincipalOwnSchool = user.role === 'PRINCIPAL' && user.schoolId === id;
+    if (user.role !== 'ADMIN' && !isPrincipalOwnSchool) throw new ForbiddenException('Not authorized');
     const school = await prisma.school.findUnique({ where: { id } });
     if (!school) throw new NotFoundException('School not found');
+    // Principals cannot change identity/location fields
+    if (isPrincipalOwnSchool) {
+      delete body.name; delete body.udiseCode; delete body.siteCode; delete body.blockId;
+    }
 
     const {
       name, udiseCode, siteCode, blockId, type, hasVirtualClassroom, hasIctLab,
@@ -182,6 +239,24 @@ export class SchoolsService {
       hasCwsnToilet, hasHandwashing,
       classesFrom, classesTo, streams,
       hasFireSafety, hasDisasterPlan, hasFirstAid, hasSecurityGuard, emergencyContact,
+      // Extended fields
+      registrationNumber, email, yearEstablished, assemblyConstituency, gramPanchayat,
+      managedBy, mediumOfInstruction,
+      totalLand, totalLandUnit, hasGarden, landInSchoolName,
+      buildingType, hasHmRoom, hasOfficeRoom, hasCommonRoom, hasComputerRoom, hasArtCraftRoom,
+      hmChairs, hmTables, hmCupboards,
+      officeChairs, officeTables, officeCupboards,
+      commonChairs, commonTables, commonCupboards,
+      classChairs, classTables, classCupboards,
+      computerChairs, computerTables, computerCupboards,
+      libraryChairs, libraryTables, libraryCupboards,
+      artChairs, artTables, artCupboards,
+      vcChairs, vcTables, vcCupboards,
+      hasOverheadTank, waterQuantity, hasWaterPurifier, purifierInstallDate,
+      numUsableToilets, numUnusableToilets, numStaffToilets, numCwsnToilets, numOtherToilets,
+      electricityAvailability,
+      numDesktopPCs, hasUPS, hasInternetConnectivity,
+      numHostelStudentRooms, hostelStudentCapacity, numHostelStudents, numHostelStaffRooms, hostelStaffCapacity,
     } = body;
 
     const nullBool = (v: any) => v === null ? null : v !== undefined ? Boolean(v) : undefined;
@@ -235,6 +310,74 @@ export class SchoolsService {
         ...(hasFirstAid !== undefined && { hasFirstAid: nullBool(hasFirstAid) }),
         ...(hasSecurityGuard !== undefined && { hasSecurityGuard: nullBool(hasSecurityGuard) }),
         ...(emergencyContact !== undefined && { emergencyContact: nullStr(emergencyContact) }),
+        // General Info (extended)
+        ...(registrationNumber !== undefined && { registrationNumber: nullStr(registrationNumber) }),
+        ...(email !== undefined && { email: nullStr(email) }),
+        ...(yearEstablished !== undefined && { yearEstablished: nullInt(yearEstablished) }),
+        ...(assemblyConstituency !== undefined && { assemblyConstituency: nullStr(assemblyConstituency) }),
+        ...(gramPanchayat !== undefined && { gramPanchayat: nullStr(gramPanchayat) }),
+        ...(managedBy !== undefined && { managedBy: nullStr(managedBy) }),
+        ...(mediumOfInstruction !== undefined && { mediumOfInstruction: nullStr(mediumOfInstruction) }),
+        // Land Record
+        ...(totalLand !== undefined && { totalLand: nullFlt(totalLand) }),
+        ...(totalLandUnit !== undefined && { totalLandUnit: nullStr(totalLandUnit) }),
+        ...(hasGarden !== undefined && { hasGarden: nullBool(hasGarden) }),
+        ...(landInSchoolName !== undefined && { landInSchoolName: nullBool(landInSchoolName) }),
+        // Building
+        ...(buildingType !== undefined && { buildingType: nullStr(buildingType) }),
+        ...(hasHmRoom !== undefined && { hasHmRoom: nullBool(hasHmRoom) }),
+        ...(hasOfficeRoom !== undefined && { hasOfficeRoom: nullBool(hasOfficeRoom) }),
+        ...(hasCommonRoom !== undefined && { hasCommonRoom: nullBool(hasCommonRoom) }),
+        ...(hasComputerRoom !== undefined && { hasComputerRoom: nullBool(hasComputerRoom) }),
+        ...(hasArtCraftRoom !== undefined && { hasArtCraftRoom: nullBool(hasArtCraftRoom) }),
+        // Furniture
+        ...(hmChairs !== undefined && { hmChairs: nullInt(hmChairs) }),
+        ...(hmTables !== undefined && { hmTables: nullInt(hmTables) }),
+        ...(hmCupboards !== undefined && { hmCupboards: nullInt(hmCupboards) }),
+        ...(officeChairs !== undefined && { officeChairs: nullInt(officeChairs) }),
+        ...(officeTables !== undefined && { officeTables: nullInt(officeTables) }),
+        ...(officeCupboards !== undefined && { officeCupboards: nullInt(officeCupboards) }),
+        ...(commonChairs !== undefined && { commonChairs: nullInt(commonChairs) }),
+        ...(commonTables !== undefined && { commonTables: nullInt(commonTables) }),
+        ...(commonCupboards !== undefined && { commonCupboards: nullInt(commonCupboards) }),
+        ...(classChairs !== undefined && { classChairs: nullInt(classChairs) }),
+        ...(classTables !== undefined && { classTables: nullInt(classTables) }),
+        ...(classCupboards !== undefined && { classCupboards: nullInt(classCupboards) }),
+        ...(computerChairs !== undefined && { computerChairs: nullInt(computerChairs) }),
+        ...(computerTables !== undefined && { computerTables: nullInt(computerTables) }),
+        ...(computerCupboards !== undefined && { computerCupboards: nullInt(computerCupboards) }),
+        ...(libraryChairs !== undefined && { libraryChairs: nullInt(libraryChairs) }),
+        ...(libraryTables !== undefined && { libraryTables: nullInt(libraryTables) }),
+        ...(libraryCupboards !== undefined && { libraryCupboards: nullInt(libraryCupboards) }),
+        ...(artChairs !== undefined && { artChairs: nullInt(artChairs) }),
+        ...(artTables !== undefined && { artTables: nullInt(artTables) }),
+        ...(artCupboards !== undefined && { artCupboards: nullInt(artCupboards) }),
+        ...(vcChairs !== undefined && { vcChairs: nullInt(vcChairs) }),
+        ...(vcTables !== undefined && { vcTables: nullInt(vcTables) }),
+        ...(vcCupboards !== undefined && { vcCupboards: nullInt(vcCupboards) }),
+        // Water (additional)
+        ...(hasOverheadTank !== undefined && { hasOverheadTank: nullBool(hasOverheadTank) }),
+        ...(waterQuantity !== undefined && { waterQuantity: nullFlt(waterQuantity) }),
+        ...(hasWaterPurifier !== undefined && { hasWaterPurifier: nullBool(hasWaterPurifier) }),
+        ...(purifierInstallDate !== undefined && { purifierInstallDate: nullStr(purifierInstallDate) }),
+        // Toilets (detailed)
+        ...(numUsableToilets !== undefined && { numUsableToilets: nullInt(numUsableToilets) }),
+        ...(numUnusableToilets !== undefined && { numUnusableToilets: nullInt(numUnusableToilets) }),
+        ...(numStaffToilets !== undefined && { numStaffToilets: nullInt(numStaffToilets) }),
+        ...(numCwsnToilets !== undefined && { numCwsnToilets: nullInt(numCwsnToilets) }),
+        ...(numOtherToilets !== undefined && { numOtherToilets: nullInt(numOtherToilets) }),
+        // Electricity
+        ...(electricityAvailability !== undefined && { electricityAvailability: nullStr(electricityAvailability) }),
+        // Computer Lab
+        ...(numDesktopPCs !== undefined && { numDesktopPCs: nullInt(numDesktopPCs) }),
+        ...(hasUPS !== undefined && { hasUPS: nullBool(hasUPS) }),
+        ...(hasInternetConnectivity !== undefined && { hasInternetConnectivity: nullBool(hasInternetConnectivity) }),
+        // Hostel
+        ...(numHostelStudentRooms !== undefined && { numHostelStudentRooms: nullInt(numHostelStudentRooms) }),
+        ...(hostelStudentCapacity !== undefined && { hostelStudentCapacity: nullInt(hostelStudentCapacity) }),
+        ...(numHostelStudents !== undefined && { numHostelStudents: nullInt(numHostelStudents) }),
+        ...(numHostelStaffRooms !== undefined && { numHostelStaffRooms: nullInt(numHostelStaffRooms) }),
+        ...(hostelStaffCapacity !== undefined && { hostelStaffCapacity: nullInt(hostelStaffCapacity) }),
         // Auto-track who updated profile
         profileUpdatedBy: user.name,
         profileUpdatedAt: new Date(),

@@ -10,6 +10,7 @@
     "reset": "prisma db push --force-reset --skip-generate",
     "seed": "tsx src/seed.ts",
     "seed:force": "tsx src/seed.ts --force",
+    "import-students": "tsx src/import-students.ts",
     "migrate-blocks": "tsx src/migrate-blocks.ts",
     "bulk-logins": "tsx src/bulk-logins.ts",
     "use-postgres": "node scripts/use-postgres.mjs",

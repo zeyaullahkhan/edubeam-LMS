@@ -30,6 +30,15 @@ export function Analytics() {
   const [error, setError] = useState('');
 
   const canPickDistrict = user?.role === 'ADMIN' || user?.role === 'STATE_OFFICIAL';
+  const isSchoolScoped = ['PRINCIPAL', 'TEACHER', 'STUDENT', 'PARENT'].includes(user?.role ?? '');
+
+  // For school-scoped users pre-seed their schoolId so the backend scopes KPIs correctly
+  useEffect(() => {
+    if (isSchoolScoped && user?.schoolId) {
+      setSel({ schoolId: user.schoolId });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.schoolId]);
 
   useEffect(() => {
     api.districts().then(setDistricts).catch(() => setDistricts([]));
@@ -47,13 +56,30 @@ export function Analytics() {
   }, [sel.districtId, sel.blockId]);
 
   useEffect(() => {
-    api.kpis(sel).then(setData).catch((e) => setError((e as Error).message));
+    api.kpis(sel)
+      .then(setData)
+      .catch((e) => {
+        const msg = (e as Error).message ?? '';
+        setError(isSchoolScoped ? 'school_analytics_unavailable' : msg);
+      });
   }, [sel.districtId, sel.blockId, sel.schoolId]);
 
   const groups = data?.groups ?? [];
   const tabs = useMemo(
     () => [...groups.map((g) => g.category), 'Government Project KPIs'],
     [groups],
+  );
+
+  if (error === 'school_analytics_unavailable') return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 text-amber-700 rounded-xl p-4">
+        <i className="fas fa-chart-line text-amber-500" />
+        <div>
+          <div className="font-semibold">Analytics are being prepared for your school</div>
+          <div className="text-sm text-amber-600 mt-0.5">School-level KPI data will appear here once your school profile is fully set up. Please check back later or contact the administrator.</div>
+        </div>
+      </div>
+    </div>
   );
 
   if (error) return (

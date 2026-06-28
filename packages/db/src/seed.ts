@@ -21,13 +21,14 @@ import { PrismaClient } from '@prisma/client';
 // when the API service is also running during Render deploy (pool limit ~17).
 function seedUrl() {
   const base = process.env.DATABASE_URL ?? '';
+  if (base.startsWith('file:')) return base; // SQLite — no pool params
   const sep = base.includes('?') ? '&' : '?';
-  // Remove any existing connection_limit/pool_timeout params first, then append ours.
   const stripped = base.replace(/[?&]connection_limit=\d+/g, '').replace(/[?&]pool_timeout=\d+/g, '');
   return stripped + sep + 'connection_limit=2&pool_timeout=60';
 }
 
 const prisma = new PrismaClient({ datasources: { db: { url: seedUrl() } } });
+const isSQLite = (process.env.DATABASE_URL ?? '').startsWith('file:');
 
 const ACADEMIC_YEAR = '2025-26';
 const DATA_DIR = join(__dirname, '..', 'data');
@@ -309,7 +310,7 @@ async function persist() {
     data: Array.from(districtId.entries()).map(([name, id]) => ({
       id, tenantId: tenant.id, name: name || 'Unknown',
     })),
-    skipDuplicates: true,
+    ...(!isSQLite && { skipDuplicates: true }),
   }));
 
   // ── Bulk insert blocks ─────────────────────────────────────────────────────
@@ -318,7 +319,7 @@ async function persist() {
       const [district, block] = bkey.split('||');
       return { id, districtId: districtId.get(district)!, name: block || 'Unknown' };
     }),
-    skipDuplicates: true,
+    ...(!isSQLite && { skipDuplicates: true }),
   }));
 
   // ── Bulk insert schools ────────────────────────────────────────────────────
@@ -333,7 +334,7 @@ async function persist() {
       hasVirtualClassroom: s.hasVirtualClassroom,
       hasIctLab: s.hasIctLab,
     })),
-    skipDuplicates: true,
+    ...(!isSQLite && { skipDuplicates: true }),
   }));
 
   // ── Bulk insert enrollments ────────────────────────────────────────────────
@@ -341,7 +342,7 @@ async function persist() {
     s.enrollments.map((e) => ({ schoolId: `s_${s.udiseCode}`, academicYear: ACADEMIC_YEAR, ...e })),
   );
   if (allEnrollments.length) {
-    await withDbRetry('enrollment.createMany', () => prisma.enrollment.createMany({ data: allEnrollments, skipDuplicates: true }));
+    await withDbRetry('enrollment.createMany', () => prisma.enrollment.createMany({ data: allEnrollments, ...(!isSQLite && { skipDuplicates: true }) }));
   }
 
   // ── Bulk insert board results (dedupe per school) ──────────────────────────
@@ -355,7 +356,7 @@ async function persist() {
     }).map((x) => ({ schoolId: `s_${s.udiseCode}`, academicYear: ACADEMIC_YEAR, ...x }));
   });
   if (allResults.length) {
-    await withDbRetry('boardResult.createMany', () => prisma.boardResult.createMany({ data: allResults, skipDuplicates: true }));
+    await withDbRetry('boardResult.createMany', () => prisma.boardResult.createMany({ data: allResults, ...(!isSQLite && { skipDuplicates: true }) }));
   }
 
   // ── Bulk insert ICT deployments ────────────────────────────────────────────
@@ -363,7 +364,7 @@ async function persist() {
     .filter((s) => s.ict)
     .map((s) => ({ schoolId: `s_${s.udiseCode}`, academicYear: ACADEMIC_YEAR, ...s.ict! }));
   if (allIct.length) {
-    await withDbRetry('ictDeployment.createMany', () => prisma.ictDeployment.createMany({ data: allIct, skipDuplicates: true }));
+    await withDbRetry('ictDeployment.createMany', () => prisma.ictDeployment.createMany({ data: allIct, ...(!isSQLite && { skipDuplicates: true }) }));
   }
 
   return { tenant, districts: districtId.size, blocks: blockId.size };

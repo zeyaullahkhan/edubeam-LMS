@@ -33,6 +33,11 @@ export class AnalyticsController {
     return this.analytics.districtSummaries(user);
   }
 
+  @Get('map-districts')
+  mapDistricts(@CurrentUser() user: AuthUser) {
+    return this.analytics.allDistrictSummaries(user);
+  }
+
   @Get('blocks')
   blocks(@CurrentUser() user: AuthUser, @Query('districtId') districtId: string) {
     return this.analytics.blockSummaries(user, districtId);

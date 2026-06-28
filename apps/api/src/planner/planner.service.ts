@@ -157,27 +157,38 @@ export class PlannerService {
     const today = this.today();
     const sid = schoolId ?? user.schoolId;
     if (!sid) return [];
-    const visWhere = await this.noticeVisibilityWhere(sid);
-    return prisma.notice.findMany({
-      where: {
-        AND: [
-          visWhere,
-          { publishDate: { lte: today } },
-          { OR: [{ expiryDate: null }, { expiryDate: { gte: today } }] },
-        ],
-      },
-      orderBy: { publishDate: 'desc' },
-    });
+    try {
+      const visWhere = await this.noticeVisibilityWhere(sid);
+      return await prisma.notice.findMany({
+        where: {
+          AND: [
+            visWhere,
+            { publishDate: { lte: today } },
+            { OR: [{ expiryDate: null }, { expiryDate: { gte: today } }] },
+          ],
+        },
+        orderBy: { publishDate: 'desc' },
+      });
+    } catch (e: any) {
+      if (e?.code === 'P2021' || /does not exist/i.test(e?.message ?? '')) return [];
+      throw e;
+    }
   }
 
   async getAllNotices(user: AuthUser, schoolId?: string): Promise<any[]> {
     const sid = schoolId ?? user.schoolId;
     if (!sid) return [];
-    const visWhere = await this.noticeVisibilityWhere(sid);
-    return prisma.notice.findMany({
-      where: visWhere,
-      orderBy: { publishDate: 'desc' },
-    });
+    try {
+      const visWhere = await this.noticeVisibilityWhere(sid);
+      return await prisma.notice.findMany({
+        where: visWhere,
+        orderBy: { publishDate: 'desc' },
+      });
+    } catch (e: any) {
+      // Table may not exist on first deploy before schema push completes
+      if (e?.code === 'P2021' || /does not exist/i.test(e?.message ?? '')) return [];
+      throw e;
+    }
   }
 
   async createNotice(user: AuthUser, dto: {

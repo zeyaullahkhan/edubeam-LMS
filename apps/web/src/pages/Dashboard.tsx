@@ -91,11 +91,15 @@ export function Dashboard() {
   const [attDrilldown, setAttDrilldown] = useState<any[] | null>(null);
   const [attDrillMetric, setAttDrillMetric] = useState<'present' | 'absent' | 'late' | null>(null);
   const [attDrillLoading, setAttDrillLoading] = useState(false);
+  const [mapDistricts, setMapDistricts] = useState<DistrictSummary[]>([]);
+  const [mySchool, setMySchool] = useState<SchoolRow | null>(null);
 
   useEffect(() => {
     Promise.all([api.overview(), api.districts(), api.enrollment(), api.teacherStats()])
       .then(([o, d, e, ts]) => { setOverview(o); setDistricts(d); setEnrollment(e); setTeacherStats(ts); })
       .catch((e) => setError((e as Error).message));
+    api.mapDistricts().then(setMapDistricts).catch(() => null);
+    if (user?.schoolId) api.schools({ q: '' }).then(rows => setMySchool(rows[0] ?? null)).catch(() => null);
     api.attendance.today().then(setTodayAtt).catch(() => null);
     api.planner.upcoming(3).then(setUpcomingHolidays).catch(() => null);
   }, []);
@@ -162,7 +166,9 @@ export function Dashboard() {
             Monitoring Dashboard
           </div>
           <h1 className="font-heading font-bold text-navy-700 text-2xl leading-tight">
-            {state ? state.govLabel : 'All States — Platform Dashboard'}
+            {isSchoolScoped
+              ? (mySchool?.name ?? user?.name?.replace(/^(Principal|Teacher)\s*[—-]\s*/i, '') ?? 'School Dashboard')
+              : (state ? state.govLabel : 'All States — Platform Dashboard')}
           </h1>
           <p className="text-slate-500 text-sm mt-1">2025–26 Academic Year · Real-time data</p>
         </div>
@@ -377,15 +383,26 @@ export function Dashboard() {
             active={drilldown === 'blocks'}
           />
         )}
-        <StatCard
-          label={isSchoolScoped ? 'Your School' : 'Schools'}
-          value={isSchoolScoped ? '1 School' : overview.schools.toLocaleString()}
-          sub={isSchoolScoped && districtLabel ? `District: ${districtLabel}` : `${overview.virtualClassroomSchools.toLocaleString()} with Virtual`}
-          icon="fas fa-school"
-          accent="linear-gradient(135deg,#003087,#0076BC)"
-          onClick={isSchoolScoped ? undefined : () => setDrilldown(drilldown === 'schools' ? null : 'schools')}
-          active={drilldown === 'schools'}
-        />
+        {!isSchoolScoped && (
+          <StatCard
+            label="Schools"
+            value={overview.schools.toLocaleString()}
+            sub={`${overview.virtualClassroomSchools.toLocaleString()} with Virtual`}
+            icon="fas fa-school"
+            accent="linear-gradient(135deg,#003087,#0076BC)"
+            onClick={() => setDrilldown(drilldown === 'schools' ? null : 'schools')}
+            active={drilldown === 'schools'}
+          />
+        )}
+        {isSchoolScoped && mySchool && (
+          <StatCard
+            label="School"
+            value={mySchool.name}
+            sub={`${districtLabel ?? ''} · UDISE: ${mySchool.udiseCode ?? ''}`}
+            icon="fas fa-school"
+            accent="linear-gradient(135deg,#003087,#0076BC)"
+          />
+        )}
         <StatCard
           label="Students"
           value={overview.totalStudents.toLocaleString()}
@@ -429,9 +446,9 @@ export function Dashboard() {
       />}
 
       {/* ── Uttarakhand map — always shown below tabs/drilldown ── */}
-      {districts.length > 0 && (
+      {mapDistricts.length > 0 && (
         <UttarakhandMap
-          districts={districts}
+          districts={mapDistricts}
           onDistrictClick={async (districtId) => {
             setDrilldown('schools');
             if (drillDistrictId !== districtId) {
