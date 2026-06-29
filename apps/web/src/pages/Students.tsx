@@ -290,7 +290,7 @@ export function Students() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { api.enrollment().then(setEnrollment).catch(() => {}); }, []);
+  useEffect(() => { api.enrollment(scope).then(setEnrollment).catch(() => {}); }, [JSON.stringify(scope)]);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [JSON.stringify(filter), hasScope]);
@@ -311,6 +311,10 @@ export function Students() {
 
   const onBulk = async (file: File) => {
     setErr(''); setMsg('');
+    if (needsSchool && !scope.schoolId) {
+      setErr('Please select a specific school in the Scope bar before uploading students.');
+      return;
+    }
     try {
       const rows = file.name.endsWith('.csv')
         ? parseCsv(await readFileText(file)).map(r => Object.fromEntries(Object.entries(r).map(([k, v]) => [k.toLowerCase().replace(/[^a-z0-9]/g, ''), String(v)])))
@@ -509,12 +513,67 @@ export function Students() {
           <button
             onClick={() => exportCsv('students', rows.map((s) => {
               const key = (s.admissionNo || s.rollNo || s.id).replace(/\s+/g, '').toLowerCase();
+              const fmtDate = (d: string | null | undefined) => d ? new Date(d).toLocaleDateString('en-IN') : '';
               return {
-                Name: s.name, Roll: s.rollNo ?? '', AdmissionNo: s.admissionNo ?? '',
-                Grade: s.grade, Section: s.section ?? '',
-                Gender: GENDER_LABELS[s.gender], Category: s.category, Religion: s.religion ?? '',
-                RTE: s.isRte ? 'Yes' : 'No', Guardian: s.guardianName ?? '', Phone: s.guardianPhone ?? '',
-                Status: s.isDropout ? 'Dropout' : 'Active', School: s.school ?? '',
+                // ── Identity ──────────────────────────────────────
+                'Admission No': s.admissionNo ?? '',
+                'Roll No': s.rollNo ?? '',
+                'First Name': s.firstName ?? '',
+                'Last Name': s.lastName ?? '',
+                'Full Name': s.name ?? '',
+                'Date of Birth': fmtDate(s.dateOfBirth),
+                Gender: GENDER_LABELS[s.gender] ?? s.gender ?? '',
+                Category: s.category ?? '',
+                Religion: s.religion ?? '',
+                'Blood Group': s.bloodGroup ?? '',
+                'Aadhaar No': s.aadhaarNo ?? '',
+                Nationality: s.nationality ?? '',
+                'Mother Tongue': s.motherTongue ?? '',
+                House: s.house ?? '',
+                'Admission Date': fmtDate(s.admissionDate),
+                'RTE': s.isRte ? 'Yes' : 'No',
+                Class: s.grade ?? '',
+                Section: s.section ?? '',
+                School: s.school ?? '',
+                'Academic Year': s.academicYear ?? '',
+                // ── Family ────────────────────────────────────────
+                'Father Name': s.fatherName ?? '',
+                'Father Phone': s.fatherPhone ?? '',
+                'Father Occupation': s.fatherOccupation ?? '',
+                'Mother Name': s.motherName ?? '',
+                'Mother Phone': s.motherPhone ?? '',
+                'Mother Occupation': s.motherOccupation ?? '',
+                'Guardian Name': s.guardianName ?? '',
+                'Guardian Phone': s.guardianPhone ?? '',
+                'Guardian Relation': s.guardianRelation ?? '',
+                // ── Address ───────────────────────────────────────
+                'State / District': s.stateAddr ?? '',
+                Village: s.village ?? '',
+                'Permanent Address': s.permanentAddress ?? '',
+                'Correspondence Address': s.correspondenceAddress ?? '',
+                'Pin Code': s.pinCode ?? '',
+                // ── Academic ──────────────────────────────────────
+                'Previous School': s.previousSchool ?? '',
+                Medium: s.medium ?? '',
+                'Subjects Opted': s.subjectsOpted ?? '',
+                'Promotion Status': s.promotionStatus ?? '',
+                // ── Health ────────────────────────────────────────
+                'Height (cm)': s.height ?? '',
+                'Weight (kg)': s.weight ?? '',
+                'Vaccination Status': s.vaccinationStatus ?? '',
+                'CWSN Status': s.cwsnStatus === true ? 'Yes' : s.cwsnStatus === false ? 'No' : '',
+                'Last Health Checkup': fmtDate(s.healthCheckupDate),
+                // ── Hostel ────────────────────────────────────────
+                'Hostel Required': s.hostelRequired === true ? 'Yes' : s.hostelRequired === false ? 'No' : '',
+                'Hostel Name': s.hostelName ?? '',
+                'Hostel Fee Status': s.hostelFeeStatus ?? '',
+                // ── Documents ─────────────────────────────────────
+                'Aadhaar Doc': s.docAadhaar ?? '',
+                'Birth Certificate': s.docBirthCert ?? '',
+                // ── Status ────────────────────────────────────────
+                Status: s.isDropout ? 'Dropout' : 'Active',
+                'Dropout Reason': s.dropoutReason ?? '',
+                // ── Login credentials ─────────────────────────────
                 'Student Login': `st${key}@edubeam.com`,
                 'Student Password': `st${key}`,
                 'Parent Login': `pr${key}@edubeam.com`,
@@ -523,7 +582,7 @@ export function Students() {
             }))}
             className="btn-outline"
           >
-            <i className="fas fa-download" />Export
+            <i className="fas fa-download" />Export All Fields
           </button>
         </div>
       </div>
@@ -536,6 +595,8 @@ export function Students() {
           <DemoCard label="Girls" value={enrollment.girls} sub={pctOf(enrollment.girls, enrollment.total)} icon="fas fa-female" accent="linear-gradient(135deg,#be185d,#ec4899)" />
         </div>
       )}
+
+      <ScopeBar value={scope} onChange={setScope} />
 
       {/* Students by Grade — boys vs girls grouped, Class 6–12 */}
       {enrollment && enrollment.byGrade.length > 0 && (
@@ -641,8 +702,6 @@ export function Students() {
           </div>
         </div>
       )}
-
-      <ScopeBar value={scope} onChange={setScope} />
 
       {msg && <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl px-4 py-3 text-sm"><i className="fas fa-check-circle" />{msg}</div>}
       {err && <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm"><i className="fas fa-exclamation-circle mt-0.5 shrink-0" /><span className="whitespace-pre-line">{err}</span></div>}
@@ -1023,47 +1082,93 @@ function StudentModal({
       d === 'full' ? 'bg-emerald-400' : d === 'partial' ? 'bg-amber-400' : d === 'empty' ? 'bg-slate-200' : 'bg-transparent border-transparent'
     }`;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col">
+  const handleExport = () => {
+    const s = { ...student, ...editForm };
+    exportCsv(`student-${s.admissionNo ?? s.id}`, [{
+      // Identity
+      'Admission No': s.admissionNo ?? '', 'Roll No': s.rollNo ?? '',
+      'First Name': s.firstName ?? '', 'Last Name': s.lastName ?? '', 'Full Name': s.name ?? '',
+      'Date of Birth': s.dateOfBirth ? new Date(s.dateOfBirth).toLocaleDateString('en-IN') : '',
+      Gender: s.gender === 'M' ? 'Male' : s.gender === 'F' ? 'Female' : '',
+      Category: s.category ?? '', 'Blood Group': s.bloodGroup ?? '',
+      'Aadhaar No': s.aadhaarNo ?? '', Nationality: s.nationality ?? '',
+      'Mother Tongue': s.motherTongue ?? '', House: s.house ?? '',
+      'Admission Date': s.admissionDate ? new Date(s.admissionDate).toLocaleDateString('en-IN') : '',
+      Class: s.grade ?? '', Section: s.section ?? '', School: s.school ?? '',
+      // Family
+      'Father Name': s.fatherName ?? '', 'Father Phone': s.fatherPhone ?? '', 'Father Occupation': s.fatherOccupation ?? '',
+      'Mother Name': s.motherName ?? '', 'Mother Phone': s.motherPhone ?? '', 'Mother Occupation': s.motherOccupation ?? '',
+      'Guardian Name': s.guardianName ?? '', 'Guardian Phone': s.guardianPhone ?? '', 'Guardian Relation': s.guardianRelation ?? '',
+      // Address
+      'State / District': s.stateAddr ?? '', Village: s.village ?? '',
+      'Permanent Address': s.permanentAddress ?? '', 'Correspondence Address': s.correspondenceAddress ?? '',
+      'Pin Code': s.pinCode ?? '',
+      // Academic
+      'Previous School': s.previousSchool ?? '', Medium: s.medium ?? '', 'Subjects Opted': s.subjectsOpted ?? '',
+      'Promotion Status': s.promotionStatus ?? '', 'Academic Year': s.academicYear ?? '',
+      // Health
+      'Height (cm)': s.height ?? '', 'Weight (kg)': s.weight ?? '',
+      'Vaccination Status': s.vaccinationStatus ?? '', 'CWSN Status': s.cwsnStatus ?? '',
+      'Last Health Checkup': s.healthCheckupDate ? new Date(s.healthCheckupDate).toLocaleDateString('en-IN') : '',
+      // Hostel
+      'Hostel Required': s.hostelRequired === true ? 'Yes' : s.hostelRequired === false ? 'No' : '',
+      'Hostel Name': s.hostelName ?? '', 'Hostel Fee Status': s.hostelFeeStatus ?? '',
+      // Documents
+      'Aadhaar Doc': s.docAadhaar ?? '', 'Birth Certificate': s.docBirthCert ?? '',
+      // Status
+      Status: s.isDropout ? 'Dropout' : 'Active', 'Dropout Reason': s.dropoutReason ?? '',
+      'Profile Completion %': pct,
+    }]);
+  };
 
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/50 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full flex flex-col" style={{ maxWidth: '1100px', maxHeight: '95vh' }} onClick={e => e.stopPropagation()}>
+
+        {/* Header — navy gradient matching school modal */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0 bg-gradient-to-r from-navy-700 to-sky-700 rounded-t-2xl">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-sky-100 flex items-center justify-center">
-              <i className="fas fa-user-graduate text-sky-600" />
+            <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center">
+              <i className="fas fa-user-graduate text-white text-base" />
             </div>
             <div>
-              <h2 className="font-heading font-bold text-navy-700 text-lg leading-none">{student.name}</h2>
-              <p className="text-xs text-slate-400 mt-0.5">Class {student.grade} · {student.admissionNo ?? student.rollNo ?? student.id.slice(-6)}</p>
+              <h2 className="font-heading font-bold text-white text-lg leading-none">{student.name}</h2>
+              <p className="text-xs text-sky-200 mt-0.5 font-mono">
+                Class {student.grade}{student.section ? ` · ${student.section}` : ''} · {student.admissionNo ?? student.rollNo ?? student.id.slice(-6)}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <div className="text-right">
-              <div className="text-xs text-slate-400 mb-0.5">Profile {pct}%</div>
-              <div className="w-28 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                <div className="h-full rounded-full transition-all"
-                  style={{ width: `${pct}%`, background: pct >= 80 ? '#10b981' : pct >= 50 ? '#f59e0b' : '#0076BC' }} />
+            <div className="flex items-center gap-2">
+              <div className="w-24 h-1.5 bg-white/20 rounded-full overflow-hidden">
+                <div className={`h-full rounded-full ${pct >= 80 ? 'bg-emerald-400' : pct >= 50 ? 'bg-amber-400' : 'bg-red-400'}`} style={{ width: `${pct}%` }} />
               </div>
+              <span className="text-xs text-white/80 font-medium">{pct}%</span>
             </div>
-            <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><i className="fas fa-times text-lg" /></button>
+            <button type="button" onClick={handleExport}
+              className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-white transition-colors">
+              <i className="fas fa-download" />Export
+            </button>
+            <button type="button" onClick={onClose} className="text-white/70 hover:text-white transition-colors w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10">
+              <i className="fas fa-times" />
+            </button>
           </div>
         </div>
 
-        {/* Tab strip */}
-        <div className="flex border-b border-slate-100 flex-shrink-0 overflow-x-auto">
+        {/* Tab strip — matching school modal */}
+        <div className="flex border-b border-slate-100 shrink-0 overflow-x-auto bg-slate-50/60">
           {STUDENT_TABS.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)} type="button"
-              className={`flex items-center gap-1.5 px-3 py-3 text-xs font-medium border-b-2 -mb-px whitespace-nowrap transition-colors ${
-                tab === t.id ? 'border-sky-500 text-sky-600' : 'border-transparent text-slate-500 hover:text-slate-700'
+              className={`flex items-center gap-1.5 px-4 py-3 text-xs font-medium whitespace-nowrap border-b-2 transition-colors ${
+                tab === t.id ? 'border-sky-500 text-sky-600 bg-white' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-100/60'
               }`}>
-              <i className={t.icon} />{t.label}
+              <i className={`${t.icon} text-[10px]`} />{t.label}
             </button>
           ))}
         </div>
 
         {/* Body */}
-        <form onSubmit={onSubmit} className="flex-1 overflow-y-auto flex flex-col">
+        <form onSubmit={onSubmit} className="flex-1 overflow-y-auto flex flex-col min-h-0">
           <div className="p-6 space-y-4 flex-1">
 
             {/* TAB 1 — Basic Info */}

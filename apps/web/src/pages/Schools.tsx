@@ -921,19 +921,74 @@ export function Schools() {
               exportCsv(
                 'schools',
                 rows.map((s) => ({
+                  // Identity
                   Name: s.name,
                   UDISE: s.udiseCode,
-                  Site: s.siteCode ?? '',
+                  'Site Code': s.siteCode ?? '',
+                  Type: s.type ?? '',
                   District: s.district,
                   Block: s.block,
+                  // Contact
                   Principal: s.principalName ?? '',
                   Phone: s.phone ?? '',
                   'Phone 2': s.phone2 ?? '',
+                  Email: s.email ?? '',
                   Address: s.address ?? '',
+                  // General
+                  'Registration No.': s.registrationNumber ?? '',
+                  'Year Established': s.yearEstablished ?? '',
+                  'Assembly Constituency': s.assemblyConstituency ?? '',
+                  'Gram Panchayat': s.gramPanchayat ?? '',
+                  'Managed By': s.managedBy ?? '',
+                  'Medium of Instruction': s.mediumOfInstruction ?? '',
+                  'Classes From': s.classesFrom ?? '',
+                  'Classes To': s.classesTo ?? '',
+                  Streams: s.streams ?? '',
+                  // ICT / Facilities
                   'Virtual Classroom': s.hasVirtualClassroom ? 'Yes' : 'No',
                   'ICT Lab': s.hasIctLab ? 'Yes' : 'No',
+                  'Smart Classroom': s.hasSmartClassroom ? 'Yes' : 'No',
+                  Electricity: s.hasElectricity ? 'Yes' : 'No',
+                  Internet: s.hasInternet ? 'Yes' : 'No',
+                  CCTV: s.hasCctv ? 'Yes' : 'No',
+                  // Infrastructure
+                  'Campus Area': s.campusArea ?? '',
+                  'Campus Area Unit': s.campusAreaUnit ?? '',
+                  'Built-Up Area': s.builtUpArea ?? '',
+                  Buildings: s.numBuildings ?? '',
+                  Classrooms: s.numClassrooms ?? '',
+                  Playground: s.hasPlayground ? 'Yes' : 'No',
+                  'Boundary Wall': s.hasBoundaryWall ? 'Yes' : 'No',
+                  Library: s.hasLibrary ? 'Yes' : 'No',
+                  Laboratory: s.hasLaboratory ? 'Yes' : 'No',
+                  'Computer Lab': s.hasComputerLab ? 'Yes' : 'No',
+                  // Water & Sanitation
+                  'Drinking Water': s.hasDrinkingWater ? 'Yes' : 'No',
+                  'Water Source': s.drinkingWaterSource ?? '',
+                  Toilets: s.numToilets ?? '',
+                  'Boys Toilets': s.numBoysToilets ?? '',
+                  'Girls Toilets': s.numGirlsToilets ?? '',
+                  'CWSN Toilet': s.hasCwsnToilet ? 'Yes' : 'No',
+                  Handwashing: s.hasHandwashing ? 'Yes' : 'No',
+                  // Safety
+                  'Fire Safety': s.hasFireSafety ? 'Yes' : 'No',
+                  'Disaster Plan': s.hasDisasterPlan ? 'Yes' : 'No',
+                  'First Aid': s.hasFirstAid ? 'Yes' : 'No',
+                  'Security Guard': s.hasSecurityGuard ? 'Yes' : 'No',
+                  'Emergency Contact': s.emergencyContact ?? '',
+                  // Computer Lab
+                  'Desktop PCs': s.numDesktopPCs ?? '',
+                  UPS: s.hasUPS ? 'Yes' : 'No',
+                  'Internet Connectivity': s.hasInternetConnectivity ? 'Yes' : 'No',
+                  // Hostel
+                  'Hostel Student Rooms': s.numHostelStudentRooms ?? '',
+                  'Hostel Capacity': s.hostelStudentCapacity ?? '',
+                  'Hostel Students': s.numHostelStudents ?? '',
+                  // Stats
                   Teachers: s.teachers ?? '',
                   Students: s.students ?? '',
+                  'Avg Pass 10th': s.avgPass10th ?? '',
+                  'Avg Pass 12th': s.avgPass12th ?? '',
                 })),
               )
             }
@@ -943,66 +998,6 @@ export function Schools() {
             Export CSV
           </button>
         </div>
-      </div>
-
-      {/* ── Filters ───────────────────────────────────── */}
-      <div className="flex flex-wrap gap-2 items-center">
-        {/* District — hidden for school-scoped roles */}
-        {!isSchoolScoped && <select
-          value={districtId}
-          onChange={e => { setDistrictId(e.target.value); setBlockId(''); }}
-          className="border border-slate-200 rounded-lg px-3 py-2.5 text-sm bg-white
-                     focus:outline-none focus:ring-2 focus:ring-sky-300/50 focus:border-sky-300
-                     transition-colors text-slate-700 min-w-[160px]"
-        >
-          <option value="">All Districts</option>
-          {districts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-        </select>}
-
-        {/* Block — only shown when a district is selected and not school-scoped */}
-        {!isSchoolScoped && districtId && (
-          <select
-            value={blockId}
-            onChange={e => setBlockId(e.target.value)}
-            className="border border-slate-200 rounded-lg px-3 py-2.5 text-sm bg-white
-                       focus:outline-none focus:ring-2 focus:ring-sky-300/50 focus:border-sky-300
-                       transition-colors text-slate-700 min-w-[160px]"
-          >
-            <option value="">All Blocks</option>
-            {blocks.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-          </select>
-        )}
-
-        {/* Name search — hidden for school-scoped roles */}
-        {!isSchoolScoped && (
-          <form onSubmit={(e) => { e.preventDefault(); load(); }} className="flex gap-2 items-center flex-1">
-            <div className="relative flex-1 max-w-sm">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-                <i className="fas fa-search text-xs" />
-              </span>
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Search by school name…"
-                className="w-full border border-slate-200 rounded-lg pl-9 pr-4 py-2.5 text-sm bg-white
-                           focus:outline-none focus:ring-2 focus:ring-sky-300/50 focus:border-sky-300 transition-colors"
-              />
-            </div>
-            <button type="submit" className="btn-navy px-5 py-2.5">
-              <i className="fas fa-search" /> Search
-            </button>
-            {(q || districtId || blockId) && (
-              <button
-                type="button"
-                onClick={() => { setQ(''); setDistrictId(''); setBlockId(''); }}
-                className="btn-outline px-3 py-2.5 text-xs"
-                title="Clear all filters"
-              >
-                <i className="fas fa-times mr-1" />Clear
-              </button>
-            )}
-          </form>
-        )}
       </div>
 
       {/* ── Principal: My School profile card ─────────── */}
@@ -1186,6 +1181,66 @@ export function Schools() {
           </div>
         );
       })()}
+
+      {/* ── Filters ───────────────────────────────────── */}
+      <div className="flex flex-wrap gap-2 items-center">
+        {/* District — hidden for school-scoped roles */}
+        {!isSchoolScoped && <select
+          value={districtId}
+          onChange={e => { setDistrictId(e.target.value); setBlockId(''); }}
+          className="border border-slate-200 rounded-lg px-3 py-2.5 text-sm bg-white
+                     focus:outline-none focus:ring-2 focus:ring-sky-300/50 focus:border-sky-300
+                     transition-colors text-slate-700 min-w-[160px]"
+        >
+          <option value="">All Districts</option>
+          {districts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+        </select>}
+
+        {/* Block — only shown when a district is selected and not school-scoped */}
+        {!isSchoolScoped && districtId && (
+          <select
+            value={blockId}
+            onChange={e => setBlockId(e.target.value)}
+            className="border border-slate-200 rounded-lg px-3 py-2.5 text-sm bg-white
+                       focus:outline-none focus:ring-2 focus:ring-sky-300/50 focus:border-sky-300
+                       transition-colors text-slate-700 min-w-[160px]"
+          >
+            <option value="">All Blocks</option>
+            {blocks.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+          </select>
+        )}
+
+        {/* Name search — hidden for school-scoped roles */}
+        {!isSchoolScoped && (
+          <form onSubmit={(e) => { e.preventDefault(); load(); }} className="flex gap-2 items-center flex-1">
+            <div className="relative flex-1 max-w-sm">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                <i className="fas fa-search text-xs" />
+              </span>
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Search by school name…"
+                className="w-full border border-slate-200 rounded-lg pl-9 pr-4 py-2.5 text-sm bg-white
+                           focus:outline-none focus:ring-2 focus:ring-sky-300/50 focus:border-sky-300 transition-colors"
+              />
+            </div>
+            <button type="submit" className="btn-navy px-5 py-2.5">
+              <i className="fas fa-search" /> Search
+            </button>
+            {(q || districtId || blockId) && (
+              <button
+                type="button"
+                onClick={() => { setQ(''); setDistrictId(''); setBlockId(''); }}
+                className="btn-outline px-3 py-2.5 text-xs"
+                title="Clear all filters"
+              >
+                <i className="fas fa-times mr-1" />Clear
+              </button>
+            )}
+          </form>
+        )}
+      </div>
 
       {/* ── Table — hidden for PRINCIPAL (they see My School card above) ── */}
       {!isPrincipal && <div className="panel overflow-hidden">

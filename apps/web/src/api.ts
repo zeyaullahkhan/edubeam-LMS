@@ -118,6 +118,22 @@ export interface SchoolRow {
   hasFirstAid: boolean | null;
   hasSecurityGuard: boolean | null;
   emergencyContact: string | null;
+  // General Info (extended)
+  registrationNumber: string | null;
+  email: string | null;
+  yearEstablished: number | null;
+  assemblyConstituency: string | null;
+  gramPanchayat: string | null;
+  managedBy: string | null;
+  mediumOfInstruction: string | null;
+  // Computer Lab
+  numDesktopPCs: number | null;
+  hasUPS: boolean | null;
+  hasInternetConnectivity: boolean | null;
+  // Hostel
+  numHostelStudentRooms: number | null;
+  hostelStudentCapacity: number | null;
+  numHostelStudents: number | null;
   // Profile tracking
   profileUpdatedBy: string | null;
   profileUpdatedAt: string | null;
@@ -197,7 +213,10 @@ export const api = {
   blocks: (districtId: string) => req<BlockSummary[]>(`/analytics/blocks?districtId=${districtId}`),
   subjects: (examType: '10TH' | '12TH') =>
     req<SubjectAverage[]>(`/analytics/subjects?examType=${examType}`),
-  enrollment: () => req<EnrollmentDemographics>('/analytics/enrollment'),
+  enrollment: (scope?: { districtId?: string; blockId?: string; schoolId?: string }) => {
+    const qs = scope ? new URLSearchParams(Object.entries(scope).filter(([, v]) => v) as [string, string][]).toString() : '';
+    return req<EnrollmentDemographics>(`/analytics/enrollment${qs ? `?${qs}` : ''}`);
+  },
   teacherStats: (districtId?: string) =>
     req<TeacherStats>(`/analytics/teacher-stats${districtId ? `?districtId=${encodeURIComponent(districtId)}` : ''}`),
   attendanceSeries: (period: 'month' | 'day', month?: number, year?: number) => {
@@ -221,16 +240,21 @@ export const api = {
 
   // Academic Years (tenant-wide — common for entire state)
   academicYears: () => req<any[]>(`/schools/academic-years`),
-  createAcademicYear: (body: { label: string; startDate: string; endDate: string }) =>
+  createAcademicYear: (body: { label: string; startDate: string; endDate: string; tenantId?: string }) =>
     req<any>(`/schools/academic-years`, { method: 'POST', body: JSON.stringify(body) }),
+  updateAcademicYear: (id: string, body: { label: string; startDate: string; endDate: string }) =>
+    req<any>(`/schools/academic-years/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   setCurrentAcademicYear: (id: string) =>
     req<any>(`/schools/academic-years/${id}/set-current`, { method: 'PATCH', body: '{}' }),
   deleteAcademicYear: (id: string) =>
     req<{ ok: boolean }>(`/schools/academic-years/${id}`, { method: 'DELETE' }),
+  tenants: () => req<{ id: string; name: string }[]>(`/auth/tenants`),
 
   // Class Sections
   classSections: (schoolId: string, academicYear?: string) =>
     req<any[]>(`/schools/${schoolId}/class-sections${academicYear ? `?academicYear=${academicYear}` : ''}`),
+  bulkCreateClassSections: (body: { schoolId?: string; districtId?: string; blockId?: string; academicYear: string; gradeFrom: number; gradeTo: number; sections: string[]; capacity?: number }) =>
+    req<{ created: number; skipped: number; schools: number }>(`/schools/class-sections/bulk`, { method: 'POST', body: JSON.stringify(body) }),
   createClassSection: (schoolId: string, body: any) =>
     req<any>(`/schools/${schoolId}/class-sections`, { method: 'POST', body: JSON.stringify(body) }),
   updateClassSection: (id: string, body: any) =>
@@ -238,10 +262,13 @@ export const api = {
   deleteClassSection: (id: string) =>
     req<{ ok: boolean }>(`/schools/class-sections/${id}`, { method: 'DELETE' }),
 
-  // Subjects (tenant-wide — common curriculum for entire state)
-  schoolSubjects: () => req<any[]>(`/schools/subjects`),
+  // Subjects (state-wide catalog)
+  schoolSubjects: (tenantId?: string) =>
+    req<any[]>(`/schools/subjects${tenantId ? `?tenantId=${tenantId}` : ''}`),
   createSubject: (body: any) =>
     req<any>(`/schools/subjects`, { method: 'POST', body: JSON.stringify(body) }),
+  bulkCreateSubjects: (body: { tenantId?: string; subjects: any[] }) =>
+    req<{ created: number; skipped: number }>(`/schools/subjects/bulk`, { method: 'POST', body: JSON.stringify(body) }),
   updateSubject: (id: string, body: any) =>
     req<any>(`/schools/subjects/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   deleteSubject: (id: string) =>

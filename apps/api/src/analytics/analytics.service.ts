@@ -130,8 +130,8 @@ export class AnalyticsService {
 
   /** Boys/girls enrolment totals + class-wise split, from the Virtual Classroom
    * enrolment data (500 Virtual2526.xlsx), within the caller's scope. */
-  async enrollmentDemographics(user: AuthUser): Promise<EnrollmentDemographics> {
-    const { schoolWhere } = schoolScope(user);
+  async enrollmentDemographics(user: AuthUser, schoolWhereOverride?: any): Promise<EnrollmentDemographics> {
+    const { schoolWhere } = schoolWhereOverride !== undefined ? { schoolWhere: schoolWhereOverride } : schoolScope(user);
     const grouped = await prisma.enrollment.groupBy({
       by: ['grade'],
       where: { school: schoolWhere },

@@ -3,26 +3,31 @@ import { api } from '../api';
 import { useAuth } from '../auth';
 
 const inputCls = 'w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sky-300/50 focus:border-sky-300 transition-colors';
-const WRITE_ROLES = ['ADMIN', 'STATE_OFFICIAL', 'PRINCIPAL'];
+// Only admin can add/edit/delete academic years
+const WRITE_ROLES = ['ADMIN'];
 
-function fmtRange(start: string, end: string) {
-  const fmt = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
-  return `${fmt(start)} – ${fmt(end)}`;
+function fmtDate(d: string) {
+  return new Date(d + 'T00:00:00').toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 export function AcademicYears() {
   const { user } = useAuth();
   const canWrite = WRITE_ROLES.includes(user?.role ?? '');
+  const isPlatformAdmin = user?.role === 'ADMIN' && !user?.tenantId;
+
   const [years, setYears] = useState<any[]>([]);
+  const [tenants, setTenants] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ label: '', startDate: '', endDate: '' });
+  const [editYear, setEditYear] = useState<any | null>(null);
+  const [form, setForm] = useState({ label: '', startDate: '', endDate: '', tenantId: '' });
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
+    setErr('');
     try { setYears(await api.academicYears()); }
     catch (e: any) { setErr(e.message); }
     finally { setLoading(false); }
@@ -30,22 +35,47 @@ export function AcademicYears() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Load tenants for platform admin dropdown
+  useEffect(() => {
+    if (isPlatformAdmin) {
+      api.tenants?.().then(setTenants).catch(() => {});
+    }
+  }, [isPlatformAdmin]);
+
+  const openAdd = () => {
+    setEditYear(null);
+    setForm({ label: '', startDate: '', endDate: '', tenantId: tenants[0]?.id ?? '' });
+    setShowForm(true);
+  };
+
+  const openEdit = (y: any) => {
+    setEditYear(y);
+    setForm({ label: y.label, startDate: y.startDate, endDate: y.endDate, tenantId: y.tenantId ?? '' });
+    setShowForm(true);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr(''); setMsg('');
     setSaving(true);
     try {
-      await api.createAcademicYear(form);
-      setMsg('Academic year created.');
+      if (editYear) {
+        await api.updateAcademicYear(editYear.id, { label: form.label, startDate: form.startDate, endDate: form.endDate });
+        setMsg('Academic year updated.');
+      } else {
+        await api.createAcademicYear({ ...form, tenantId: isPlatformAdmin ? form.tenantId : undefined });
+        setMsg('Academic year created.');
+      }
       setShowForm(false);
-      setForm({ label: '', startDate: '', endDate: '' });
+      setEditYear(null);
       load();
     } catch (e: any) { setErr(e.message); }
     finally { setSaving(false); }
   };
 
   const handleSetCurrent = async (id: string) => {
-    try { await api.setCurrentAcademicYear(id); load(); }
+    setErr('');
+    try { await api.setCurrentAcademicYear(id); setMsg('Active year updated.'); load(); }
     catch (e: any) { setErr(e.message); }
   };
 
@@ -55,6 +85,15 @@ export function AcademicYears() {
     catch (e: any) { setErr(e.message); }
   };
 
+  // Group by tenant when platform admin
+  const byTenant = isPlatformAdmin
+    ? Array.from(new Set(years.map(y => y.tenantId))).map(tid => ({
+        tenantId: tid,
+        label: tenants.find(t => t.id === tid)?.name ?? tid,
+        years: years.filter(y => y.tenantId === tid),
+      }))
+    : null;
+
   const current = years.find(y => y.isCurrent);
 
   return (
@@ -63,37 +102,49 @@ export function AcademicYears() {
         <div>
           <div className="section-tag mb-2"><i className="fas fa-calendar-alt" />Academic Calendar</div>
           <h1 className="font-heading font-bold text-navy-700 text-2xl">Academic Years</h1>
-          <p className="text-sm text-slate-500 mt-1">Manage academic sessions and set the active year</p>
+          <p className="text-sm text-slate-500 mt-1">Manage academic sessions · same year applies to all state schools</p>
         </div>
         {canWrite && (
-          <button onClick={() => setShowForm(s => !s)} className={showForm ? 'btn-outline' : 'btn-navy'}>
-            {showForm ? <><i className="fas fa-times" />Cancel</> : <><i className="fas fa-plus" />Add Year</>}
+          <button onClick={openAdd} className="btn-navy">
+            <i className="fas fa-plus" />Add Year
           </button>
         )}
       </div>
 
-      {msg &&<div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl px-4 py-3 text-sm"><i className="fas fa-check-circle" />{msg}</div>}
+      {msg && <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl px-4 py-3 text-sm"><i className="fas fa-check-circle" />{msg}</div>}
       {err && <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm"><i className="fas fa-exclamation-circle" />{err}</div>}
 
-      {/* Current year banner */}
-      {current && (
+      {/* Active year banner */}
+      {current && !isPlatformAdmin && (
         <div className="panel p-5 border-l-4 border-l-emerald-500 flex items-center gap-4">
           <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-600">
             <i className="fas fa-check-circle text-lg" />
           </div>
           <div>
-            <p className="text-xs text-emerald-600 font-semibold uppercase tracking-wide">Current Active Year</p>
+            <p className="text-xs text-emerald-600 font-semibold uppercase tracking-wide">Current Active Year — applies to all schools</p>
             <p className="font-bold text-slate-800 text-lg">{current.label}</p>
-            <p className="text-xs text-slate-500">{fmtRange(current.startDate, current.endDate)}</p>
+            <p className="text-xs text-slate-500">{fmtDate(current.startDate)} – {fmtDate(current.endDate)}</p>
           </div>
         </div>
       )}
 
-      {/* Create form */}
+      {/* Add / Edit form */}
       {showForm && canWrite && (
         <form onSubmit={handleSubmit} className="panel p-5 space-y-4 border-l-4 border-l-sky-500">
-          <h2 className="font-semibold text-slate-700"><i className="fas fa-plus-circle text-sky-500 mr-1.5" />New Academic Year</h2>
+          <h2 className="font-semibold text-slate-700">
+            <i className={`fas ${editYear ? 'fa-edit' : 'fa-plus-circle'} text-sky-500 mr-1.5`} />
+            {editYear ? 'Edit Academic Year' : 'New Academic Year'}
+          </h2>
           <div className="grid md:grid-cols-3 gap-4">
+            {isPlatformAdmin && !editYear && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">State *</label>
+                <select required className={inputCls} value={form.tenantId} onChange={e => setForm({ ...form, tenantId: e.target.value })}>
+                  <option value="">Select state…</option>
+                  {tenants.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </div>
+            )}
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1">Label *</label>
               <input required className={inputCls} value={form.label} onChange={e => setForm({ ...form, label: e.target.value })} placeholder="e.g. 2025-26" />
@@ -109,14 +160,15 @@ export function AcademicYears() {
           </div>
           <div className="flex gap-2 pt-2 border-t border-slate-100">
             <button type="submit" disabled={saving} className="btn-primary">
-              {saving ? <i className="fas fa-circle-notch fa-spin" /> : <i className="fas fa-save" />}Create
+              {saving ? <i className="fas fa-circle-notch fa-spin" /> : <i className="fas fa-save" />}
+              {editYear ? 'Save Changes' : 'Create'}
             </button>
-            <button type="button" onClick={() => setShowForm(false)} className="btn-outline">Cancel</button>
+            <button type="button" onClick={() => { setShowForm(false); setEditYear(null); }} className="btn-outline">Cancel</button>
           </div>
         </form>
       )}
 
-      {/* Table */}
+      {/* Empty state */}
       {!loading && years.length === 0 && (
         <div className="py-12 text-center panel text-slate-400">
           <i className="fas fa-calendar-alt text-3xl mb-2 block text-slate-300" />
@@ -125,52 +177,82 @@ export function AcademicYears() {
         </div>
       )}
 
-      {years.length > 0 && (
-        <div className="panel overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 border-b border-slate-100">
-              <tr>
-                {['Year', 'Period', 'Status', ''].map(h => (
-                  <th key={h} className="text-left px-4 py-3 font-semibold text-xs text-slate-500 uppercase tracking-wide">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {years.map(y => (
-                <tr key={y.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-4 py-3 font-bold text-slate-800">{y.label}</td>
-                  <td className="px-4 py-3 text-slate-500">{fmtRange(y.startDate, y.endDate)}</td>
-                  <td className="px-4 py-3">
-                    {y.isCurrent ? (
-                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-100 rounded-full px-2 py-0.5">
-                        <i className="fas fa-check-circle" />Active
-                      </span>
-                    ) : (
-                      <span className="text-xs text-slate-400">Inactive</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    {canWrite && (
-                      <div className="flex items-center gap-2 justify-end">
-                        {!y.isCurrent && (
-                          <button onClick={() => handleSetCurrent(y.id)}
-                            className="text-xs text-sky-600 hover:text-sky-800 font-medium transition-colors">
-                            Set Active
-                          </button>
-                        )}
-                        <button onClick={() => handleDelete(y.id)}
-                          className="text-slate-300 hover:text-rose-500 transition-colors">
-                          <i className="fas fa-trash text-xs" />
-                        </button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {/* Table — grouped by tenant for platform admin */}
+      {byTenant
+        ? byTenant.map(group => (
+            <div key={group.tenantId} className="panel overflow-hidden">
+              <div className="px-5 py-3 bg-slate-50 border-b border-slate-100">
+                <span className="font-semibold text-sm text-navy-700">{group.label}</span>
+              </div>
+              <YearsTable years={group.years} canWrite={canWrite} onEdit={openEdit} onSetCurrent={handleSetCurrent} onDelete={handleDelete} />
+            </div>
+          ))
+        : years.length > 0 && (
+            <div className="panel overflow-hidden">
+              <YearsTable years={years} canWrite={canWrite} onEdit={openEdit} onSetCurrent={handleSetCurrent} onDelete={handleDelete} />
+            </div>
+          )
+      }
     </div>
+  );
+}
+
+function YearsTable({ years, canWrite, onEdit, onSetCurrent, onDelete }: {
+  years: any[];
+  canWrite: boolean;
+  onEdit: (y: any) => void;
+  onSetCurrent: (id: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  return (
+    <table className="w-full text-sm">
+      <thead className="bg-slate-50 border-b border-slate-100">
+        <tr>
+          {['Academic Year', 'Start Date', 'End Date', 'Status', 'Action'].map(h => (
+            <th key={h} className="text-left px-4 py-3 font-semibold text-xs text-slate-500 uppercase tracking-wide">{h}</th>
+          ))}
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-slate-50">
+        {years.map(y => (
+          <tr key={y.id} className={`hover:bg-slate-50 transition-colors${y.isCurrent ? ' bg-emerald-50/40' : ''}`}>
+            <td className="px-4 py-3 font-bold text-slate-800">{y.label}</td>
+            <td className="px-4 py-3 text-slate-600">{fmtDate(y.startDate)}</td>
+            <td className="px-4 py-3 text-slate-600">{fmtDate(y.endDate)}</td>
+            <td className="px-4 py-3">
+              {y.isCurrent ? (
+                <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-100 rounded-full px-2.5 py-0.5">
+                  <i className="fas fa-check-circle" />Active
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-xs text-slate-400">
+                  <i className="far fa-circle" />Inactive
+                </span>
+              )}
+            </td>
+            <td className="px-4 py-3">
+              {canWrite && (
+                <div className="flex items-center gap-3">
+                  {!y.isCurrent && (
+                    <button onClick={() => onSetCurrent(y.id)}
+                      className="text-xs text-sky-600 hover:text-sky-800 font-medium transition-colors">
+                      Set Active
+                    </button>
+                  )}
+                  <button onClick={() => onEdit(y)}
+                    className="text-xs text-slate-600 hover:text-navy-700 font-medium transition-colors">
+                    Edit
+                  </button>
+                  <button onClick={() => onDelete(y.id)}
+                    className="text-slate-300 hover:text-rose-500 transition-colors">
+                    <i className="fas fa-trash text-xs" />
+                  </button>
+                </div>
+              )}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }

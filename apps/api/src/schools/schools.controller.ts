@@ -24,22 +24,7 @@ export class SchoolsController {
     return this.schools.listDistricts(user);
   }
 
-  @Get(':id')
-  detail(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.schools.detail(user, id);
-  }
-
-  @Post()
-  create(@CurrentUser() user: AuthUser, @Body() body: any) {
-    return this.schools.create(user, body);
-  }
-
-  @Patch(':id')
-  update(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() body: any) {
-    return this.schools.update(user, id, body);
-  }
-
-  // ── Academic Years (tenant-wide — same year for entire state) ──────────────
+  // ── Academic Years — must be before @Get(':id') to avoid route collision ────
 
   @Get('academic-years')
   listAcademicYears(@CurrentUser() user: AuthUser) {
@@ -56,12 +41,66 @@ export class SchoolsController {
     return this.schools.setCurrentAcademicYear(user, id);
   }
 
+  @Patch('academic-years/:id')
+  updateAcademicYear(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() body: any) {
+    return this.schools.updateAcademicYear(user, id, body);
+  }
+
   @Delete('academic-years/:id')
   deleteAcademicYear(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.schools.deleteAcademicYear(user, id);
   }
 
-  // ── Class Sections ──────────────────────────────────────────────────────────
+  // ── Subjects (state-wide catalog) — static routes BEFORE :id wildcard ───────
+
+  @Get('subjects')
+  listSubjects(@CurrentUser() user: AuthUser, @Query('tenantId') tenantId?: string) {
+    return this.schools.listSubjects(user, tenantId);
+  }
+
+  @Post('subjects/bulk')
+  bulkCreateSubjects(@CurrentUser() user: AuthUser, @Body() body: any) {
+    return this.schools.bulkCreateSubjects(user, body);
+  }
+
+  @Post('subjects')
+  createSubject(@CurrentUser() user: AuthUser, @Body() body: any) {
+    return this.schools.createSubject(user, body);
+  }
+
+  @Patch('subjects/:id')
+  updateSubject(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() body: any) {
+    return this.schools.updateSubject(user, id, body);
+  }
+
+  @Delete('subjects/:id')
+  deleteSubject(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.schools.deleteSubject(user, id);
+  }
+
+  // ── Class Sections — static routes BEFORE :id wildcards ─────────────────────
+
+  @Post('class-sections/bulk')
+  bulkCreateClassSections(@CurrentUser() user: AuthUser, @Body() body: any) {
+    return this.schools.bulkCreateClassSections(user, body);
+  }
+
+  // ── Per-school routes — :id wildcard MUST come after all static routes ──────
+
+  @Get(':id')
+  detail(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.schools.detail(user, id);
+  }
+
+  @Post()
+  create(@CurrentUser() user: AuthUser, @Body() body: any) {
+    return this.schools.create(user, body);
+  }
+
+  @Patch(':id')
+  update(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() body: any) {
+    return this.schools.update(user, id, body);
+  }
 
   @Get(':id/class-sections')
   listClassSections(@CurrentUser() user: AuthUser, @Param('id') id: string, @Query('academicYear') academicYear?: string) {
@@ -98,25 +137,4 @@ export class SchoolsController {
     return this.schools.deleteAssignment(user, id);
   }
 
-  // ── Subjects (tenant-wide — same curriculum for entire state) ──────────────
-
-  @Get('subjects')
-  listSubjects(@CurrentUser() user: AuthUser) {
-    return this.schools.listSubjects(user);
-  }
-
-  @Post('subjects')
-  createSubject(@CurrentUser() user: AuthUser, @Body() body: any) {
-    return this.schools.createSubject(user, body);
-  }
-
-  @Patch('subjects/:id')
-  updateSubject(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() body: any) {
-    return this.schools.updateSubject(user, id, body);
-  }
-
-  @Delete('subjects/:id')
-  deleteSubject(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.schools.deleteSubject(user, id);
-  }
 }

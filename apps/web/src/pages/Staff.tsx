@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
+} from 'recharts';
+import {
   GENDERS, GENDER_LABELS, STAFF_TYPES, STAFF_TYPE_LABELS,
   type Staff as StaffMember, type StaffDemographics, type TeacherStats,
 } from '@edubeam/shared';
@@ -47,6 +50,7 @@ export function Staff() {
   const [staffType, setStaffType] = useState('');
   const [q, setQ] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
   const [form, setForm] = useState<Partial<StaffMember>>(emptyStaff);
   const [msg, setMsg] = useState('');
   const [confirmStaff, setConfirmStaff] = useState<StaffMember | null>(null);
@@ -82,8 +86,14 @@ export function Staff() {
     e.preventDefault();
     setErr(''); setMsg('');
     try {
-      await api.staff.create({ ...form, schoolId: scope.schoolId });
-      setMsg(`${form.name} added to staff.`);
+      if (editingStaff) {
+        await api.staff.update(editingStaff.id, form);
+        setMsg(`${form.name} updated.`);
+        setEditingStaff(null);
+      } else {
+        await api.staff.create({ ...form, schoolId: scope.schoolId });
+        setMsg(`${form.name} added to staff.`);
+      }
       setForm(emptyStaff);
       setShowForm(false);
       load();
@@ -92,8 +102,19 @@ export function Staff() {
     }
   };
 
+  const openEdit = (s: StaffMember) => {
+    setEditingStaff(s);
+    setForm({ ...s });
+    setShowForm(true);
+    setMsg('');
+  };
+
   const onBulk = async (file: File) => {
     setErr(''); setMsg('');
+    if (needsSchool && !scope.schoolId) {
+      setErr('Please select a specific school in the Scope bar before uploading staff.');
+      return;
+    }
     try {
       const rows = file.name.endsWith('.csv')
         ? parseCsv(await readFileText(file)).map(r => Object.fromEntries(Object.entries(r).map(([k, v]) => [k.toLowerCase().replace(/[^a-z0-9]/g, ''), String(v)])))
@@ -251,6 +272,20 @@ export function Staff() {
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">Select a district in the Scope bar to filter all data below</p>
               </div>
+              {/* Bar chart */}
+              <div className="p-5">
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={teacherStats.byDistrict} margin={{ top: 4, right: 16, left: 0, bottom: 60 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis dataKey="district" tick={{ fontSize: 11 }} angle={-40} textAnchor="end" interval={0} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip formatter={(v: number) => v.toLocaleString()} />
+                    <Legend verticalAlign="top" />
+                    <Bar dataKey="teachers" name="Teachers" fill="#0076BC" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="schools" name="ICT Schools" fill="#3AAAC5" radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
               <table className="w-full text-sm data-table" style={{ tableLayout: 'fixed' }}>
                 <colgroup>
                   <col style={{ width: 'auto' }} />
@@ -287,13 +322,34 @@ export function Staff() {
               </table>
             </div>
           )}
+
+          {/* Staff composition pie chart — visible when school is selected and has staff */}
+          {summary && summary.byType && summary.byType.length > 0 && (
+            <div className="panel p-5">
+              <h2 className="font-heading font-semibold text-navy-700 mb-4">Staff Composition by Type</h2>
+              <ResponsiveContainer width="100%" height={240}>
+                <PieChart>
+                  <Pie data={summary.byType} dataKey="count" nameKey="staffType" cx="50%" cy="50%" outerRadius={90} label={({ staffType, percent }: { staffType: string; percent: number }) => `${STAFF_TYPE_LABELS[staffType as keyof typeof STAFF_TYPE_LABELS] ?? staffType} (${(percent * 100).toFixed(0)}%)`} labelLine>
+                    {summary.byType.map((_: any, i: number) => (
+                      <Cell key={i} fill={['#003087', '#0076BC', '#3AAAC5', '#be185d', '#f59e0b', '#10b981'][i % 6]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(v: number, name: string) => [v, STAFF_TYPE_LABELS[name as keyof typeof STAFF_TYPE_LABELS] ?? name]} />
+                  <Legend formatter={(v: string) => STAFF_TYPE_LABELS[v as keyof typeof STAFF_TYPE_LABELS] ?? v} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </>
       )}
 
-      {/* Add form */}
+      {/* Add / Edit form */}
       {showForm && canWrite && (
         <form onSubmit={submit} className="panel p-5">
-          <h2 className="font-heading font-semibold text-navy-700 mb-4"><i className="fas fa-user-plus text-sky-500 mr-2" />Add staff member</h2>
+          <h2 className="font-heading font-semibold text-navy-700 mb-4">
+            <i className={`fas ${editingStaff ? 'fa-edit' : 'fa-user-plus'} text-sky-500 mr-2`} />
+            {editingStaff ? `Edit — ${editingStaff.name}` : 'Add staff member'}
+          </h2>
           {needsSchool && !scope.schoolId && (
             <div className="mb-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
               Select a specific <strong>school</strong> in the scope bar above before adding staff.
@@ -320,8 +376,16 @@ export function Staff() {
             <Field label="Salary group"><input className={inputCls} placeholder="e.g. Level 8" value={form.salaryGroup ?? ''} onChange={(e) => setForm({ ...form, salaryGroup: e.target.value })} /></Field>
             <Field label="Class teacher of"><input className={inputCls} placeholder="e.g. 8-A" value={form.classTeacherOf ?? ''} onChange={(e) => setForm({ ...form, classTeacherOf: e.target.value, isClassTeacher: !!e.target.value })} /></Field>
           </div>
-          <div className="pt-4 mt-4 border-t border-slate-100">
-            <button type="submit" className="btn-primary"><i className="fas fa-user-plus" />Add staff</button>
+          <div className="pt-4 mt-4 border-t border-slate-100 flex gap-2">
+            <button type="submit" className="btn-primary">
+              <i className={`fas ${editingStaff ? 'fa-save' : 'fa-user-plus'}`} />
+              {editingStaff ? 'Save changes' : 'Add staff'}
+            </button>
+            {editingStaff && (
+              <button type="button" className="btn-outline" onClick={() => { setShowForm(false); setEditingStaff(null); setForm(emptyStaff); }}>
+                Cancel
+              </button>
+            )}
           </div>
         </form>
       )}
@@ -372,6 +436,7 @@ export function Staff() {
                 <td className="text-xs text-slate-500">{s.phone ?? ''}{s.email ? <div>{s.email}</div> : null}</td>
                 {canWrite && (
                   <td className="text-right whitespace-nowrap">
+                    <button onClick={() => openEdit(s)} className="text-xs text-sky-600 hover:text-sky-800 font-medium px-2 py-1 rounded hover:bg-sky-50">Edit</button>
                     <button onClick={() => toggleClassTeacher(s)} className="text-xs text-slate-600 hover:text-sky-600 font-medium px-2 py-1 rounded hover:bg-sky-50">
                       {s.isClassTeacher ? 'Unassign CT' : 'Make CT'}
                     </button>

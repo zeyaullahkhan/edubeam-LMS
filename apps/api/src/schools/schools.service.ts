@@ -399,29 +399,35 @@ export class SchoolsService {
 
   async listAcademicYears(user: AuthUser) {
     const tid = user.tenantId;
-    if (!tid) throw new ForbiddenException('Tenant ID required');
-    return prisma.academicYear.findMany({ where: { tenantId: tid }, orderBy: { label: 'desc' } });
+    // ADMIN with no tenantId sees all years; scoped users see their tenant only
+    return prisma.academicYear.findMany({
+      where: tid ? { tenantId: tid } : undefined,
+      orderBy: { label: 'desc' },
+    });
   }
 
-  async createAcademicYear(user: AuthUser, dto: { label: string; startDate: string; endDate: string }) {
-    const WRITE_ROLES = ['ADMIN', 'STATE_OFFICIAL', 'PRINCIPAL'];
-    if (!WRITE_ROLES.includes(user.role)) throw new ForbiddenException('Not authorized');
-    const tid = user.tenantId;
-    if (!tid) throw new ForbiddenException('Tenant ID required');
+  async createAcademicYear(user: AuthUser, dto: { label: string; startDate: string; endDate: string; tenantId?: string }) {
+    if (user.role !== 'ADMIN') throw new ForbiddenException('Only platform admin can create academic years');
+    const tid = dto.tenantId ?? user.tenantId;
+    if (!tid) throw new ForbiddenException('Tenant ID required — platform admin must supply tenantId');
     return prisma.academicYear.create({ data: { tenantId: tid, label: dto.label, startDate: dto.startDate, endDate: dto.endDate } });
   }
 
   async setCurrentAcademicYear(user: AuthUser, id: string) {
-    const WRITE_ROLES = ['ADMIN', 'STATE_OFFICIAL', 'PRINCIPAL'];
-    if (!WRITE_ROLES.includes(user.role)) throw new ForbiddenException('Not authorized');
+    if (user.role !== 'ADMIN') throw new ForbiddenException('Only platform admin can change the active year');
     const year = await prisma.academicYear.findUnique({ where: { id } });
     if (!year) throw new NotFoundException('Academic year not found');
     await prisma.academicYear.updateMany({ where: { tenantId: year.tenantId }, data: { isCurrent: false } });
     return prisma.academicYear.update({ where: { id }, data: { isCurrent: true } });
   }
 
+  async updateAcademicYear(user: AuthUser, id: string, dto: { label?: string; startDate?: string; endDate?: string }) {
+    if (user.role !== 'ADMIN') throw new ForbiddenException('Only platform admin can edit academic years');
+    return prisma.academicYear.update({ where: { id }, data: { ...dto } });
+  }
+
   async deleteAcademicYear(user: AuthUser, id: string) {
-    if (!['ADMIN', 'STATE_OFFICIAL', 'PRINCIPAL'].includes(user.role)) throw new ForbiddenException('Not authorized');
+    if (user.role !== 'ADMIN') throw new ForbiddenException('Only platform admin can delete academic years');
     await prisma.academicYear.delete({ where: { id } });
     return { ok: true };
   }
@@ -449,6 +455,57 @@ export class SchoolsService {
     });
   }
 
+  async bulkCreateClassSections(user: AuthUser, dto: {
+    schoolId?: string; districtId?: string; blockId?: string;
+    academicYear: string; gradeFrom: number; gradeTo: number;
+    sections: string[]; capacity?: number;
+  }) {
+    const WRITE_ROLES = ['ADMIN', 'STATE_OFFICIAL', 'PRINCIPAL'];
+    if (!WRITE_ROLES.includes(user.role)) throw new ForbiddenException('Not authorized');
+
+    const grades = Array.from({ length: dto.gradeTo - dto.gradeFrom + 1 }, (_, i) => dto.gradeFrom + i);
+
+    // Resolve which schools to create sections for
+    let schoolIds: string[];
+    if (dto.schoolId || user.role === 'PRINCIPAL') {
+      // Specific school (or principal always scoped to their own school)
+      schoolIds = [this.resolveSchoolId(user, dto.schoolId)];
+    } else {
+      // District/block/state level — find all matching schools
+      const tenantId = user.tenantId;
+      const where: any = {};
+      if (tenantId) where.block = { district: { tenantId } };
+      if (dto.districtId) where.block = { ...(where.block ?? {}), districtId: dto.districtId };
+      if (dto.blockId) where.blockId = dto.blockId;
+      const schools = await prisma.school.findMany({ where, select: { id: true } });
+      schoolIds = schools.map(s => s.id);
+    }
+
+    if (schoolIds.length === 0) return { created: 0, skipped: 0, schools: 0 };
+
+    // Get all existing sections for these schools in this academic year
+    const existing = await prisma.classSection.findMany({
+      where: { schoolId: { in: schoolIds }, academicYear: dto.academicYear },
+      select: { schoolId: true, grade: true, section: true },
+    });
+    const existSet = new Set(existing.map(e => `${e.schoolId}|${e.grade}|${e.section}`));
+
+    const toCreate: { schoolId: string; grade: number; section: string; academicYear: string; capacity?: number }[] = [];
+    for (const sid of schoolIds) {
+      for (const grade of grades) {
+        for (const section of dto.sections) {
+          if (!existSet.has(`${sid}|${grade}|${section}`)) {
+            toCreate.push({ schoolId: sid, grade, section, academicYear: dto.academicYear, capacity: dto.capacity });
+          }
+        }
+      }
+    }
+
+    if (toCreate.length === 0) return { created: 0, skipped: schoolIds.length * grades.length * dto.sections.length, schools: schoolIds.length };
+    await prisma.classSection.createMany({ data: toCreate });
+    return { created: toCreate.length, skipped: (schoolIds.length * grades.length * dto.sections.length) - toCreate.length, schools: schoolIds.length };
+  }
+
   async updateClassSection(user: AuthUser, id: string, dto: any) {
     if (!['ADMIN', 'STATE_OFFICIAL', 'PRINCIPAL'].includes(user.role)) throw new ForbiddenException('Not authorized');
     return prisma.classSection.update({ where: { id }, data: dto });
@@ -462,32 +519,54 @@ export class SchoolsService {
 
   // ── Subject Master ───────────────────────────────────────────────────────────
 
-  async listSubjects(user: AuthUser) {
-    const tid = user.tenantId;
-    if (!tid) throw new ForbiddenException('Tenant ID required');
-    return prisma.subject.findMany({ where: { tenantId: tid, isActive: true }, orderBy: { name: 'asc' } });
+  async listSubjects(user: AuthUser, tenantId?: string) {
+    const tid = tenantId ?? user.tenantId;
+    return prisma.subject.findMany({
+      where: { ...(tid ? { tenantId: tid } : {}), isActive: true },
+      orderBy: [{ stream: 'asc' }, { grade: 'asc' }, { name: 'asc' }],
+    });
   }
 
   async createSubject(user: AuthUser, dto: {
     name: string; code?: string; grade?: number; stream?: string;
-    maxMarks?: number; isElective?: boolean;
+    maxMarks?: number; isElective?: boolean; tenantId?: string;
   }) {
-    const WRITE_ROLES = ['ADMIN', 'STATE_OFFICIAL', 'PRINCIPAL'];
-    if (!WRITE_ROLES.includes(user.role)) throw new ForbiddenException('Not authorized');
-    const tid = user.tenantId;
+    if (!['ADMIN', 'PRINCIPAL'].includes(user.role)) throw new ForbiddenException('Only admin or principal can manage subjects');
+    const tid = dto.tenantId ?? user.tenantId;
     if (!tid) throw new ForbiddenException('Tenant ID required');
     return prisma.subject.create({
-      data: { tenantId: tid, name: dto.name, code: dto.code, grade: dto.grade, stream: dto.stream, maxMarks: dto.maxMarks ?? 100, isElective: dto.isElective ?? false },
+      data: { tenantId: tid, name: dto.name, code: dto.code, grade: dto.grade, stream: dto.stream ?? '', maxMarks: dto.maxMarks ?? 100, isElective: dto.isElective ?? false },
     });
   }
 
+  async bulkCreateSubjects(user: AuthUser, dto: { tenantId?: string; subjects: { name: string; code?: string; grade?: number; stream?: string; maxMarks?: number; isElective?: boolean }[] }) {
+    if (!['ADMIN', 'PRINCIPAL'].includes(user.role)) throw new ForbiddenException('Only admin or principal can manage subjects');
+    const tid = dto.tenantId ?? user.tenantId;
+    if (!tid) throw new ForbiddenException('Tenant ID required');
+    const existing = await prisma.subject.findMany({ where: { tenantId: tid }, select: { name: true, grade: true } });
+    const existSet = new Set(existing.map(e => `${e.name}|${e.grade ?? ''}`));
+    // Deduplicate input by (name, grade) — the DB unique constraint — keeping first match
+    const seen = new Set<string>();
+    const toCreate = dto.subjects.filter(s => {
+      const key = `${s.name}|${s.grade ?? ''}`;
+      if (existSet.has(key) || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    if (toCreate.length === 0) return { created: 0, skipped: dto.subjects.length };
+    await prisma.subject.createMany({
+      data: toCreate.map(s => ({ tenantId: tid!, name: s.name, code: s.code, grade: s.grade, stream: s.stream ?? '', maxMarks: s.maxMarks ?? 100, isElective: s.isElective ?? false })),
+    });
+    return { created: toCreate.length, skipped: dto.subjects.length - toCreate.length };
+  }
+
   async updateSubject(user: AuthUser, id: string, dto: any) {
-    if (!['ADMIN', 'STATE_OFFICIAL', 'PRINCIPAL'].includes(user.role)) throw new ForbiddenException('Not authorized');
+    if (!['ADMIN', 'PRINCIPAL'].includes(user.role)) throw new ForbiddenException('Only admin or principal can manage subjects');
     return prisma.subject.update({ where: { id }, data: dto });
   }
 
   async deleteSubject(user: AuthUser, id: string) {
-    if (!['ADMIN', 'PRINCIPAL'].includes(user.role)) throw new ForbiddenException('Not authorized');
+    if (!['ADMIN', 'PRINCIPAL'].includes(user.role)) throw new ForbiddenException('Only admin or principal can manage subjects');
     return prisma.subject.update({ where: { id }, data: { isActive: false } });
   }
 

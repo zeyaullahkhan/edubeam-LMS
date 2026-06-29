@@ -6,6 +6,7 @@ import { AnalyticsService } from './analytics.service';
 import { KpiService } from './kpi.service';
 import { AttendanceService } from '../attendance/attendance.service';
 import { PlannerService } from '../planner/planner.service';
+import { resolveScope } from './scope';
 
 // In-memory cache: key = role+tenantId+districtId+schoolId, TTL = 2 min
 const snapshotCache = new Map<string, { data: any; ts: number }>();
@@ -78,8 +79,14 @@ export class AnalyticsController {
   }
 
   @Get('enrollment')
-  enrollment(@CurrentUser() user: AuthUser) {
-    return this.analytics.enrollmentDemographics(user);
+  async enrollment(
+    @CurrentUser() user: AuthUser,
+    @Query('districtId') districtId?: string,
+    @Query('blockId') blockId?: string,
+    @Query('schoolId') schoolId?: string,
+  ) {
+    const { schoolWhere } = await resolveScope(user, { districtId, blockId, schoolId });
+    return this.analytics.enrollmentDemographics(user, schoolWhere);
   }
 
   @Get('teacher-stats')

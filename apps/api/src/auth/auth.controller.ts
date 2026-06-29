@@ -4,6 +4,7 @@ import { AuthService } from './auth.service';
 import { JwtGuard } from './jwt.guard';
 import { LoginThrottleGuard } from './login-throttle.guard';
 import { CurrentUser } from './current-user.decorator';
+import { prisma } from '@edubeam/db';
 
 @Controller('auth')
 export class AuthController {
@@ -19,5 +20,11 @@ export class AuthController {
   @UseGuards(JwtGuard)
   me(@CurrentUser() user: AuthUser) {
     return user;
+  }
+
+  @Get('tenants')
+  @UseGuards(JwtGuard)
+  tenants() {
+    return prisma.tenant.findMany({ select: { id: true, name: true, code: true }, orderBy: { name: 'asc' } });
   }
 }
