@@ -52,8 +52,14 @@ export class PlannerController {
   // ── Notices ──────────────────────────────────────────────────────────────────
 
   @Get('notices')
-  getNotices(@CurrentUser() user: AuthUser, @Query('schoolId') schoolId?: string) {
-    return this.svc.getAllNotices(user, schoolId);
+  getNotices(
+    @CurrentUser() user: AuthUser,
+    @Query('schoolId') schoolId?: string,
+    @Query('tenantId') tenantId?: string,
+    @Query('districtId') districtId?: string,
+    @Query('blockId') blockId?: string,
+  ) {
+    return this.svc.getAllNotices(user, schoolId, tenantId, districtId, blockId);
   }
 
   @Post('notices')

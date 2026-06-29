@@ -93,6 +93,7 @@ export function Dashboard() {
   const [attDrillLoading, setAttDrillLoading] = useState(false);
   const [mapDistricts, setMapDistricts] = useState<DistrictSummary[]>([]);
   const [mySchool, setMySchool] = useState<SchoolRow | null>(null);
+  const [dashNotices, setDashNotices] = useState<any[]>([]);
 
   useEffect(() => {
     const CACHE_KEY = 'dash_snapshot_v1';
@@ -128,6 +129,12 @@ export function Dashboard() {
       .catch((e) => setError((e as Error).message));
 
     if (user?.schoolId) api.school(user.schoolId).then(setMySchool).catch(() => null);
+
+    // Load recent notices visible to this user
+    const noticeParams: Record<string, string> = {};
+    if (user?.schoolId) noticeParams.schoolId = user.schoolId;
+    else if (user?.tenantId) noticeParams.tenantId = user.tenantId;
+    api.notices(noticeParams).then((n) => setDashNotices(n.slice(0, 5))).catch(() => null);
   }, []);
 
   const openAttDrilldown = async (metric: 'present' | 'absent' | 'late') => {
@@ -267,6 +274,50 @@ export function Dashboard() {
           <a href="/planner" className="flex items-center gap-1.5 text-xs font-bold text-amber-600 hover:text-amber-800 shrink-0 mt-1">
             Manage <i className="fas fa-arrow-right text-[10px]" />
           </a>
+        </div>
+      )}
+
+      {/* ── Recent notices ──────────────────────────────────── */}
+      {dashNotices.length > 0 && (
+        <div className="no-print bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100">
+            <i className="fas fa-bullhorn text-sky-500 text-sm" />
+            <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Recent Notices</span>
+            <a href="/notice-board" className="ml-auto text-xs font-bold text-sky-500 hover:text-sky-700 flex items-center gap-1">
+              View All <i className="fas fa-arrow-right text-[10px]" />
+            </a>
+          </div>
+          <div className="divide-y divide-slate-50">
+            {dashNotices.map((n) => {
+              const typeClr: Record<string, string> = {
+                Urgent: 'text-rose-500', Academic: 'text-sky-500', Event: 'text-violet-500', General: 'text-slate-400',
+              };
+              const scopeClr: Record<string, string> = {
+                school: 'bg-sky-50 text-sky-700', block: 'bg-violet-50 text-violet-700',
+                district: 'bg-amber-50 text-amber-700', all: 'bg-emerald-50 text-emerald-700',
+              };
+              return (
+                <div key={n.id} className="flex items-start gap-3 px-4 py-3 hover:bg-slate-50 transition-colors">
+                  <i className={`fas fa-circle text-[6px] mt-2 ${typeClr[n.type] ?? 'text-slate-400'}`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-semibold text-slate-700 truncate">{n.title}</span>
+                      {n.type === 'Urgent' && <span className="text-[10px] font-bold text-rose-600 animate-pulse">URGENT</span>}
+                      {n.scope && (
+                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${scopeClr[n.scope] ?? 'bg-slate-100 text-slate-600'}`}>
+                          {n.scope === 'all' ? 'All Schools' : n.scope}
+                        </span>
+                      )}
+                    </div>
+                    {n.description && <p className="text-xs text-slate-500 mt-0.5 truncate">{n.description}</p>}
+                  </div>
+                  <span className="text-[10px] text-slate-400 shrink-0 mt-0.5">
+                    {new Date(n.publishDate + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 

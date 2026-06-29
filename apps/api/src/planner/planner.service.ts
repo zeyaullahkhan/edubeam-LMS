@@ -153,12 +153,32 @@ export class PlannerService {
     };
   }
 
-  async getNotices(user: AuthUser, schoolId?: string): Promise<any[]> {
+  /** Build a broad where filter for roles that don't have a schoolId */
+  private broadNoticeWhere(user: AuthUser, tenantId?: string, districtId?: string, blockId?: string) {
+    const tid = tenantId ?? user.tenantId;
+    const did = districtId ?? user.districtId;
+    const bid = blockId ?? user.blockId;
+    // Platform admin with no tenant filter → all notices
+    if (!tid && !did && !bid) return {};
+    // Build OR: notices at or above the requested scope
+    const conditions: any[] = [];
+    if (bid)  conditions.push({ blockId: bid });
+    if (did)  conditions.push({ districtId: did });
+    if (tid)  conditions.push({ tenantId: tid });
+    // Also include school-scoped notices within this district/block for viewing
+    if (bid)  conditions.push({ scope: 'block', blockId: bid });
+    if (did)  conditions.push({ scope: 'district', districtId: did });
+    return conditions.length ? { OR: conditions } : {};
+  }
+
+  async getNotices(user: AuthUser, schoolId?: string, tenantId?: string, districtId?: string, blockId?: string): Promise<any[]> {
     const today = this.today();
     const sid = schoolId ?? user.schoolId;
-    if (!sid) return [];
     try {
-      const visWhere = await this.noticeVisibilityWhere(sid);
+      const visWhere = sid
+        ? await this.noticeVisibilityWhere(sid)
+        : this.broadNoticeWhere(user, tenantId, districtId, blockId);
+      if (Object.keys(visWhere).length === 0 && !sid && user.role !== 'ADMIN') return [];
       return await prisma.notice.findMany({
         where: {
           AND: [
@@ -175,17 +195,18 @@ export class PlannerService {
     }
   }
 
-  async getAllNotices(user: AuthUser, schoolId?: string): Promise<any[]> {
+  async getAllNotices(user: AuthUser, schoolId?: string, tenantId?: string, districtId?: string, blockId?: string): Promise<any[]> {
     const sid = schoolId ?? user.schoolId;
-    if (!sid) return [];
     try {
-      const visWhere = await this.noticeVisibilityWhere(sid);
+      const visWhere = sid
+        ? await this.noticeVisibilityWhere(sid)
+        : this.broadNoticeWhere(user, tenantId, districtId, blockId);
+      if (Object.keys(visWhere).length === 0 && !sid && user.role !== 'ADMIN') return [];
       return await prisma.notice.findMany({
         where: visWhere,
         orderBy: { publishDate: 'desc' },
       });
     } catch (e: any) {
-      // Table may not exist on first deploy before schema push completes
       if (e?.code === 'P2021' || /does not exist/i.test(e?.message ?? '')) return [];
       throw e;
     }
@@ -194,9 +215,9 @@ export class PlannerService {
   async createNotice(user: AuthUser, dto: {
     title: string; description?: string; type?: string;
     publishDate: string; expiryDate?: string;
-    scope?: string; schoolId?: string; blockId?: string; districtId?: string;
+    scope?: string; schoolId?: string; blockId?: string; districtId?: string; tenantId?: string;
   }) {
-    const WRITE_ROLES = ['ADMIN', 'STATE_OFFICIAL', 'DISTRICT_OFFICIAL', 'PRINCIPAL'];
+    const WRITE_ROLES = ['ADMIN', 'STATE_OFFICIAL', 'DISTRICT_OFFICIAL', 'BLOCK_OFFICIAL', 'PRINCIPAL'];
     if (!WRITE_ROLES.includes(user.role)) throw new ForbiddenException('Not authorized to create notices');
 
     const scope = dto.scope ?? 'school';
@@ -215,8 +236,9 @@ export class PlannerService {
       districtId = dto.districtId ?? user.districtId ?? null;
       if (!districtId) throw new ForbiddenException('districtId required');
     } else if (scope === 'all') {
-      tenantId = user.tenantId ?? null;
-      if (!tenantId) throw new ForbiddenException('tenantId required');
+      // Accept tenantId from DTO (Platform Admin picks a state; others use their own)
+      tenantId = dto.tenantId ?? user.tenantId ?? null;
+      if (!tenantId) throw new ForbiddenException('Select a state to broadcast to all schools');
     }
 
     return prisma.notice.create({

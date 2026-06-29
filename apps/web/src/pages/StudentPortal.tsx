@@ -45,7 +45,7 @@ function fmtDate(d: string) {
 }
 function todayStr() { return new Date().toISOString().slice(0, 10); }
 
-type Tab = 'profile' | 'attendance' | 'leave' | 'report';
+type Tab = 'profile' | 'attendance' | 'leave' | 'report' | 'notices';
 
 // ─── StudentPortal ────────────────────────────────────────────────────────────
 
@@ -59,6 +59,9 @@ export function StudentPortal() {
   const [loading, setLoading] = useState(true);
   const [calMonth, setCalMonth] = useState(new Date().toISOString().slice(0, 7));
 
+  // Notices state
+  const [notices, setNotices] = useState<any[]>([]);
+
   // My Leave state
   const [leaves, setLeaves] = useState<any[]>([]);
   const [leaveForm, setLeaveForm] = useState({ startDate: todayStr(), endDate: todayStr(), reason: 'SICK', remarks: '' });
@@ -67,7 +70,16 @@ export function StudentPortal() {
   const [leaveSuccess, setLeaveSuccess] = useState('');
 
   useEffect(() => {
-    api.attendance.studentMe().then(d => { setProfile(d); setLoading(false); }).catch(() => setLoading(false));
+    api.attendance.studentMe().then(d => {
+      setProfile(d);
+      setLoading(false);
+      // Load notices for the student's school once we have the school
+      if (d?.student?.schoolId) {
+        api.notices({ schoolId: d.student.schoolId })
+          .then((n) => setNotices(n))
+          .catch(() => null);
+      }
+    }).catch(() => setLoading(false));
   }, []);
 
   useEffect(() => {
@@ -166,19 +178,33 @@ export function StudentPortal() {
           { id: 'attendance', label: 'Attendance',  icon: 'fa-calendar-check' },
           { id: 'leave',      label: 'My Leave',    icon: 'fa-calendar-times' },
           { id: 'report',     label: 'Report Card', icon: 'fa-graduation-cap' },
-        ] as { id: Tab; label: string; icon: string }[]).map(t => (
+          { id: 'notices',    label: 'Notices',     icon: 'fa-bullhorn', badge: notices.filter(n => n.type === 'Urgent').length },
+        ] as { id: Tab; label: string; icon: string; badge?: number }[]).map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all ${
+            className={`flex-1 relative flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all ${
               tab === t.id ? 'bg-white text-sky-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
             }`}>
             <i className={`fas ${t.icon}`} />
             <span className="hidden sm:inline">{t.label}</span>
             <span className="sm:hidden">{t.label.split(' ')[0]}</span>
+            {t.badge ? <span className="absolute top-1 right-1 w-4 h-4 bg-rose-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">{t.badge}</span> : null}
           </button>
         ))}
       </div>
 
       {/* ── Profile ─────────────────────────────────────────────────────────── */}
+      {/* Urgent notice banner on profile tab */}
+      {tab === 'profile' && notices.filter(n => n.type === 'Urgent').length > 0 && (
+        <button onClick={() => setTab('notices')} className="w-full text-left bg-rose-50 border border-rose-200 rounded-xl px-4 py-3 flex items-center gap-3 hover:bg-rose-100 transition-colors">
+          <i className="fas fa-exclamation-triangle text-rose-500 text-lg animate-pulse" />
+          <div>
+            <p className="font-bold text-rose-700 text-sm">{notices.filter(n => n.type === 'Urgent').length} Urgent Notice{notices.filter(n => n.type === 'Urgent').length > 1 ? 's' : ''} from your school</p>
+            <p className="text-xs text-rose-500">{notices.find(n => n.type === 'Urgent')?.title}</p>
+          </div>
+          <i className="fas fa-arrow-right text-rose-400 ml-auto" />
+        </button>
+      )}
+
       {tab === 'profile' && (
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
           <h2 className="font-semibold text-slate-800 mb-4">Personal Details</h2>
@@ -548,6 +574,49 @@ export function StudentPortal() {
           ) : (
             <p className="text-slate-400 text-sm text-center py-8">No report card data available.</p>
           )}
+        </div>
+      )}
+      {/* ── Notices ─────────────────────────────────────────────────────────── */}
+      {tab === 'notices' && (
+        <div className="space-y-3">
+          {notices.length === 0 ? (
+            <div className="py-12 text-center bg-white rounded-xl border border-slate-100 shadow-sm text-slate-400">
+              <i className="fas fa-bullhorn text-3xl mb-2 block text-slate-200" />
+              <p className="font-semibold text-slate-500">No notices from your school</p>
+            </div>
+          ) : notices.map((n) => {
+            const typeColor: Record<string, string> = {
+              Urgent: 'border-l-rose-500 bg-rose-50',
+              Academic: 'border-l-sky-500 bg-sky-50',
+              Event: 'border-l-violet-500 bg-violet-50',
+              General: 'border-l-slate-400 bg-white',
+            };
+            const typeIcon: Record<string, string> = {
+              Urgent: 'fa-exclamation-triangle text-rose-500',
+              Academic: 'fa-graduation-cap text-sky-500',
+              Event: 'fa-calendar-star text-violet-500',
+              General: 'fa-bullhorn text-slate-400',
+            };
+            return (
+              <div key={n.id} className={`rounded-xl border border-slate-200 border-l-4 p-4 ${typeColor[n.type] ?? 'bg-white border-l-slate-400'}`}>
+                <div className="flex items-start gap-3">
+                  <i className={`fas ${typeIcon[n.type] ?? 'fa-bullhorn text-slate-400'} mt-0.5`} />
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-slate-800">{n.title}</span>
+                      {n.type === 'Urgent' && <span className="text-xs font-bold text-rose-600 animate-pulse">⚠ URGENT</span>}
+                    </div>
+                    {n.description && <p className="text-sm text-slate-600 mt-1">{n.description}</p>}
+                    <p className="text-xs text-slate-400 mt-1.5">
+                      <i className="fas fa-calendar mr-1" />
+                      {new Date(n.publishDate + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}
+                      {n.createdByName && <> · <i className="fas fa-user mr-1" />{n.createdByName}</>}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

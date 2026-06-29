@@ -283,8 +283,11 @@ export const api = {
     req<{ ok: boolean }>(`/schools/assignments/${id}`, { method: 'DELETE' }),
 
   // Notices
-  notices: (schoolId: string) => req<any[]>(`/planner/notices?schoolId=${schoolId}`),
-  createNotice: (body: { title: string; description?: string; type?: string; publishDate: string; expiryDate?: string; scope?: string; schoolId?: string; blockId?: string; districtId?: string }) =>
+  notices: (params: { schoolId?: string; tenantId?: string; districtId?: string; blockId?: string }) => {
+    const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v) as [string, string][]).toString();
+    return req<any[]>(`/planner/notices${qs ? `?${qs}` : ''}`);
+  },
+  createNotice: (body: { title: string; description?: string; type?: string; publishDate: string; expiryDate?: string; scope?: string; schoolId?: string; blockId?: string; districtId?: string; tenantId?: string }) =>
     req<any>('/planner/notices', { method: 'POST', body: JSON.stringify(body) }),
   updateNotice: (id: string, body: any) =>
     req<any>(`/planner/notices/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
