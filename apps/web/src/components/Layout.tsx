@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { useAuth } from '../auth';
 import { stateFor } from '../config/states';
+import { api } from '../api';
 
 const ROLE_LABELS: Record<string, string> = {
   ADMIN: 'Administrator',
@@ -79,9 +80,51 @@ export function Layout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [allNotices, setAllNotices] = useState<any[]>([]);
+  const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
+  const [showNoticePopup, setShowNoticePopup] = useState(false);
   const groups = navGroupsFor(user?.role);
   const state = user ? stateFor(user) : null;
   const closeMobile = () => setMobileOpen(false);
+
+  // localStorage key per student
+  const seenKey = user?.id ? `noticed_seen_${user.id}` : null;
+
+  // Load seen IDs from localStorage on mount
+  useEffect(() => {
+    if (!seenKey) return;
+    try {
+      const stored = JSON.parse(localStorage.getItem(seenKey) ?? '[]');
+      setSeenIds(new Set(stored));
+    } catch { /* ignore */ }
+  }, [seenKey]);
+
+  // Load notices for students
+  useEffect(() => {
+    if (user?.role !== 'STUDENT') return;
+    const load = () => {
+      api.notices(user.schoolId ? { schoolId: user.schoolId } : {})
+        .then(n => setAllNotices(n))
+        .catch(() => null);
+    };
+    load();
+    const t = setInterval(load, 60_000);
+    return () => clearInterval(t);
+  }, [user?.role, user?.schoolId]);
+
+  // Unread = notices not yet seen
+  const unreadNotices = allNotices.filter(n => !seenIds.has(n.id));
+  const unreadCount = unreadNotices.length;
+  const noticePreview = allNotices.slice(0, 5);
+
+  // Mark all as seen when popup opens
+  const openPopup = () => {
+    setShowNoticePopup(true);
+    if (!seenKey || allNotices.length === 0) return;
+    const newSeen = new Set([...seenIds, ...allNotices.map(n => n.id)]);
+    setSeenIds(newSeen);
+    try { localStorage.setItem(seenKey, JSON.stringify([...newSeen])); } catch { /* ignore */ }
+  };
 
   const sidebar = (
     <>
@@ -171,14 +214,95 @@ export function Layout({ children }: { children: ReactNode }) {
             <span className="text-navy-200 text-xs hidden sm:inline">|</span>
             <span className="text-navy-300 text-xs tracking-wide hidden sm:inline">Valuable Group — EdTech Infrastructure</span>
           </div>
-          {state ? (
-            <div className="flex items-center gap-2">
-              <span className="text-navy-300 text-xs hidden sm:inline">{state.govLabel}</span>
-              <img src={state.logo} alt={state.name} className="h-6 w-auto" />
-            </div>
-          ) : (
-            <span className="text-navy-300 text-xs">All States — Platform Admin</span>
-          )}
+          <div className="flex items-center gap-3">
+            {/* Bell notification — students only */}
+            {user?.role === 'STUDENT' && (
+              <div className="relative">
+                <button
+                  onClick={openPopup}
+                  className="relative w-8 h-8 flex items-center justify-center text-white/70 hover:text-white transition-colors"
+                  aria-label="Notices"
+                >
+                  <i className={`fas fa-bell text-lg ${unreadCount > 0 ? 'text-white animate-[wiggle_1s_ease-in-out_3]' : ''}`} />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center px-1 shadow-lg ring-2 ring-navy-800 animate-bounce">
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </span>
+                  )}
+                </button>
+
+                {/* Dropdown popup */}
+                {showNoticePopup && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowNoticePopup(false)} />
+                    <div className="absolute right-0 top-10 z-50 w-80 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden">
+                      {/* Header */}
+                      <div className="flex items-center justify-between px-4 py-3 bg-navy-800">
+                        <div className="flex items-center gap-2">
+                          <i className="fas fa-bell text-sky-300 text-sm" />
+                          <span className="text-white font-bold text-sm">Notices</span>
+                          <span className="bg-slate-600 text-slate-300 text-[10px] font-semibold px-2 py-0.5 rounded-full">{allNotices.length} total</span>
+                          {unreadCount > 0 && (
+                            <span className="bg-rose-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full animate-pulse">{unreadCount} new</span>
+                          )}
+                        </div>
+                        <button onClick={() => setShowNoticePopup(false)} className="text-white/50 hover:text-white text-xs">
+                          <i className="fas fa-times" />
+                        </button>
+                      </div>
+
+                      {/* Notice list */}
+                      <div className="divide-y divide-slate-50 max-h-72 overflow-y-auto">
+                        {noticePreview.length === 0 ? (
+                          <div className="py-8 text-center text-slate-400 text-sm">No notices</div>
+                        ) : noticePreview.map(n => {
+                          const typeDot: Record<string, string> = { Urgent: 'bg-rose-500', Academic: 'bg-sky-500', Event: 'bg-violet-500', General: 'bg-slate-400' };
+                          const isUrgent = n.type === 'Urgent';
+                          const isUnread = !seenIds.has(n.id);
+                          return (
+                            <div key={n.id} className={`flex items-start gap-3 px-4 py-3 transition-colors ${isUrgent ? 'bg-rose-50 hover:bg-rose-100' : isUnread ? 'bg-sky-50/50 hover:bg-sky-50' : 'hover:bg-slate-50'}`}>
+                              {/* Type dot */}
+                              <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${typeDot[n.type] ?? 'bg-slate-400'} ${isUrgent ? 'animate-pulse' : ''}`} />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <p className={`text-sm font-semibold truncate ${isUrgent ? 'text-rose-700' : 'text-slate-800'}`}>{n.title}</p>
+                                  {isUnread && <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-sky-500" title="Unread" />}
+                                </div>
+                                {n.description && <p className="text-xs text-slate-500 truncate mt-0.5">{n.description}</p>}
+                                <p className="text-[10px] text-slate-400 mt-0.5">
+                                  {new Date(n.publishDate + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                                  {isUrgent && <span className="ml-1 text-rose-500 font-bold">⚠ Urgent</span>}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Footer */}
+                      <div className="border-t border-slate-100 px-4 py-2.5">
+                        <button
+                          onClick={() => { setShowNoticePopup(false); navigate('/'); setTimeout(() => { document.querySelector('[data-tab="notices"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true })); }, 100); }}
+                          className="w-full text-center text-xs font-bold text-sky-600 hover:text-sky-800 transition-colors"
+                        >
+                          View all notices <i className="fas fa-arrow-right text-[10px] ml-1" />
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {state ? (
+              <div className="flex items-center gap-2">
+                <span className="text-navy-300 text-xs hidden sm:inline">{state.govLabel}</span>
+                <img src={state.logo} alt={state.name} className="h-6 w-auto" />
+              </div>
+            ) : (
+              <span className="text-navy-300 text-xs">All States — Platform Admin</span>
+            )}
+          </div>
         </div>
 
         {/* Page content */}

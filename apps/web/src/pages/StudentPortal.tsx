@@ -61,6 +61,7 @@ export function StudentPortal() {
 
   // Notices state
   const [notices, setNotices] = useState<any[]>([]);
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
 
   // My Leave state
   const [leaves, setLeaves] = useState<any[]>([]);
@@ -180,7 +181,7 @@ export function StudentPortal() {
           { id: 'report',     label: 'Report Card', icon: 'fa-graduation-cap' },
           { id: 'notices',    label: 'Notices',     icon: 'fa-bullhorn', badge: notices.filter(n => n.type === 'Urgent').length },
         ] as { id: Tab; label: string; icon: string; badge?: number }[]).map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
+          <button key={t.id} onClick={() => setTab(t.id)} data-tab={t.id}
             className={`flex-1 relative flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all ${
               tab === t.id ? 'bg-white text-sky-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
             }`}>
@@ -192,18 +193,36 @@ export function StudentPortal() {
         ))}
       </div>
 
-      {/* ── Profile ─────────────────────────────────────────────────────────── */}
-      {/* Urgent notice banner on profile tab */}
-      {tab === 'profile' && notices.filter(n => n.type === 'Urgent').length > 0 && (
-        <button onClick={() => setTab('notices')} className="w-full text-left bg-rose-50 border border-rose-200 rounded-xl px-4 py-3 flex items-center gap-3 hover:bg-rose-100 transition-colors">
-          <i className="fas fa-exclamation-triangle text-rose-500 text-lg animate-pulse" />
-          <div>
-            <p className="font-bold text-rose-700 text-sm">{notices.filter(n => n.type === 'Urgent').length} Urgent Notice{notices.filter(n => n.type === 'Urgent').length > 1 ? 's' : ''} from your school</p>
-            <p className="text-xs text-rose-500">{notices.find(n => n.type === 'Urgent')?.title}</p>
+      {/* ── Persistent alert banners (visible on every tab) ─────────────────── */}
+      {notices
+        .filter(n => n.type === 'Urgent' && !dismissedIds.has(n.id))
+        .map(n => (
+          <div key={n.id} className="flex items-start gap-3 bg-rose-600 text-white rounded-2xl px-4 py-3 shadow-lg shadow-rose-200 relative overflow-hidden">
+            {/* animated shimmer stripe */}
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full animate-[shimmer_2.5s_infinite]" style={{ animation: 'shimmer 2.5s infinite' }} />
+            <div className="relative shrink-0 flex flex-col items-center pt-0.5">
+              <span className="flex h-8 w-8 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-300 opacity-60" />
+                <span className="relative flex h-8 w-8 rounded-full bg-rose-500 border-2 border-white/40 items-center justify-center">
+                  <i className="fas fa-exclamation text-white text-sm font-black" />
+                </span>
+              </span>
+            </div>
+            <div className="relative flex-1 min-w-0">
+              <p className="text-[10px] font-black uppercase tracking-widest text-rose-200 mb-0.5">⚠ Urgent Notice</p>
+              <p className="font-bold text-sm leading-snug">{n.title}</p>
+              {n.description && <p className="text-xs text-rose-100 mt-0.5 line-clamp-2">{n.description}</p>}
+              <button onClick={() => setTab('notices')} className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-white bg-white/20 hover:bg-white/30 px-3 py-1 rounded-full transition-colors">
+                View Details <i className="fas fa-arrow-right text-[10px]" />
+              </button>
+            </div>
+            <button onClick={() => setDismissedIds(prev => new Set([...prev, n.id]))}
+              className="relative shrink-0 w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors mt-0.5">
+              <i className="fas fa-times text-xs" />
+            </button>
           </div>
-          <i className="fas fa-arrow-right text-rose-400 ml-auto" />
-        </button>
-      )}
+        ))
+      }
 
       {tab === 'profile' && (
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
@@ -576,49 +595,97 @@ export function StudentPortal() {
           )}
         </div>
       )}
-      {/* ── Notices ─────────────────────────────────────────────────────────── */}
-      {tab === 'notices' && (
-        <div className="space-y-3">
-          {notices.length === 0 ? (
-            <div className="py-12 text-center bg-white rounded-xl border border-slate-100 shadow-sm text-slate-400">
-              <i className="fas fa-bullhorn text-3xl mb-2 block text-slate-200" />
-              <p className="font-semibold text-slate-500">No notices from your school</p>
-            </div>
-          ) : notices.map((n) => {
-            const typeColor: Record<string, string> = {
-              Urgent: 'border-l-rose-500 bg-rose-50',
-              Academic: 'border-l-sky-500 bg-sky-50',
-              Event: 'border-l-violet-500 bg-violet-50',
-              General: 'border-l-slate-400 bg-white',
-            };
-            const typeIcon: Record<string, string> = {
-              Urgent: 'fa-exclamation-triangle text-rose-500',
-              Academic: 'fa-graduation-cap text-sky-500',
-              Event: 'fa-calendar-star text-violet-500',
-              General: 'fa-bullhorn text-slate-400',
-            };
-            return (
-              <div key={n.id} className={`rounded-xl border border-slate-200 border-l-4 p-4 ${typeColor[n.type] ?? 'bg-white border-l-slate-400'}`}>
-                <div className="flex items-start gap-3">
-                  <i className={`fas ${typeIcon[n.type] ?? 'fa-bullhorn text-slate-400'} mt-0.5`} />
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-bold text-slate-800">{n.title}</span>
-                      {n.type === 'Urgent' && <span className="text-xs font-bold text-rose-600 animate-pulse">⚠ URGENT</span>}
+      {/* ── Notices Tab ──────────────────────────────────────────────────────── */}
+      {tab === 'notices' && (() => {
+        const TYPE_CFG = {
+          Urgent:   { bar: 'bg-rose-500',   bg: 'bg-rose-50',   border: 'border-rose-200',   icon: 'fa-exclamation-circle', iconCls: 'text-rose-500',   title: 'text-rose-900',   desc: 'text-rose-700',   meta: 'text-rose-400',   badge: 'bg-rose-100 text-rose-700'   },
+          Academic: { bar: 'bg-sky-500',    bg: 'bg-sky-50',    border: 'border-sky-200',    icon: 'fa-graduation-cap',     iconCls: 'text-sky-500',    title: 'text-sky-900',    desc: 'text-sky-700',    meta: 'text-sky-400',    badge: 'bg-sky-100 text-sky-700'    },
+          Event:    { bar: 'bg-violet-500', bg: 'bg-violet-50', border: 'border-violet-200', icon: 'fa-calendar-star',      iconCls: 'text-violet-500', title: 'text-violet-900', desc: 'text-violet-700', meta: 'text-violet-400', badge: 'bg-violet-100 text-violet-700' },
+          General:  { bar: 'bg-slate-400',  bg: 'bg-white',     border: 'border-slate-200',  icon: 'fa-bullhorn',           iconCls: 'text-slate-400',  title: 'text-slate-800',  desc: 'text-slate-600',  meta: 'text-slate-400',  badge: 'bg-slate-100 text-slate-600'  },
+        } as const;
+        type NType = keyof typeof TYPE_CFG;
+
+        const sorted = [...notices].sort((a, b) => {
+          const order: Record<string, number> = { Urgent: 0, Academic: 1, Event: 2, General: 3 };
+          return (order[a.type] ?? 9) - (order[b.type] ?? 9);
+        });
+
+        const urgentCount   = notices.filter(n => n.type === 'Urgent').length;
+        const academicCount = notices.filter(n => n.type === 'Academic').length;
+        const eventCount    = notices.filter(n => n.type === 'Event').length;
+
+        return (
+          <div className="space-y-3">
+
+            {/* Summary chips */}
+            {notices.length > 0 && (
+              <div className="flex flex-wrap gap-2 items-center pb-1">
+                {urgentCount   > 0 && <span className="inline-flex items-center gap-1.5 bg-rose-500   text-white text-xs font-bold px-3 py-1 rounded-full"><i className="fas fa-exclamation-circle text-[9px]" />{urgentCount} Urgent</span>}
+                {academicCount > 0 && <span className="inline-flex items-center gap-1.5 bg-sky-500    text-white text-xs font-bold px-3 py-1 rounded-full"><i className="fas fa-graduation-cap text-[9px]"  />{academicCount} Academic</span>}
+                {eventCount    > 0 && <span className="inline-flex items-center gap-1.5 bg-violet-500 text-white text-xs font-bold px-3 py-1 rounded-full"><i className="fas fa-calendar-star text-[9px]"  />{eventCount} Event</span>}
+                <span className="text-xs text-slate-400 ml-auto">{notices.length} notice{notices.length !== 1 ? 's' : ''}</span>
+              </div>
+            )}
+
+            {notices.length === 0 ? (
+              <div className="py-16 text-center bg-white rounded-2xl border border-dashed border-slate-200">
+                <div className="w-14 h-14 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-3 border border-slate-100">
+                  <i className="fas fa-bullhorn text-xl text-slate-300" />
+                </div>
+                <p className="font-semibold text-slate-500 text-sm">No notices yet</p>
+                <p className="text-xs text-slate-400 mt-1">Your school's announcements will appear here</p>
+              </div>
+            ) : sorted.map((n) => {
+              const t = (n.type in TYPE_CFG ? n.type : 'General') as NType;
+              const c = TYPE_CFG[t];
+              const isUrgent = t === 'Urgent';
+              const fmtD = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+
+              return (
+                <div key={n.id} className={`relative flex gap-0 rounded-2xl border overflow-hidden shadow-sm ${c.border} ${isUrgent ? 'shadow-rose-100' : ''}`}>
+                  {/* Left colour bar */}
+                  <div className={`w-1 shrink-0 ${c.bar}`} />
+
+                  <div className={`flex-1 ${c.bg} px-4 py-3.5`}>
+                    {/* Top row: icon + type badge + scope + urgent flash */}
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      <i className={`fas ${c.icon} ${c.iconCls} text-sm`} />
+                      <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${c.badge}`}>{t}</span>
+                      {n.scope && n.scope !== 'school' && (
+                        <span className="text-[10px] font-semibold bg-white/70 border border-slate-200 text-slate-500 px-2 py-0.5 rounded-full">
+                          <i className={`fas ${n.scope === 'all' ? 'fa-globe' : n.scope === 'district' ? 'fa-map' : 'fa-city'} mr-0.5`} />
+                          {n.scope === 'all' ? 'All Schools' : n.scope === 'district' ? 'District-wide' : 'Block-wide'}
+                        </span>
+                      )}
+                      {isUrgent && (
+                        <span className="ml-auto flex items-center gap-1 text-[10px] font-black text-rose-600 uppercase tracking-widest">
+                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping" />
+                          Action Required
+                        </span>
+                      )}
                     </div>
-                    {n.description && <p className="text-sm text-slate-600 mt-1">{n.description}</p>}
-                    <p className="text-xs text-slate-400 mt-1.5">
-                      <i className="fas fa-calendar mr-1" />
-                      {new Date(n.publishDate + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}
-                      {n.createdByName && <> · <i className="fas fa-user mr-1" />{n.createdByName}</>}
-                    </p>
+
+                    {/* Title */}
+                    <h3 className={`font-bold text-[15px] leading-snug ${c.title}`}>{n.title}</h3>
+
+                    {/* Description */}
+                    {n.description && (
+                      <p className={`text-sm mt-1.5 leading-relaxed ${c.desc}`}>{n.description}</p>
+                    )}
+
+                    {/* Meta row */}
+                    <div className={`flex flex-wrap items-center gap-x-4 gap-y-1 mt-2.5 text-xs ${c.meta}`}>
+                      <span><i className="fas fa-calendar mr-1" />{fmtD(n.publishDate)}</span>
+                      {n.expiryDate && <span><i className="fas fa-hourglass-end mr-1" />Expires {fmtD(n.expiryDate)}</span>}
+                      {n.createdByName && <span><i className="fas fa-user-tie mr-1" />{n.createdByName}</span>}
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+              );
+            })}
+          </div>
+        );
+      })()}
     </div>
   );
 }
