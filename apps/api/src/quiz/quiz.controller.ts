@@ -14,6 +14,18 @@ export class QuizController {
     return this.svc.create(user, dto);
   }
 
+  // stats MUST be before :id to avoid route collision
+  @Get('stats')
+  stats(
+    @CurrentUser() user: AuthUser,
+    @Query('tenantId') tenantId?: string,
+    @Query('districtId') districtId?: string,
+    @Query('blockId') blockId?: string,
+    @Query('schoolId') schoolId?: string,
+  ) {
+    return this.svc.stats(user, { tenantId, districtId, blockId, schoolId });
+  }
+
   @Post(':id/questions')
   setQuestions(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() body: { questions: any[] }) {
     return this.svc.setQuestions(user, id, body.questions);

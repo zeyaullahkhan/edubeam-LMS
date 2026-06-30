@@ -137,6 +137,9 @@ export interface SchoolRow {
   // Profile tracking
   profileUpdatedBy: string | null;
   profileUpdatedAt: string | null;
+  // Detail-only (returned by GET /schools/:id)
+  enrollments?: { grade: number; boys: number; girls: number; total: number }[];
+  boardResults?: { examType: string; subject: string; passPct: number; academicYear: string }[];
 }
 
 export interface DistrictMeta {
@@ -429,6 +432,8 @@ export const api = {
     submitAttempt: (id: string, body: { answers: Record<string, number>; timeTaken?: number }) =>
       req<any>(`/quiz/${id}/attempt`, { method: 'POST', body: JSON.stringify(body) }),
     results: (id: string) => req<any>(`/quiz/${id}/results`),
+    stats: (params: { tenantId?: string; districtId?: string; blockId?: string; schoolId?: string } = {}) =>
+      req<any>(`/quiz/stats${qstr(params)}`),
     toggle: (id: string) => req<any>(`/quiz/${id}/toggle`, { method: 'PATCH' }),
     remove: (id: string) => req<any>(`/quiz/${id}`, { method: 'DELETE' }),
   },

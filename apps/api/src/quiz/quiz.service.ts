@@ -14,7 +14,7 @@ function canManageQuiz(role: string) {
 export class QuizService {
   // ── Create quiz ─────────────────────────────────────────────────────────
   async create(user: AuthUser, dto: {
-    schoolId?: string; scope?: string; blockId?: string; districtId?: string;
+    schoolId?: string; scope?: string; blockId?: string; districtId?: string; tenantId?: string;
     title: string; description?: string;
     subject: string; grade: number; section?: string; dueDate?: string;
   }) {
@@ -22,7 +22,6 @@ export class QuizService {
 
     const scope = dto.scope ?? 'school';
 
-    // Resolve IDs based on scope
     let schoolId: string | null = null;
     let blockId: string | null = null;
     let districtId: string | null = null;
@@ -34,23 +33,20 @@ export class QuizService {
     } else if (scope === 'block') {
       blockId = dto.blockId ?? user.blockId ?? null;
       if (!blockId) throw new BadRequestException('blockId required for block-scoped quiz');
+      districtId = dto.districtId ?? user.districtId ?? null;
     } else if (scope === 'district') {
       districtId = dto.districtId ?? user.districtId ?? null;
       if (!districtId) throw new BadRequestException('districtId required for district-scoped quiz');
     } else if (scope === 'all') {
-      tenantId = user.tenantId ?? null;
-      if (!tenantId) throw new BadRequestException('tenantId required');
+      tenantId = dto.tenantId ?? user.tenantId ?? null;
+      if (!tenantId) throw new BadRequestException('Select a state to broadcast to all schools');
     } else {
       throw new BadRequestException('scope must be school | block | district | all');
     }
 
     return prisma.quiz.create({
       data: {
-        schoolId,
-        scope,
-        blockId,
-        districtId,
-        tenantId,
+        schoolId, scope, blockId, districtId, tenantId,
         title: dto.title,
         description: dto.description,
         subject: dto.subject,
@@ -104,14 +100,32 @@ export class QuizService {
     return {
       OR: [
         { schoolId, scope: 'school', ...gradeFilter },
-        ...(blockId   ? [{ blockId,    scope: 'block',    ...gradeFilter }] : []),
+        ...(blockId    ? [{ blockId,    scope: 'block',    ...gradeFilter }] : []),
         ...(districtId ? [{ districtId, scope: 'district', ...gradeFilter }] : []),
-        ...(tenantId  ? [{ tenantId,   scope: 'all',      ...gradeFilter }] : []),
+        ...(tenantId   ? [{ tenantId,   scope: 'all',      ...gradeFilter }] : []),
       ],
     };
   }
 
-  // ── List quizzes (teacher/admin: all visible for school; student: active + not yet attempted) ─
+  // ── Build quiz filter for management roles (without schoolId) ────────────
+  private buildManagementFilter(user: AuthUser, params: { tenantId?: string; districtId?: string; blockId?: string; schoolId?: string }) {
+    const tenantId = params.tenantId ?? user.tenantId;
+    const districtId = params.districtId ?? user.districtId;
+    const blockId = params.blockId ?? user.blockId;
+
+    if (!tenantId) return {}; // Platform Admin — all quizzes
+
+    if (user.role === 'BLOCK_OFFICIAL' && blockId) {
+      return { OR: [{ blockId }, { districtId }, { tenantId, scope: 'all' }] };
+    }
+    if (user.role === 'DISTRICT_OFFICIAL' && districtId) {
+      return { OR: [{ districtId }, { tenantId, scope: 'all' }] };
+    }
+    // STATE_OFFICIAL / ADMIN with tenantId
+    return { OR: [{ tenantId }, { districtId }, { blockId }].filter(c => Object.values(c)[0]) };
+  }
+
+  // ── List quizzes ─────────────────────────────────────────────────────────
   async list(user: AuthUser, params: { schoolId?: string; grade?: number }) {
     const schoolId = user.schoolId ?? params.schoolId;
 
@@ -120,12 +134,7 @@ export class QuizService {
       const student = user.studentId
         ? await prisma.student.findUnique({ where: { id: user.studentId }, select: { grade: true } })
         : null;
-
-      const visibilityFilter = await this.buildSchoolVisibilityFilter(
-        user.schoolId,
-        student?.grade,
-      );
-
+      const visibilityFilter = await this.buildSchoolVisibilityFilter(user.schoolId, student?.grade);
       const quizzes = await prisma.quiz.findMany({
         where: { ...visibilityFilter, isActive: true },
         include: {
@@ -134,7 +143,6 @@ export class QuizService {
         },
         orderBy: { createdAt: 'desc' },
       });
-
       return quizzes.map(q => ({
         ...q,
         questionCount: q.questions.length,
@@ -144,19 +152,36 @@ export class QuizService {
       }));
     }
 
-    if (!schoolId) throw new BadRequestException('schoolId required');
+    if (schoolId) {
+      const visibilityFilter = await this.buildSchoolVisibilityFilter(schoolId, params.grade);
+      const quizzes = await prisma.quiz.findMany({
+        where: visibilityFilter,
+        include: {
+          questions: { select: { id: true } },
+          attempts: { select: { id: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      return quizzes.map(q => ({
+        ...q,
+        questionCount: q.questions.length,
+        questions: undefined,
+        attemptCount: q.attempts.length,
+        attempts: undefined,
+      }));
+    }
 
-    const visibilityFilter = await this.buildSchoolVisibilityFilter(schoolId, params.grade);
-
+    // Management roles without a specific school — show all quizzes in their scope
+    if (!canManageQuiz(user.role)) throw new ForbiddenException();
+    const where = this.buildManagementFilter(user, params);
     const quizzes = await prisma.quiz.findMany({
-      where: visibilityFilter,
+      where,
       include: {
         questions: { select: { id: true } },
         attempts: { select: { id: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
-
     return quizzes.map(q => ({
       ...q,
       questionCount: q.questions.length,
@@ -166,7 +191,102 @@ export class QuizService {
     }));
   }
 
-  // ── Get single quiz with questions (correct answers hidden for students) ─
+  // ── Aggregate statistics for management dashboard ─────────────────────
+  async stats(user: AuthUser, params: { tenantId?: string; districtId?: string; blockId?: string; schoolId?: string }) {
+    if (!canManageQuiz(user.role)) throw new ForbiddenException();
+
+    const schoolId = user.schoolId ?? params.schoolId;
+    let quizWhere: any;
+
+    if (schoolId) {
+      quizWhere = await this.buildSchoolVisibilityFilter(schoolId);
+    } else {
+      quizWhere = this.buildManagementFilter(user, params);
+    }
+
+    const quizzes = await prisma.quiz.findMany({
+      where: quizWhere,
+      include: {
+        questions: { select: { id: true } },
+        attempts: { select: { id: true, score: true, maxScore: true, studentId: true } },
+      },
+    });
+
+    const allAttempts = quizzes.flatMap(q => q.attempts);
+    const studentIds = [...new Set(allAttempts.map(a => a.studentId))];
+
+    const students = studentIds.length
+      ? await prisma.student.findMany({ where: { id: { in: studentIds } }, select: { id: true, schoolId: true } })
+      : [];
+    const studentSchoolMap = Object.fromEntries(students.map(s => [s.id, s.schoolId]));
+
+    const schoolsAttempted = new Set(allAttempts.map(a => studentSchoolMap[a.studentId]).filter(Boolean)).size;
+    const avgScore = allAttempts.length
+      ? Math.round(allAttempts.reduce((s, a) => s + (a.maxScore > 0 ? (a.score / a.maxScore) * 100 : 0), 0) / allAttempts.length)
+      : null;
+
+    // Score distribution buckets
+    const dist = { high: 0, mid: 0, low: 0 };
+    allAttempts.forEach(a => {
+      const pct = a.maxScore > 0 ? (a.score / a.maxScore) * 100 : 0;
+      if (pct >= 75) dist.high++;
+      else if (pct >= 50) dist.mid++;
+      else dist.low++;
+    });
+
+    // By subject
+    const subjectMap: Record<string, { quizzes: number; attempts: number; scoreSum: number }> = {};
+    quizzes.forEach(q => {
+      if (!subjectMap[q.subject]) subjectMap[q.subject] = { quizzes: 0, attempts: 0, scoreSum: 0 };
+      subjectMap[q.subject].quizzes++;
+      subjectMap[q.subject].attempts += q.attempts.length;
+      subjectMap[q.subject].scoreSum += q.attempts.reduce(
+        (s, a) => s + (a.maxScore > 0 ? (a.score / a.maxScore) * 100 : 0), 0,
+      );
+    });
+    const bySubject = Object.entries(subjectMap)
+      .map(([subject, d]) => ({
+        subject,
+        quizzes: d.quizzes,
+        attempts: d.attempts,
+        avgScore: d.attempts > 0 ? Math.round(d.scoreSum / d.attempts) : 0,
+      }))
+      .sort((a, b) => b.attempts - a.attempts)
+      .slice(0, 8);
+
+    // Top quizzes by attempts
+    const topQuizzes = quizzes
+      .map(q => ({
+        id: q.id,
+        title: q.title,
+        subject: q.subject,
+        grade: q.grade,
+        scope: q.scope,
+        isActive: q.isActive,
+        questionCount: q.questions.length,
+        attemptCount: q.attempts.length,
+        schoolCount: new Set(q.attempts.map(a => studentSchoolMap[a.studentId]).filter(Boolean)).size,
+        avgScore: q.attempts.length
+          ? Math.round(q.attempts.reduce((s, a) => s + (a.maxScore > 0 ? (a.score / a.maxScore) * 100 : 0), 0) / q.attempts.length)
+          : null,
+      }))
+      .sort((a, b) => b.attemptCount - a.attemptCount)
+      .slice(0, 10);
+
+    return {
+      totalQuizzes: quizzes.length,
+      activeQuizzes: quizzes.filter(q => q.isActive).length,
+      totalAttempts: allAttempts.length,
+      uniqueStudents: studentIds.length,
+      schoolsAttempted,
+      avgScore,
+      scoreDist: dist,
+      bySubject,
+      topQuizzes,
+    };
+  }
+
+  // ── Get single quiz with questions ───────────────────────────────────────
   async get(user: AuthUser, quizId: string) {
     const quiz = await prisma.quiz.findUnique({
       where: { id: quizId },
@@ -205,19 +325,14 @@ export class QuizService {
     });
     if (existing) throw new BadRequestException('You have already submitted this quiz');
 
-    const quiz = await prisma.quiz.findUnique({
-      where: { id: quizId },
-      include: { questions: true },
-    });
+    const quiz = await prisma.quiz.findUnique({ where: { id: quizId }, include: { questions: true } });
     if (!quiz) throw new NotFoundException('Quiz not found');
     if (!quiz.isActive) throw new BadRequestException('This quiz is no longer active');
 
-    let score = 0;
-    let maxScore = 0;
+    let score = 0, maxScore = 0;
     for (const q of quiz.questions) {
       maxScore += q.marks;
-      const selected = dto.answers[q.id];
-      if (selected === q.correct) score += q.marks;
+      if (dto.answers[q.id] === q.correct) score += q.marks;
     }
 
     return prisma.studentAttempt.create({
@@ -232,7 +347,7 @@ export class QuizService {
     });
   }
 
-  // ── Get results for a quiz (teacher/admin view with per-student breakdown) ─
+  // ── Get results for a quiz ───────────────────────────────────────────────
   async results(user: AuthUser, quizId: string) {
     if (!canManageQuiz(user.role)) throw new ForbiddenException();
 
@@ -252,7 +367,6 @@ export class QuizService {
           select: { id: true, name: true, rollNo: true, grade: true, section: true },
         })
       : [];
-
     const studentMap = Object.fromEntries(students.map(s => [s.id, s]));
 
     const attempts = quiz.attempts.map(a => ({
