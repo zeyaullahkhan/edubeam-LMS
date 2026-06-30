@@ -472,6 +472,11 @@ export const api = {
     }>) => req<any>(`/content/lectures/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
     deleteLecture: (id: string) =>
       req<{ ok: boolean }>(`/content/lectures/${id}`, { method: 'DELETE' }),
+    schedule: (from: string, to: string) =>
+      req<any[]>(`/content/schedule?from=${from}&to=${to}`),
+    importSchedule: (rows: any[]) =>
+      req<{ inserted: number; replacedStudios: number; replacedFrom: string | null; replacedTo: string | null }>(
+        '/content/lectures/import', { method: 'POST', body: JSON.stringify({ rows }) }),
   },
 
   storage: {

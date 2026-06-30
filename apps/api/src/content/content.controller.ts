@@ -34,6 +34,16 @@ export class ContentController {
     return this.svc.lectures(Number(standard), subject, { search, date, page: page ? Number(page) : 1 });
   }
 
+  @Get('schedule')
+  schedule(@Query('from') from: string, @Query('to') to: string) {
+    return this.svc.schedule(from, to);
+  }
+
+  @Post('lectures/import')
+  importSchedule(@CurrentUser() user: AuthUser, @Body() body: { rows: any[] }) {
+    return this.svc.importSchedule(user, body?.rows ?? []);
+  }
+
   @Post('lectures')
   createLecture(@CurrentUser() user: AuthUser, @Body() body: any) {
     return this.svc.createLecture(user, body);

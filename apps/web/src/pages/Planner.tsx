@@ -1,11 +1,12 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import {
-  SCHEDULE, HOLIDAYS as STATIC_HOLIDAYS, STUDIO_LABELS, SUBJECT_COLOR,
+  HOLIDAYS as STATIC_HOLIDAYS, STUDIO_LABELS, SUBJECT_COLOR,
   type ScheduleSession,
 } from '../data/schedule';
 import { api } from '../api';
 import { useAuth } from '../auth';
 import type { AuthUser } from '@edubeam/shared';
+import { downloadLectureScheduleTemplate, parseLectureScheduleFile } from '../excel';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -519,22 +520,78 @@ function SubjectChip({ subject, teacher }: { subject: string; teacher: string })
   );
 }
 
-const JUNE_DAYS = 30;
 const OFF_DATES = new Set(STATIC_HOLIDAYS.map(h => h.date));
-const WORKING_DAYS: string[] = [];
-for (let d = 1; d <= JUNE_DAYS; d++) {
-  const key = dateKey(2026, 6, d);
-  if (!OFF_DATES.has(key)) WORKING_DAYS.push(key);
+
+// Map a DB lecture row to the ScheduleSession shape the grid renders.
+const STD_TO_CLASS: Record<number, string> = {
+  6: 'Class VI', 7: 'Class VII', 8: 'Class VIII', 9: 'Class IX',
+  10: 'Class X', 11: 'Class XI', 12: 'Class XII',
+};
+function lectureToSession(l: any): ScheduleSession {
+  const studio = (Number(String(l.studioName).replace(/\D/g, '')) || 1) as 1 | 2 | 3 | 4;
+  return {
+    date: l.date,
+    day: new Date(l.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long' }),
+    studio,
+    timeSlot: `${l.startTime}-${l.endTime}`,
+    classGroup: STD_TO_CLASS[l.standard] ?? `Class ${l.standard}`,
+    subject: l.subject,
+    teacher: l.teacherName,
+  };
 }
 
 function SchoolPlanner({ apiHolidays }: { apiHolidays: any[] }) {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
   const [studio, setStudio] = useState<1 | 2 | 3 | 4>(1);
-  const [view, setView] = useState<'daily' | 'weekly'>('daily');
-  const [selectedDate, setSelectedDate] = useState<string>(() => {
-    const today = new Date();
-    const key = dateKey(today.getFullYear(), today.getMonth() + 1, today.getDate());
-    return WORKING_DAYS.find(d => d >= key) ?? WORKING_DAYS[0] ?? '2026-06-01';
-  });
+  const [view, setView] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+  const todayKey = dateKey(new Date().getFullYear(), new Date().getMonth() + 1, new Date().getDate());
+  const [selectedDate, setSelectedDate] = useState<string>(todayKey);
+
+  // Schedule is DB-backed. We fetch only the viewed month (+/- a week so the weekly
+  // view can span month edges) — the lecture table holds years of data, so loading
+  // it all would be wasteful.
+  const [dbSessions, setDbSessions] = useState<ScheduleSession[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importMsg, setImportMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const monthAnchor = selectedDate.slice(0, 7); // "YYYY-MM" — drives the fetch window
+
+  const loadSchedule = useCallback(async (anchorYM: string) => {
+    const [y, m] = anchorYM.split('-').map(Number);
+    const start = new Date(y, m - 1, 1); start.setDate(start.getDate() - 7);
+    const end = new Date(y, m, 0); end.setDate(end.getDate() + 7);
+    const f = dateKey(start.getFullYear(), start.getMonth() + 1, start.getDate());
+    const t = dateKey(end.getFullYear(), end.getMonth() + 1, end.getDate());
+    try {
+      const rows = await api.content.schedule(f, t);
+      setDbSessions(rows.map(lectureToSession));
+    } catch {
+      setDbSessions([]);
+    } finally {
+      setLoaded(true);
+    }
+  }, []);
+  useEffect(() => { if (monthAnchor) loadSchedule(monthAnchor); }, [monthAnchor, loadSchedule]);
+
+  const SESSIONS = dbSessions;
+
+  // Working days (dates with sessions) in the loaded window — for daily/weekly nav.
+  const WORKING_DAYS = useMemo(
+    () => [...new Set(SESSIONS.map(s => s.date))].sort(),
+    [SESSIONS],
+  );
+
+  // Snap the selected date to a real session day within the SAME month (no refetch loop).
+  useEffect(() => {
+    if (!loaded || !WORKING_DAYS.length || WORKING_DAYS.includes(selectedDate)) return;
+    const sameMonth = WORKING_DAYS.filter(d => d.slice(0, 7) === monthAnchor);
+    if (sameMonth.length) {
+      const before = [...sameMonth].reverse().find(d => d <= selectedDate);
+      setSelectedDate(before ?? sameMonth[sameMonth.length - 1]);
+    }
+  }, [loaded, WORKING_DAYS, selectedDate, monthAnchor]);
 
   // Merge static + API holidays for off-date detection
   const allOffDates = useMemo(() => {
@@ -563,10 +620,29 @@ function SchoolPlanner({ apiHolidays }: { apiHolidays: any[] }) {
     return dateKey(d.getFullYear(), d.getMonth() + 1, d.getDate());
   }), [weekStart]);
 
-  const studioSessions = useMemo(() => SCHEDULE.filter(s => s.studio === studio), [studio]);
+  const studioSessions = useMemo(() => SESSIONS.filter(s => s.studio === studio), [SESSIONS, studio]);
 
   function sessionsFor(date: string, slot: string): ScheduleSession | undefined {
     return studioSessions.find(s => s.date === date && s.timeSlot === slot);
+  }
+
+  async function onImportFile(file: File | undefined) {
+    if (!file) return;
+    setImportMsg(null); setImporting(true);
+    try {
+      const { rows, warnings } = await parseLectureScheduleFile(file);
+      if (!rows.length) { setImportMsg({ ok: false, text: 'No lecture rows found. Check the template format.' }); return; }
+      const res = await api.content.importSchedule(rows);
+      // Jump the view to the imported month (this also triggers a refetch).
+      if (res.replacedFrom) setSelectedDate(res.replacedFrom);
+      else await loadSchedule(monthAnchor);
+      const warn = warnings.length ? ` (${warnings.length} warning${warnings.length > 1 ? 's' : ''})` : '';
+      setImportMsg({ ok: true, text: `Imported ${res.inserted} lectures across ${res.replacedStudios} studio(s), ${res.replacedFrom} → ${res.replacedTo}${warn}.` });
+    } catch (e: any) {
+      setImportMsg({ ok: false, text: e.message ?? 'Import failed. Please check the file.' });
+    } finally {
+      setImporting(false);
+    }
   }
 
   function prevDay() {
@@ -589,8 +665,8 @@ function SchoolPlanner({ apiHolidays }: { apiHolidays: any[] }) {
 
   return (
     <div className="space-y-4">
-      {/* Studio tabs */}
-      <div className="flex flex-wrap gap-2">
+      {/* Studio tabs + admin import/template */}
+      <div className="flex flex-wrap items-center gap-2">
         {([1, 2, 3, 4] as const).map(s => (
           <button key={s} onClick={() => setStudio(s)}
             className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-all ${
@@ -601,7 +677,28 @@ function SchoolPlanner({ apiHolidays }: { apiHolidays: any[] }) {
             <i className="fas fa-tv mr-1.5" />{STUDIO_LABELS[s]}
           </button>
         ))}
+        {isAdmin && (
+          <div className="flex items-center gap-2 ml-auto">
+            <button onClick={() => downloadLectureScheduleTemplate()}
+              className="px-3 py-2 rounded-lg text-sm font-semibold border border-slate-200 bg-white text-slate-600 hover:border-emerald-300 hover:text-emerald-600 transition-all">
+              <i className="fas fa-file-arrow-down mr-1.5" />Template
+            </button>
+            <label className={`px-3 py-2 rounded-lg text-sm font-semibold bg-gradient-to-r from-sky-600 to-indigo-600 text-white hover:from-sky-700 hover:to-indigo-700 transition-all cursor-pointer ${importing ? 'opacity-60 pointer-events-none' : ''}`}>
+              <i className={`fas ${importing ? 'fa-circle-notch fa-spin' : 'fa-file-import'} mr-1.5`} />
+              {importing ? 'Importing…' : 'Import Schedule'}
+              <input type="file" accept=".xlsx,.xls" className="hidden"
+                onChange={e => { onImportFile(e.target.files?.[0]); e.currentTarget.value = ''; }} />
+            </label>
+          </div>
+        )}
       </div>
+
+      {importMsg && (
+        <div className={`flex items-center gap-2 text-sm rounded-xl px-4 py-2.5 ${importMsg.ok ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
+          <i className={`fas ${importMsg.ok ? 'fa-circle-check' : 'fa-circle-exclamation'} shrink-0`} />
+          {importMsg.text}
+        </div>
+      )}
 
       {/* View toggle + date nav */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -613,6 +710,10 @@ function SchoolPlanner({ apiHolidays }: { apiHolidays: any[] }) {
           <button onClick={() => setView('weekly')}
             className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all ${view === 'weekly' ? 'bg-white text-sky-700 shadow' : 'text-slate-500 hover:text-slate-700'}`}>
             <i className="fas fa-calendar-week mr-1.5" />Weekly
+          </button>
+          <button onClick={() => setView('monthly')}
+            className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all ${view === 'monthly' ? 'bg-white text-sky-700 shadow' : 'text-slate-500 hover:text-slate-700'}`}>
+            <i className="fas fa-calendar mr-1.5" />Monthly
           </button>
         </div>
 
@@ -757,6 +858,67 @@ function SchoolPlanner({ apiHolidays }: { apiHolidays: any[] }) {
           </div>
         </div>
       )}
+
+      {/* Monthly view */}
+      {view === 'monthly' && (() => {
+        const base = new Date((selectedDate || WORKING_DAYS[0] || '2026-06-01') + 'T00:00:00');
+        const year = base.getFullYear(); const month = base.getMonth();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const lead = (new Date(year, month, 1).getDay() + 6) % 7; // Monday-first
+        const cells: (string | null)[] = [];
+        for (let i = 0; i < lead; i++) cells.push(null);
+        for (let d = 1; d <= daysInMonth; d++) cells.push(dateKey(year, month + 1, d));
+        const gotoMonth = (delta: number) => {
+          const t = new Date(year, month + delta, 1);
+          setSelectedDate(dateKey(t.getFullYear(), t.getMonth() + 1, 1)); // triggers month refetch
+        };
+        const monthLabel = base.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+        return (
+          <div className="rounded-xl border border-slate-200 overflow-hidden bg-white">
+            <div className="px-5 py-3 bg-slate-700 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <button onClick={() => gotoMonth(-1)} className="p-1.5 rounded-md hover:bg-white/10"><i className="fas fa-chevron-left text-xs" /></button>
+                <span className="font-bold w-40 text-center">{monthLabel}</span>
+                <button onClick={() => gotoMonth(1)} className="p-1.5 rounded-md hover:bg-white/10"><i className="fas fa-chevron-right text-xs" /></button>
+              </div>
+              <span className="text-sky-300 text-sm font-semibold">{STUDIO_LABELS[studio]}</span>
+            </div>
+            <div className="grid grid-cols-7 bg-slate-50 border-b border-slate-200">
+              {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => (
+                <div key={d} className="px-2 py-2 text-center text-[11px] font-semibold text-slate-500 uppercase tracking-wide">{d}</div>
+              ))}
+            </div>
+            <div className="grid grid-cols-7">
+              {cells.map((d, i) => {
+                if (!d) return <div key={`b${i}`} className="min-h-[92px] border-b border-r border-slate-100 bg-slate-50/40" />;
+                const off = isOffDay(d);
+                const daySess = studioSessions.filter(s => s.date === d)
+                  .sort((a, b) => a.timeSlot.localeCompare(b.timeSlot));
+                const dayNum = Number(d.slice(8, 10));
+                return (
+                  <div key={d} className={`min-h-[92px] border-b border-r border-slate-100 p-1.5 ${off ? 'bg-red-50/50' : ''}`}>
+                    <div className={`text-xs font-bold mb-1 ${off ? 'text-red-400' : 'text-slate-500'}`}>{dayNum}</div>
+                    {off ? (
+                      <div className="text-[10px] text-red-400 leading-tight">{getHolidayName(d)}</div>
+                    ) : daySess.length ? (
+                      <div className="space-y-0.5">
+                        {daySess.map((s, j) => (
+                          <div key={j} className="text-[10px] leading-tight rounded px-1 py-0.5 text-white truncate"
+                            style={{ backgroundColor: subjectColor(s.subject) }} title={`${s.timeSlot} · ${s.subject} — ${s.teacher}`}>
+                            {s.subject}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-slate-200 text-xs">—</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Subject legend */}
       <div className="flex flex-wrap gap-2">

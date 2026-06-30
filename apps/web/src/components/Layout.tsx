@@ -211,8 +211,8 @@ export function Layout({ children }: { children: ReactNode }) {
               <i className="fas fa-bars" />
             </button>
             <img src="/valuable-group-logo.png" alt="Valuable Group" className="h-5 w-auto opacity-90 hidden sm:block" />
-            <span className="text-navy-200 text-xs hidden sm:inline">|</span>
-            <span className="text-navy-300 text-xs tracking-wide hidden sm:inline">Valuable Group — EdTech Infrastructure</span>
+            <span className="text-slate-500 text-xs hidden sm:inline">|</span>
+            <span className="text-slate-200 text-xs font-medium tracking-wide hidden sm:inline">Valuable Group — EdTech Infrastructure</span>
           </div>
           <div className="flex items-center gap-3">
             {/* Bell notification — students only */}
@@ -296,11 +296,11 @@ export function Layout({ children }: { children: ReactNode }) {
 
             {state ? (
               <div className="flex items-center gap-2">
-                <span className="text-navy-300 text-xs hidden sm:inline">{state.govLabel}</span>
+                <span className="text-slate-200 text-xs font-medium hidden sm:inline">{state.govLabel}</span>
                 <img src={state.logo} alt={state.name} className="h-6 w-auto" />
               </div>
             ) : (
-              <span className="text-navy-300 text-xs">All States — Platform Admin</span>
+              <span className="text-slate-200 text-xs font-medium">All States — Platform Admin</span>
             )}
           </div>
         </div>

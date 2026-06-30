@@ -124,6 +124,58 @@ export class ContentService {
     });
   }
 
+  /** Lecture schedule for a date range (all studios) — drives the Planner grid. */
+  async schedule(from: string, to: string) {
+    if (!from || !to) return [];
+    return prisma.lecture.findMany({
+      where: { date: { gte: from, lte: to } },
+      orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
+      select: {
+        id: true, date: true, studioName: true, startTime: true, endTime: true,
+        standard: true, subject: true, teacherName: true, topic: true, medium: true,
+      },
+    });
+  }
+
+  /** Bulk-import a month of lectures from the uploaded schedule workbook (admin only).
+   *  Replaces existing rows for the studios + dates present in the import to avoid duplicates. */
+  async importSchedule(user: AuthUser, rows: Array<{
+    date: string; studioName: string; startTime: string; endTime: string;
+    standard: number; subject: string; teacherName: string; topic?: string; medium?: string;
+  }>) {
+    if (!EDITOR_ROLES.has(user.role)) throw new ForbiddenException('Not authorized');
+    if (!Array.isArray(rows) || rows.length === 0) return { inserted: 0, replacedStudios: 0, replacedFrom: null, replacedTo: null };
+
+    const studios = [...new Set(rows.map(r => r.studioName))];
+    const dates = rows.map(r => r.date).sort();
+    const from = dates[0];
+    const to = dates[dates.length - 1];
+
+    // Clear existing lectures for the imported studios within the imported date range,
+    // so re-importing a corrected file doesn't create duplicates.
+    await prisma.lecture.deleteMany({
+      where: { studioName: { in: studios }, date: { gte: from, lte: to } },
+    });
+
+    const maxSrNo = await prisma.lecture.aggregate({ _max: { srNo: true } });
+    let sr = (maxSrNo._max.srNo ?? 0) + 1;
+    const data = rows.map(r => ({
+      srNo: sr++,
+      date: r.date,
+      studioName: r.studioName,
+      medium: r.medium ?? 'Hindi',
+      startTime: r.startTime,
+      endTime: r.endTime,
+      standard: r.standard,
+      teacherName: r.teacherName ?? '',
+      subject: r.subject,
+      topic: r.topic ?? r.subject,
+      youtubeUrl: null,
+    }));
+    await prisma.lecture.createMany({ data });
+    return { inserted: data.length, replacedStudios: studios.length, replacedFrom: from, replacedTo: to };
+  }
+
   /** Delete a lecture (admin only). */
   async deleteLecture(id: string, user: AuthUser) {
     if (user.role !== 'ADMIN') throw new ForbiddenException('Not authorized');
