@@ -1,6 +1,8 @@
 import { Injectable, ForbiddenException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import type { AuthUser } from '@edubeam/shared';
+import { getQuizGenerator } from './ai/quiz-generator.factory';
+import { AiNotConfiguredError, type Difficulty, type SourceKind } from './ai/quiz-generator.interface';
 
 const prisma = new PrismaClient();
 
@@ -8,6 +10,23 @@ const ACADEMIC_YEAR = '2025-26';
 
 function canManageQuiz(role: string) {
   return ['ADMIN', 'STATE_OFFICIAL', 'DISTRICT_OFFICIAL', 'BLOCK_OFFICIAL', 'PRINCIPAL', 'TEACHER'].includes(role);
+}
+
+// Map raw LLM-provider errors to a short, teacher-friendly message. Full detail
+// is logged server-side; the user never sees the raw vendor dump.
+function friendlyAiError(e: any): string {
+  const msg = String(e?.message ?? e ?? '').toLowerCase();
+  const status = e?.status ?? e?.statusCode ?? e?.code;
+  if (status === 429 || msg.includes('429') || msg.includes('quota') || msg.includes('rate limit') || msg.includes('too many requests')) {
+    return 'AI is over its current usage limit. Please wait a minute and try again, or ask the administrator to check the AI plan/quota.';
+  }
+  if (status === 401 || status === 403 || msg.includes('api key') || msg.includes('unauthorized') || msg.includes('permission')) {
+    return 'The AI provider rejected the request — the API key may be invalid or unauthorized. Please ask the administrator to check it.';
+  }
+  if (msg.includes('malformed') || msg.includes('no questions')) {
+    return 'AI could not produce valid questions from this material. Try clearer pages or paste the text directly.';
+  }
+  return 'AI generation failed. Please try again in a moment.';
 }
 
 @Injectable()
@@ -61,9 +80,79 @@ export class QuizService {
     });
   }
 
+  // ── AI: generate draft questions from uploaded pages or pasted text ──────
+  async generateQuestions(user: AuthUser, dto: {
+    sourceKind: SourceKind; fileBase64?: string; mediaType?: string; text?: string;
+    subject: string; grade: number; numQuestions: number; totalMarks: number;
+    difficulty?: Difficulty; language?: string;
+  }) {
+    if (!canManageQuiz(user.role)) throw new ForbiddenException();
+
+    const numQuestions = Math.floor(Number(dto.numQuestions));
+    const totalMarks = Number(dto.totalMarks);
+    if (!Number.isFinite(numQuestions) || numQuestions < 1 || numQuestions > 30) {
+      throw new BadRequestException('Number of questions must be between 1 and 30');
+    }
+    if (!Number.isFinite(totalMarks) || totalMarks < numQuestions) {
+      throw new BadRequestException('Total marks must be at least the number of questions');
+    }
+    if (!dto.subject || !dto.grade) throw new BadRequestException('Subject and class are required');
+
+    let source;
+    if (dto.sourceKind === 'text') {
+      const text = (dto.text ?? '').trim();
+      if (text.length < 20) throw new BadRequestException('Paste at least a short paragraph of text');
+      source = { kind: 'text' as const, data: text };
+    } else if (dto.sourceKind === 'pdf' || dto.sourceKind === 'image') {
+      if (!dto.fileBase64) throw new BadRequestException('No file provided');
+      source = { kind: dto.sourceKind, data: dto.fileBase64, mediaType: dto.mediaType };
+    } else {
+      throw new BadRequestException('sourceKind must be pdf | image | text');
+    }
+
+    const generator = getQuizGenerator();
+    if (!generator) {
+      throw new BadRequestException(
+        'AI quiz generation is not configured. Ask the administrator to set the AI provider key.',
+      );
+    }
+
+    let questions;
+    try {
+      questions = await generator.generate({
+        source,
+        subject: dto.subject,
+        grade: Number(dto.grade),
+        numQuestions,
+        difficulty: dto.difficulty,
+        language: dto.language,
+      });
+    } catch (e: any) {
+      if (e instanceof AiNotConfiguredError) throw new BadRequestException(e.message);
+      // Log the full provider error server-side; show the teacher a clean message.
+      console.error('[quiz.generate] provider error:', e?.message ?? e);
+      throw new BadRequestException(friendlyAiError(e));
+    }
+
+    if (!questions.length) throw new BadRequestException('AI could not generate questions from this material.');
+
+    // Assign marks so they sum to totalMarks exactly: even split + remainder
+    // spread across the first questions.
+    const n = questions.length;
+    const base = Math.floor((totalMarks / n) * 2) / 2; // round down to nearest 0.5
+    let remaining = totalMarks - base * n;
+    const withMarks = questions.map((q) => {
+      let marks = base;
+      if (remaining >= 0.5) { marks += 0.5; remaining -= 0.5; }
+      return { ...q, marks: marks > 0 ? marks : 1 };
+    });
+
+    return { questions: withMarks, provider: generator.name };
+  }
+
   // ── Add / replace questions for a quiz ─────────────────────────────────
   async setQuestions(user: AuthUser, quizId: string, questions: {
-    question: string; options: string[]; correct: number; marks?: number; orderNo?: number;
+    question: string; options: string[]; correct: number; marks?: number; orderNo?: number; explanation?: string;
   }[]) {
     if (!canManageQuiz(user.role)) throw new ForbiddenException();
     const quiz = await prisma.quiz.findUnique({ where: { id: quizId } });
@@ -78,6 +167,7 @@ export class QuizService {
         correct: q.correct,
         marks: q.marks ?? 1,
         orderNo: q.orderNo ?? i,
+        explanation: q.explanation?.trim() || null,
       })),
     });
     return prisma.quiz.findUnique({
@@ -347,6 +437,44 @@ export class QuizService {
     });
   }
 
+  // ── Answer review for the logged-in student (only after they submit) ─────
+  async myReview(user: AuthUser, quizId: string) {
+    if (user.role !== 'STUDENT' || !user.studentId) throw new ForbiddenException();
+
+    const attempt = await prisma.studentAttempt.findUnique({
+      where: { quizId_studentId: { quizId, studentId: user.studentId } },
+    });
+    if (!attempt) throw new BadRequestException('Submit the quiz first to review answers.');
+
+    const quiz = await prisma.quiz.findUnique({
+      where: { id: quizId },
+      include: { questions: { orderBy: { orderNo: 'asc' } } },
+    });
+    if (!quiz) throw new NotFoundException('Quiz not found');
+
+    let answers: Record<string, number> = {};
+    try { answers = JSON.parse(attempt.answers); } catch { /* ignore */ }
+
+    const questions = quiz.questions.map(q => ({
+      id: q.id,
+      question: q.question,
+      options: JSON.parse(q.options) as string[],
+      correct: q.correct,
+      marks: q.marks,
+      explanation: q.explanation ?? null,
+      selected: answers[q.id] ?? null,
+      isCorrect: answers[q.id] === q.correct,
+    }));
+
+    return {
+      quiz: { id: quiz.id, title: quiz.title, subject: quiz.subject, grade: quiz.grade },
+      questions,
+      score: attempt.score,
+      maxScore: attempt.maxScore,
+      pct: attempt.maxScore > 0 ? Math.round((attempt.score / attempt.maxScore) * 100) : 0,
+    };
+  }
+
   // ── Get results for a quiz ───────────────────────────────────────────────
   async results(user: AuthUser, quizId: string) {
     if (!canManageQuiz(user.role)) throw new ForbiddenException();
@@ -369,15 +497,20 @@ export class QuizService {
       : [];
     const studentMap = Object.fromEntries(students.map(s => [s.id, s]));
 
-    const attempts = quiz.attempts.map(a => ({
-      studentId: a.studentId,
-      student: studentMap[a.studentId] ?? null,
-      score: a.score,
-      maxScore: a.maxScore,
-      pct: a.maxScore > 0 ? Math.round((a.score / a.maxScore) * 100) : 0,
-      timeTaken: a.timeTaken,
-      completedAt: a.completedAt,
-    }));
+    const attempts = quiz.attempts.map(a => {
+      let answers: Record<string, number> = {};
+      try { answers = JSON.parse(a.answers); } catch { /* ignore malformed */ }
+      return {
+        studentId: a.studentId,
+        student: studentMap[a.studentId] ?? null,
+        score: a.score,
+        maxScore: a.maxScore,
+        pct: a.maxScore > 0 ? Math.round((a.score / a.maxScore) * 100) : 0,
+        timeTaken: a.timeTaken,
+        completedAt: a.completedAt,
+        answers, // questionId → selected option index, for per-student review
+      };
+    });
 
     const questions = quiz.questions.map(q => ({
       id: q.id,
@@ -385,6 +518,7 @@ export class QuizService {
       options: JSON.parse(q.options) as string[],
       correct: q.correct,
       marks: q.marks,
+      explanation: q.explanation ?? null,
     }));
 
     return {

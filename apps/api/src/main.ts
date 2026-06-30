@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 config({ path: resolve(__dirname, '..', '.env') });
 import { NestFactory } from '@nestjs/core';
 import helmet from 'helmet';
+import express from 'express';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -13,6 +14,11 @@ async function bootstrap() {
   // Security headers (HSTS, X-Frame-Options, no-sniff, etc.). CSP is left off
   // because the SPA loads CDN fonts/icons; tighten with a CSP allow-list later.
   app.use(helmet({ contentSecurityPolicy: false }));
+
+  // Raise body limit: AI quiz generation posts a base64-encoded PDF/photo of a
+  // few book pages, which can be several MB.
+  app.use(express.json({ limit: '15mb' }));
+  app.use(express.urlencoded({ limit: '15mb', extended: true }));
 
   // Behind Render's TLS proxy — trust X-Forwarded-* so req.ip is the real client
   // (used by the login rate limiter).

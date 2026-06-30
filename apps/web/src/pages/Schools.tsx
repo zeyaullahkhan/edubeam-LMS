@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis,
+  Bar, BarChart, CartesianGrid, Cell, Legend, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
 import { api, type DistrictMeta, type SchoolFormData, type SchoolRow } from '../api';
 import type { DistrictSummary } from '@edubeam/shared';
@@ -999,6 +999,170 @@ export function Schools() {
           </button>
         </div>
       </div>
+
+      {/* ── Principal: School analytics charts ──────────── */}
+      {isPrincipal && mySchool && (() => {
+        const BOYS_C = '#0076BC';
+        const GIRLS_C = '#EC4899';
+        const tip = { borderRadius: 10, border: '1px solid #e2e8f0', boxShadow: '0 4px 16px rgba(0,48,135,0.08)' };
+
+        // Enrollment chart data
+        const enrollData = (mySchool.enrollments ?? []).map(e => ({
+          grade: `Cls ${e.grade}`,
+          Boys: e.boys,
+          Girls: e.girls,
+          Total: e.total,
+        }));
+        const totalEnrolled = (mySchool.enrollments ?? []).reduce((s, e) => s + e.total, 0);
+
+        // Board results — group by subject, separate 10th and 12th
+        const results10 = (mySchool.boardResults ?? []).filter(r => r.examType === '10TH')
+          .map(r => ({ subject: r.subject.replace('Social Science', 'Soc. Sci').replace('Science', 'Sci'), pct: Math.round(r.passPct * 100) }))
+          .sort((a, b) => b.pct - a.pct);
+        const results12 = (mySchool.boardResults ?? []).filter(r => r.examType === '12TH')
+          .map(r => ({ subject: r.subject.replace('Social Science', 'Soc. Sci').replace('Science', 'Sci'), pct: Math.round(r.passPct * 100) }))
+          .sort((a, b) => b.pct - a.pct);
+        const showResults = results10.length > 0 || results12.length > 0;
+
+        // Facilities checklist
+        const facilities = [
+          { label: 'Virtual Classroom', ok: mySchool.hasVirtualClassroom, icon: 'fa-desktop' },
+          { label: 'ICT Lab',           ok: mySchool.hasIctLab,           icon: 'fa-laptop' },
+          { label: 'Smart Classroom',   ok: mySchool.hasSmartClassroom,   icon: 'fa-chalkboard' },
+          { label: 'Library',           ok: mySchool.hasLibrary,          icon: 'fa-book' },
+          { label: 'Laboratory',        ok: mySchool.hasLaboratory,       icon: 'fa-flask' },
+          { label: 'Internet',          ok: mySchool.hasInternet,         icon: 'fa-wifi' },
+          { label: 'Electricity',       ok: mySchool.hasElectricity,      icon: 'fa-bolt' },
+          { label: 'CCTV',              ok: mySchool.hasCctv,             icon: 'fa-video' },
+          { label: 'Playground',        ok: mySchool.hasPlayground,       icon: 'fa-running' },
+          { label: 'Drinking Water',    ok: mySchool.hasDrinkingWater,    icon: 'fa-tint' },
+          { label: 'Boundary Wall',     ok: mySchool.hasBoundaryWall,     icon: 'fa-border-all' },
+          { label: 'Fire Safety',       ok: mySchool.hasFireSafety,       icon: 'fa-fire-extinguisher' },
+        ];
+        const facOk = facilities.filter(f => f.ok).length;
+
+        return (
+          <>
+            {/* KPI stat row */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { label: 'Total Enrolled',  val: totalEnrolled > 0 ? totalEnrolled.toLocaleString() : (mySchool.students ?? 0).toLocaleString(), icon: 'fa-user-graduate', color: 'text-emerald-600', bg: 'bg-emerald-50' },
+                { label: 'Teaching Staff',  val: (mySchool.teachers ?? 0).toLocaleString(),   icon: 'fa-chalkboard-teacher', color: 'text-violet-600', bg: 'bg-violet-50' },
+                { label: 'Pass Rate (10th)', val: mySchool.avgPass10th != null ? `${(mySchool.avgPass10th * 100).toFixed(1)}%` : '—', icon: 'fa-award', color: 'text-amber-600', bg: 'bg-amber-50' },
+                { label: 'Pass Rate (12th)', val: mySchool.avgPass12th != null ? `${(mySchool.avgPass12th * 100).toFixed(1)}%` : '—', icon: 'fa-graduation-cap', color: 'text-sky-600', bg: 'bg-sky-50' },
+              ].map(k => (
+                <div key={k.label} className={`panel flex items-center gap-4 px-5 py-4 ${k.bg}`}>
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center bg-white shadow-sm shrink-0`}>
+                    <i className={`fas ${k.icon} ${k.color} text-lg`} />
+                  </div>
+                  <div>
+                    <div className="font-heading font-bold text-navy-700 text-xl leading-none">{k.val}</div>
+                    <div className="text-xs text-slate-500 mt-1">{k.label}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Charts row */}
+            <div className={`grid gap-4 ${showResults ? 'lg:grid-cols-3' : 'lg:grid-cols-2'}`}>
+
+              {/* Enrollment by Grade */}
+              <div className="panel overflow-hidden">
+                <div className="px-5 py-4 border-b border-slate-100">
+                  <h3 className="font-heading font-semibold text-navy-700 text-sm">Enrollment by Grade</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">Boys · Girls · Current year</p>
+                </div>
+                <div className="p-4">
+                  {enrollData.length === 0 ? (
+                    <div className="h-48 flex items-center justify-center text-slate-400 text-sm">
+                      <i className="fas fa-database mr-2" />No enrollment data
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-4 text-xs text-slate-500 mb-3">
+                        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: BOYS_C }} />Boys</span>
+                        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: GIRLS_C }} />Girls</span>
+                      </div>
+                      <ResponsiveContainer width="100%" height={200}>
+                        <BarChart data={enrollData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                          <XAxis dataKey="grade" fontSize={11} tick={{ fill: '#64748b' }} />
+                          <YAxis fontSize={11} allowDecimals={false} />
+                          <Tooltip contentStyle={tip} />
+                          <Bar dataKey="Boys"  fill={BOYS_C}  radius={[3, 3, 0, 0]} maxBarSize={20} isAnimationActive={false} />
+                          <Bar dataKey="Girls" fill={GIRLS_C} radius={[3, 3, 0, 0]} maxBarSize={20} isAnimationActive={false} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Board Results — 10th */}
+              {showResults && (
+                <div className="panel overflow-hidden">
+                  <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                    <div>
+                      <h3 className="font-heading font-semibold text-navy-700 text-sm">Board Pass Rates</h3>
+                      <p className="text-xs text-slate-400 mt-0.5">Subject-wise · 10th class</p>
+                    </div>
+                    {results12.length > 0 && (
+                      <span className="text-xs text-slate-400 bg-slate-100 rounded-full px-2 py-0.5">+12th available</span>
+                    )}
+                  </div>
+                  <div className="p-4">
+                    {results10.length === 0 ? (
+                      <div className="h-48 flex items-center justify-center text-slate-400 text-sm">
+                        <i className="fas fa-database mr-2" />No 10th result data
+                      </div>
+                    ) : (
+                      <ResponsiveContainer width="100%" height={200}>
+                        <BarChart data={results10} layout="vertical" margin={{ top: 0, right: 40, bottom: 0, left: 60 }}>
+                          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
+                          <XAxis type="number" domain={[0, 100]} tickFormatter={v => `${v}%`} fontSize={11} tick={{ fill: '#64748b' }} />
+                          <YAxis type="category" dataKey="subject" fontSize={11} tick={{ fill: '#64748b' }} width={60} />
+                          <Tooltip contentStyle={tip} formatter={(v: number) => [`${v}%`, 'Pass Rate']} />
+                          <Bar dataKey="pct" radius={[0, 4, 4, 0]} isAnimationActive={false} maxBarSize={18}>
+                            {results10.map((r, i) => (
+                              <Cell key={i} fill={r.pct >= 75 ? '#10b981' : r.pct >= 50 ? '#f59e0b' : '#ef4444'} />
+                            ))}
+                            <LabelList dataKey="pct" position="right" formatter={(v: number) => `${v}%`} style={{ fontSize: 11, fill: '#475569' }} />
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Facilities */}
+              <div className="panel overflow-hidden">
+                <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                  <div>
+                    <h3 className="font-heading font-semibold text-navy-700 text-sm">Facilities Status</h3>
+                    <p className="text-xs text-slate-400 mt-0.5">{facOk} of {facilities.length} available</p>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="h-1.5 rounded-full bg-slate-100 w-24 overflow-hidden">
+                      <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${(facOk / facilities.length) * 100}%` }} />
+                    </div>
+                    <span className="text-xs font-semibold text-emerald-600">{Math.round((facOk / facilities.length) * 100)}%</span>
+                  </div>
+                </div>
+                <div className="p-4 grid grid-cols-2 gap-2">
+                  {facilities.map(f => (
+                    <div key={f.label} className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium ${f.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-50 text-slate-400'}`}>
+                      <i className={`fas ${f.icon} w-4 text-center ${f.ok ? 'text-emerald-500' : 'text-slate-300'}`} />
+                      <span className="truncate">{f.label}</span>
+                      <i className={`fas ${f.ok ? 'fa-check-circle text-emerald-500' : 'fa-times-circle text-slate-300'} ml-auto`} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </>
+        );
+      })()}
 
       {/* ── Principal: My School profile card ─────────── */}
       {isPrincipal && (

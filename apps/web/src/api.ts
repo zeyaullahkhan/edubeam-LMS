@@ -427,13 +427,21 @@ export const api = {
     get: (id: string) => req<any>(`/quiz/${id}`),
     create: (body: { schoolId?: string; scope?: string; blockId?: string; districtId?: string; title: string; description?: string; subject: string; grade: number; section?: string; dueDate?: string }) =>
       req<any>('/quiz', { method: 'POST', body: JSON.stringify(body) }),
-    setQuestions: (id: string, questions: { question: string; options: string[]; correct: number; marks?: number }[]) =>
+    setQuestions: (id: string, questions: { question: string; options: string[]; correct: number; marks?: number; explanation?: string }[]) =>
       req<any>(`/quiz/${id}/questions`, { method: 'POST', body: JSON.stringify({ questions }) }),
     submitAttempt: (id: string, body: { answers: Record<string, number>; timeTaken?: number }) =>
       req<any>(`/quiz/${id}/attempt`, { method: 'POST', body: JSON.stringify(body) }),
     results: (id: string) => req<any>(`/quiz/${id}/results`),
+    review: (id: string) => req<any>(`/quiz/${id}/review`),
     stats: (params: { tenantId?: string; districtId?: string; blockId?: string; schoolId?: string } = {}) =>
       req<any>(`/quiz/stats${qstr(params)}`),
+    generate: (body: {
+      sourceKind: 'pdf' | 'image' | 'text'; fileBase64?: string; mediaType?: string; text?: string;
+      subject: string; grade: number; numQuestions: number; totalMarks: number;
+      difficulty: 'Easy' | 'Medium' | 'Hard';
+    }) =>
+      req<{ questions: { question: string; options: string[]; correct: number; marks: number; explanation?: string }[]; provider: string }>(
+        '/quiz/generate', { method: 'POST', body: JSON.stringify(body) }),
     toggle: (id: string) => req<any>(`/quiz/${id}/toggle`, { method: 'PATCH' }),
     remove: (id: string) => req<any>(`/quiz/${id}`, { method: 'DELETE' }),
   },

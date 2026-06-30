@@ -29,6 +29,58 @@ function pctBadge(v: number | null) {
   return v >= 75 ? 'bg-emerald-100 text-emerald-700' : v >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700';
 }
 
+// ── Per-question answer review (reused by student result + teacher drill-down) ─
+// Each question: { question, options[], correct, explanation?, selected (index|null) }
+function AnswerReview({ questions, title }: { questions: any[]; title?: string }) {
+  return (
+    <div className="space-y-3">
+      {title && <h3 className="font-heading font-semibold text-navy-700 text-sm px-1">{title}</h3>}
+      {questions.map((q, i) => {
+        const selected = q.selected ?? null;
+        const isCorrect = selected === q.correct;
+        const unanswered = selected === null || selected === undefined;
+        return (
+          <div key={q.id ?? i} className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
+            <div className="flex items-start gap-3">
+              <span className={`rounded-full w-7 h-7 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5 ${unanswered ? 'bg-slate-200 text-slate-500' : isCorrect ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'}`}>
+                <i className={`fas ${unanswered ? 'fa-minus' : isCorrect ? 'fa-check' : 'fa-xmark'}`} />
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-slate-800 font-medium mb-3">{i + 1}. {q.question}</p>
+                <div className="space-y-2">
+                  {q.options.map((opt: string, oi: number) => {
+                    const isAns = oi === q.correct;
+                    const isPicked = oi === selected;
+                    const cls = isAns
+                      ? 'border-emerald-400 bg-emerald-50 text-emerald-800'
+                      : isPicked
+                      ? 'border-red-300 bg-red-50 text-red-700'
+                      : 'border-slate-200 text-slate-600';
+                    return (
+                      <div key={oi} className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 text-sm ${cls}`}>
+                        <span className="font-bold text-xs">{String.fromCharCode(65 + oi)}.</span>
+                        <span className="flex-1">{opt}</span>
+                        {isAns && <span className="text-xs font-semibold text-emerald-600"><i className="fas fa-check mr-1" />Correct</span>}
+                        {isPicked && !isAns && <span className="text-xs font-semibold text-red-500"><i className="fas fa-xmark mr-1" />Chosen</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+                {unanswered && <p className="text-xs text-slate-400 mt-2">Not answered</p>}
+                {q.explanation && (
+                  <div className="mt-3 bg-sky-50 border border-sky-100 rounded-lg px-3 py-2 text-xs text-sky-800">
+                    <i className="fas fa-lightbulb mr-1.5 text-sky-500" /><b>Why:</b> {q.explanation}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Quiz Statistics Dashboard ────────────────────────────────────────────────
 function QuizStatsDashboard({ stats }: { stats: any }) {
   const tip = { borderRadius: 10, border: '1px solid #e2e8f0', boxShadow: '0 4px 16px rgba(0,48,135,0.08)' };
@@ -287,10 +339,10 @@ function QuizCard({ quiz, onSelect, onToggle, onDelete, canManage }: {
 
 // ── Question builder ─────────────────────────────────────────────────────────
 function QuestionBuilder({ questions, onChange }: {
-  questions: { question: string; options: string[]; correct: number; marks: number }[];
+  questions: { question: string; options: string[]; correct: number; marks: number; explanation?: string }[];
   onChange: (qs: typeof questions) => void;
 }) {
-  const addQ = () => onChange([...questions, { question: '', options: ['', '', '', ''], correct: 0, marks: 1 }]);
+  const addQ = () => onChange([...questions, { question: '', options: ['', '', '', ''], correct: 0, marks: 1, explanation: '' }]);
   const removeQ = (i: number) => onChange(questions.filter((_, j) => j !== i));
   const setField = (i: number, field: string, val: any) =>
     onChange(questions.map((q, j) => j === i ? { ...q, [field]: val } : q));
@@ -332,7 +384,11 @@ function QuestionBuilder({ questions, onChange }: {
               </div>
             ))}
           </div>
-          <p className="text-[11px] text-slate-400"><i className="fas fa-info-circle mr-1" />Click the circle to mark the correct answer</p>
+          <p className="text-[11px] text-slate-400 mb-2"><i className="fas fa-info-circle mr-1" />Click the circle to mark the correct answer</p>
+          <textarea value={q.explanation ?? ''} onChange={e => setField(i, 'explanation', e.target.value)}
+            placeholder="Explanation (optional) — shown to students when they review answers"
+            rows={2}
+            className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs bg-white resize-none focus:outline-none focus:border-sky-400" />
         </div>
       ))}
       <button onClick={addQ}
@@ -373,6 +429,67 @@ function CreateQuizView({ user, onCreated }: { user: any; onCreated: () => void 
   const [questions, setQuestions] = useState<any[]>([{ question: '', options: ['', '', '', ''], correct: 0, marks: 1 }]);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
+
+  // ── AI generation state ──
+  const [ai, setAi] = useState({
+    open: false,
+    mode: 'pdf' as 'pdf' | 'image' | 'text',
+    text: '',
+    fileName: '',
+    fileBase64: '' as string,
+    mediaType: '',
+    numQuestions: 5,
+    totalMarks: 10,
+    difficulty: 'Medium' as 'Easy' | 'Medium' | 'Hard',
+  });
+  const [generating, setGenerating] = useState(false);
+  const [aiErr, setAiErr] = useState('');
+  const setAiField = (k: string, v: any) => setAi(p => ({ ...p, [k]: v }));
+
+  const onPickFile = (file: File | undefined, mode: 'pdf' | 'image') => {
+    setAiErr('');
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result ?? '');
+      const base64 = result.includes(',') ? result.split(',')[1] : result;
+      setAi(p => ({ ...p, fileBase64: base64, mediaType: file.type, fileName: file.name, mode }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const generate = async () => {
+    setAiErr('');
+    if (ai.mode === 'text' && ai.text.trim().length < 20) { setAiErr('Paste at least a short paragraph.'); return; }
+    if ((ai.mode === 'pdf' || ai.mode === 'image') && !ai.fileBase64) { setAiErr('Choose a file first.'); return; }
+    if (ai.numQuestions < 1 || ai.numQuestions > 30) { setAiErr('Number of questions must be 1–30.'); return; }
+    if (ai.totalMarks < ai.numQuestions) { setAiErr('Total marks must be at least the number of questions.'); return; }
+
+    setGenerating(true);
+    try {
+      const res = await api.quiz.generate({
+        sourceKind: ai.mode,
+        fileBase64: ai.mode === 'text' ? undefined : ai.fileBase64,
+        mediaType: ai.mode === 'text' ? undefined : ai.mediaType,
+        text: ai.mode === 'text' ? ai.text : undefined,
+        subject: form.subject,
+        grade: Number(form.grade),
+        numQuestions: ai.numQuestions,
+        totalMarks: ai.totalMarks,
+        difficulty: ai.difficulty,
+      });
+      if (!res.questions?.length) { setAiErr('No questions were generated. Try different material.'); return; }
+      // Populate the builder with drafts for review.
+      setQuestions(res.questions.map((q: any) => ({
+        question: q.question, options: q.options, correct: q.correct, marks: q.marks ?? 1,
+        explanation: q.explanation ?? '',
+      })));
+    } catch (e: any) {
+      setAiErr(e.message ?? 'Generation failed. Please try again.');
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   // Tenant/district/block pickers for platform admin
   const [tenants, setTenants] = useState<{ id: string; name: string }[]>([]);
@@ -535,6 +652,97 @@ function CreateQuizView({ user, onCreated }: { user: any; onCreated: () => void 
         </div>
       </div>
 
+      {/* Generate with AI */}
+      <div className="panel overflow-hidden">
+        <button type="button" onClick={() => setAiField('open', !ai.open)}
+          className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-slate-50 transition-colors">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow-sm">
+              <i className="fas fa-wand-magic-sparkles text-white text-sm" />
+            </div>
+            <div>
+              <h2 className="font-heading font-semibold text-navy-700 text-sm">Generate with AI</h2>
+              <p className="text-xs text-slate-400">Upload book pages or paste text — AI drafts the questions</p>
+            </div>
+          </div>
+          <i className={`fas fa-chevron-${ai.open ? 'up' : 'down'} text-slate-400`} />
+        </button>
+
+        {ai.open && (
+          <div className="px-5 pb-5 pt-1 space-y-4 border-t border-slate-100">
+            {/* Source mode */}
+            <div className="flex gap-1 bg-slate-100 rounded-xl p-1 w-fit mt-4">
+              {([
+                { v: 'pdf',   label: 'Upload PDF',    icon: 'fa-file-pdf' },
+                { v: 'image', label: 'Upload Photo',  icon: 'fa-image' },
+                { v: 'text',  label: 'Paste Text',    icon: 'fa-align-left' },
+              ] as const).map(t => (
+                <button key={t.v} type="button" onClick={() => { setAiField('mode', t.v); setAiErr(''); }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${ai.mode === t.v ? 'bg-white shadow-sm text-navy-700' : 'text-slate-500 hover:text-slate-700'}`}>
+                  <i className={`fas ${t.icon} mr-1.5`} />{t.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Source input */}
+            {ai.mode === 'text' ? (
+              <textarea value={ai.text} onChange={e => setAiField('text', e.target.value)}
+                rows={5} placeholder="Paste the chapter or topic text here…"
+                className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:border-violet-400 resize-none" />
+            ) : (
+              <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-slate-300 rounded-xl py-6 cursor-pointer hover:border-violet-400 hover:bg-violet-50/40 transition-all">
+                <i className={`fas ${ai.mode === 'pdf' ? 'fa-file-pdf' : 'fa-image'} text-2xl text-slate-300`} />
+                <span className="text-sm text-slate-500">
+                  {ai.fileName ? <span className="text-violet-700 font-medium">{ai.fileName}</span> : `Click to choose a ${ai.mode === 'pdf' ? 'PDF (2–3 pages)' : 'photo of the page'}`}
+                </span>
+                <input type="file" className="hidden"
+                  accept={ai.mode === 'pdf' ? 'application/pdf' : 'image/*'}
+                  onChange={e => onPickFile(e.target.files?.[0], ai.mode as 'pdf' | 'image')} />
+              </label>
+            )}
+
+            {/* Controls */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs text-slate-500 mb-1.5"># Questions</label>
+                <input type="number" min={1} max={30} value={ai.numQuestions}
+                  onChange={e => setAiField('numQuestions', Number(e.target.value))}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:border-violet-400" />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500 mb-1.5">Total Marks</label>
+                <input type="number" min={1} value={ai.totalMarks}
+                  onChange={e => setAiField('totalMarks', Number(e.target.value))}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:border-violet-400" />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500 mb-1.5">Difficulty</label>
+                <select value={ai.difficulty} onChange={e => setAiField('difficulty', e.target.value)}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:border-violet-400">
+                  <option>Easy</option><option>Medium</option><option>Hard</option>
+                </select>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-slate-400">
+              <i className="fas fa-circle-info mr-1" />
+              Uses subject <b>{form.subject}</b> · Class <b>{form.grade}</b> from above. AI drafts — review every question before saving.
+            </p>
+
+            {aiErr && (
+              <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-2.5">
+                <i className="fas fa-exclamation-circle shrink-0" />{aiErr}
+              </div>
+            )}
+
+            <button type="button" onClick={generate} disabled={generating}
+              className="w-full py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-sm font-semibold hover:from-violet-700 hover:to-indigo-700 disabled:opacity-50 transition-all shadow-sm">
+              {generating ? <><i className="fas fa-circle-notch fa-spin mr-2" />Generating…</> : <><i className="fas fa-wand-magic-sparkles mr-2" />Generate {ai.numQuestions} Questions</>}
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* Question builder */}
       <div className="panel p-5">
         <div className="flex items-center justify-between mb-4">
@@ -576,6 +784,8 @@ function TakeQuizView({ quizId, onDone }: { quizId: string; onDone: () => void }
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [startedAt] = useState(Date.now());
+  const [review, setReview] = useState<any>(null);
+  const [reviewLoading, setReviewLoading] = useState(false);
 
   useEffect(() => {
     api.quiz.get(quizId).then(q => {
@@ -583,6 +793,12 @@ function TakeQuizView({ quizId, onDone }: { quizId: string; onDone: () => void }
       if (q.myAttempt) { setSubmitted(true); setResult(q.myAttempt); }
     }).finally(() => setLoading(false));
   }, [quizId]);
+
+  const loadReview = () => {
+    if (review) return;
+    setReviewLoading(true);
+    api.quiz.review(quizId).then(setReview).catch(() => null).finally(() => setReviewLoading(false));
+  };
 
   const submit = async () => {
     if (!quiz) return;
@@ -606,11 +822,11 @@ function TakeQuizView({ quizId, onDone }: { quizId: string; onDone: () => void }
                 : pct >= 50 ? { label: 'Good effort', cls: 'text-amber-500', bg: 'bg-amber-100 text-amber-700' }
                 :              { label: 'Keep practising', cls: 'text-red-600', bg: 'bg-red-100 text-red-700' };
     return (
-      <div className="max-w-lg mx-auto space-y-6 py-8">
+      <div className="max-w-2xl mx-auto space-y-6 py-8">
         <button onClick={onDone} className="flex items-center gap-2 text-slate-500 hover:text-slate-700 text-sm">
           <i className="fas fa-arrow-left" /> Back to quizzes
         </button>
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-lg p-10 text-center space-y-5">
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-lg p-10 text-center space-y-5 max-w-lg mx-auto">
           <div className="w-20 h-20 rounded-full bg-slate-50 flex items-center justify-center mx-auto">
             <span className={`text-5xl font-bold ${grade.cls}`}>{pct}%</span>
           </div>
@@ -622,7 +838,15 @@ function TakeQuizView({ quizId, onDone }: { quizId: string; onDone: () => void }
           {result.timeTaken && (
             <p className="text-xs text-slate-400">Completed in {Math.floor(result.timeTaken / 60)}m {result.timeTaken % 60}s</p>
           )}
+          {!review && (
+            <button onClick={loadReview} disabled={reviewLoading}
+              className="mx-auto flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 text-white text-sm font-semibold hover:from-sky-700 hover:to-indigo-700 disabled:opacity-50 transition-all">
+              {reviewLoading ? <><i className="fas fa-circle-notch fa-spin" />Loading…</> : <><i className="fas fa-list-check" />Review Answers</>}
+            </button>
+          )}
         </div>
+
+        {review && <AnswerReview questions={review.questions} />}
       </div>
     );
   }
@@ -685,9 +909,17 @@ function TakeQuizView({ quizId, onDone }: { quizId: string; onDone: () => void }
 function ResultsView({ quizId, onBack }: { quizId: string; onBack: () => void }) {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [reviewFor, setReviewFor] = useState<any>(null); // selected attempt for answer drill-down
   const tip = { borderRadius: 10, border: '1px solid #e2e8f0', boxShadow: '0 4px 16px rgba(0,48,135,0.08)' };
 
   useEffect(() => { api.quiz.results(quizId).then(setData).finally(() => setLoading(false)); }, [quizId]);
+
+  // Build per-question review for one student by overlaying their stored answers.
+  const reviewQuestions = (attempt: any) =>
+    (data?.questions ?? []).map((q: any) => ({
+      ...q,
+      selected: attempt.answers ? attempt.answers[q.id] ?? null : null,
+    }));
 
   if (loading) return <div className="text-center py-16 text-slate-400"><i className="fas fa-circle-notch fa-spin mr-2" />Loading results…</div>;
   if (!data)   return <div className="text-center py-16 text-slate-400">No data.</div>;
@@ -801,6 +1033,7 @@ function ResultsView({ quizId, onBack }: { quizId: string; onBack: () => void })
                   <th className="px-3 py-3 text-center">Score</th>
                   <th className="px-3 py-3 text-center">%</th>
                   <th className="px-3 py-3 text-center">Time</th>
+                  <th className="px-3 py-3 text-center">Answers</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -818,6 +1051,12 @@ function ResultsView({ quizId, onBack }: { quizId: string; onBack: () => void })
                     <td className="px-3 py-2.5 text-center text-slate-400 text-xs">
                       {a.timeTaken ? `${Math.floor(a.timeTaken / 60)}m ${a.timeTaken % 60}s` : '—'}
                     </td>
+                    <td className="px-3 py-2.5 text-center">
+                      <button onClick={() => setReviewFor(a)}
+                        className="text-xs px-3 py-1.5 rounded-lg border border-sky-200 text-sky-700 hover:bg-sky-50 transition-colors font-medium">
+                        <i className="fas fa-list-check mr-1" />View
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -826,6 +1065,28 @@ function ResultsView({ quizId, onBack }: { quizId: string; onBack: () => void })
         </div>
       ) : (
         <div className="text-center py-10 text-slate-400">No submissions yet.</div>
+      )}
+
+      {/* Per-student answer drill-down */}
+      {reviewFor && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 overflow-y-auto" onClick={() => setReviewFor(null)}>
+          <div className="bg-slate-50 rounded-2xl shadow-2xl max-w-2xl w-full my-8 overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 bg-white border-b border-slate-100 sticky top-0">
+              <div>
+                <h3 className="font-heading font-bold text-navy-700">{reviewFor.student?.name ?? reviewFor.studentId}</h3>
+                <p className="text-xs text-slate-400">
+                  Scored {reviewFor.score}/{reviewFor.maxScore} · <span className={pctColor(reviewFor.pct)}>{reviewFor.pct}%</span>
+                </p>
+              </div>
+              <button onClick={() => setReviewFor(null)} className="text-slate-400 hover:text-slate-600">
+                <i className="fas fa-times text-lg" />
+              </button>
+            </div>
+            <div className="p-4">
+              <AnswerReview questions={reviewQuestions(reviewFor)} />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -14,6 +14,12 @@ export class QuizController {
     return this.svc.create(user, dto);
   }
 
+  // generate MUST be before :id to avoid route collision
+  @Post('generate')
+  generate(@CurrentUser() user: AuthUser, @Body() dto: any) {
+    return this.svc.generateQuestions(user, dto);
+  }
+
   // stats MUST be before :id to avoid route collision
   @Get('stats')
   stats(
@@ -48,6 +54,11 @@ export class QuizController {
   @Post(':id/attempt')
   submitAttempt(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: any) {
     return this.svc.submitAttempt(user, id, dto);
+  }
+
+  @Get(':id/review')
+  myReview(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.svc.myReview(user, id);
   }
 
   @Get(':id/results')
