@@ -360,7 +360,7 @@ function CreateQuizView({ user, onCreated }: { user: any; onCreated: () => void 
     return all.slice(0, 1); // PRINCIPAL / TEACHER: school only
   })();
 
-  const defaultScope = availableScopes[availableScopes.length - 1].value;
+  const defaultScope = availableScopes[0].value; // start at narrowest scope; user widens deliberately
 
   const [form, setForm] = useState({
     title: '', description: '', subject: 'Mathematics', grade: 9, section: '', dueDate: '',
@@ -403,6 +403,9 @@ function CreateQuizView({ user, onCreated }: { user: any; onCreated: () => void 
 
   const save = async () => {
     if (!form.title.trim()) { setErr('Title is required'); return; }
+    if (form.scope === 'all' && !form.tenantId && !user?.tenantId) { setErr('Please select a state to broadcast to all schools'); return; }
+    if (form.scope === 'district' && !form.districtId && !user?.districtId) { setErr('Please select a district'); return; }
+    if (form.scope === 'block' && !form.blockId && !user?.blockId && !form.districtId && !user?.districtId) { setErr('Please select a block or district'); return; }
     if (questions.some(q => !q.question.trim())) { setErr('Fill in all question text'); return; }
     if (questions.some(q => q.options.some((o: string) => !o.trim()))) { setErr('Fill in all answer options'); return; }
 
