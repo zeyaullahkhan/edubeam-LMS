@@ -223,11 +223,22 @@ export class SchoolsService {
 
   async update(user: AuthUser, id: string, body: any) {
     const isPrincipalOwnSchool = user.role === 'PRINCIPAL' && user.schoolId === id;
-    if (user.role !== 'ADMIN' && !isPrincipalOwnSchool) throw new ForbiddenException('Not authorized');
+    const isScopedOfficial = ['STATE_OFFICIAL', 'DISTRICT_OFFICIAL', 'BLOCK_OFFICIAL'].includes(user.role);
+    if (user.role !== 'ADMIN' && !isPrincipalOwnSchool && !isScopedOfficial) {
+      throw new ForbiddenException('Not authorized');
+    }
     const school = await prisma.school.findUnique({ where: { id } });
     if (!school) throw new NotFoundException('School not found');
-    // Principals cannot change identity/location fields
-    if (isPrincipalOwnSchool) {
+
+    // State/District/Block officials can only edit schools within their own governance scope.
+    if (isScopedOfficial) {
+      const { schoolWhere } = schoolScope(user);
+      const allowed = await prisma.school.findFirst({ where: { id, ...schoolWhere }, select: { id: true } });
+      if (!allowed) throw new ForbiddenException('Outside your scope');
+    }
+
+    // Principals and scoped officials cannot change identity/location fields — only Admin can.
+    if (isPrincipalOwnSchool || isScopedOfficial) {
       delete body.name; delete body.udiseCode; delete body.siteCode; delete body.blockId;
     }
 

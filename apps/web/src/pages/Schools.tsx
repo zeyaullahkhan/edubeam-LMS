@@ -158,6 +158,12 @@ function isFilled(v: any): boolean {
   return true;
 }
 
+// Profile completion % for a school row (used in the Schools list table).
+function schoolCompletionPct(s: any): number {
+  const filled = COMPLETION_FIELDS.filter(f => isFilled(s[f.key])).length;
+  return Math.round((filled / COMPLETION_FIELDS.length) * 100);
+}
+
 // Three-state toggle: null = unknown, true = Yes, false = No
 function TriToggle({ label, value, onChange }: { label: string; value: boolean | null | undefined; onChange: (v: boolean | null) => void }) {
   const base = 'px-3 py-1.5 text-xs font-medium rounded transition-colors border';
@@ -838,6 +844,8 @@ export function Schools() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'ADMIN';
   const isPrincipal = user?.role === 'PRINCIPAL';
+  const isScopedOfficial = ['STATE_OFFICIAL', 'DISTRICT_OFFICIAL', 'BLOCK_OFFICIAL'].includes(user?.role ?? '');
+  const canEditSchools = isAdmin || isPrincipal || isScopedOfficial;
   const isSchoolScoped = ['PRINCIPAL', 'TEACHER', 'STUDENT', 'PARENT'].includes(user?.role ?? '');
   const state = user ? stateFor(user) : null;
 
@@ -1408,62 +1416,64 @@ export function Schools() {
 
       {/* ── Table — hidden for PRINCIPAL (they see My School card above) ── */}
       {!isPrincipal && <div className="panel overflow-hidden">
-        <table className="w-full text-sm data-table">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm data-table schools-table">
           <thead>
             <tr>
               <th>School</th>
               <th>UDISE</th>
               <th>District / Block</th>
               <th>Principal</th>
-              <th>Facilities</th>
+              <th className="whitespace-nowrap">Progress</th>
               <th className="text-right">Teachers</th>
               <th className="text-right">Students</th>
               {isAdmin && <th className="text-right">Login</th>}
-              {(isAdmin || isPrincipal) && <th className="text-right">Actions</th>}
+              {canEditSchools && <th className="text-right">Actions</th>}
             </tr>
           </thead>
           <tbody>
             {pageRows.map((s) => (
               <tr key={s.id}>
-                <td>
-                  <div className="font-semibold text-navy-700">{s.name}</div>
+                <td className="max-w-[150px]">
+                  <div className="font-semibold text-navy-700 truncate" title={s.name}>{s.name}</div>
                   {s.siteCode && (
-                    <div className="text-xs text-slate-400 font-mono mt-0.5">{s.siteCode}</div>
+                    <div className="text-xs text-slate-400 font-mono mt-0.5 truncate">{s.siteCode}</div>
                   )}
                   {s.address && (
-                    <div className="text-xs text-slate-400 mt-0.5 max-w-xs truncate" title={s.address}>
+                    <div className="text-xs text-slate-400 mt-0.5 truncate" title={s.address}>
                       {s.address}
                     </div>
                   )}
                 </td>
-                <td className="text-slate-500 font-mono text-xs">{s.udiseCode}</td>
-                <td>
-                  <div className="font-medium text-slate-700">{s.district}</div>
-                  <div className="text-xs text-slate-400">{s.block}</div>
+                <td className="text-slate-500 font-mono text-xs whitespace-nowrap">{s.udiseCode}</td>
+                <td className="max-w-[120px]">
+                  <div className="font-medium text-slate-700 truncate">{s.district}</div>
+                  <div className="text-xs text-slate-400 truncate">{s.block}</div>
                 </td>
-                <td>
+                <td className="max-w-[150px]">
                   {s.principalName ? (
                     <>
-                      <div className="text-slate-700 text-xs font-medium">{s.principalName}</div>
-                      {s.phone && <div className="text-xs text-slate-400">{s.phone}</div>}
+                      <div className="text-slate-700 text-xs font-medium truncate" title={s.principalName}>{s.principalName}</div>
+                      {s.phone && <div className="text-xs text-slate-400 truncate">{s.phone}</div>}
                     </>
                   ) : (
                     <span className="text-slate-300">—</span>
                   )}
                 </td>
                 <td>
-                  <div className="flex gap-1 flex-wrap">
-                    {s.hasVirtualClassroom && (
-                      <span className="badge-virtual">
-                        <i className="fas fa-video mr-1" />Virtual
-                      </span>
-                    )}
-                    {s.hasIctLab && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200">
-                        <i className="fas fa-desktop mr-1" />ICT Lab
-                      </span>
-                    )}
-                  </div>
+                  {(() => {
+                    const pct = schoolCompletionPct(s);
+                    const color = pct >= 80 ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-500' : 'bg-red-400';
+                    const textColor = pct >= 80 ? 'text-emerald-700' : pct >= 50 ? 'text-amber-700' : 'text-red-600';
+                    return (
+                      <div className="flex items-center gap-1.5 whitespace-nowrap">
+                        <div className="h-1.5 w-10 rounded-full bg-slate-100 overflow-hidden shrink-0">
+                          <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className={`text-xs font-semibold ${textColor}`}>{pct}%</span>
+                      </div>
+                    );
+                  })()}
                 </td>
                 <td className="text-right font-medium">{s.teachers ?? '—'}</td>
                 <td className="text-right font-medium">{s.students ?? '—'}</td>
@@ -1472,9 +1482,9 @@ export function Schools() {
                     <SchoolLoginBtn schoolId={s.id} />
                   </td>
                 )}
-                {(isAdmin || isPrincipal) && (
+                {canEditSchools && (
                   <td className="text-right">
-                    {(isAdmin || (isPrincipal && s.id === user?.schoolId)) && (
+                    {(isAdmin || isScopedOfficial || (isPrincipal && s.id === user?.schoolId)) && (
                       <button
                         onClick={() => setModal(s)}
                         className="text-xs text-sky-600 hover:text-sky-800 font-medium transition-colors px-2 py-1 rounded hover:bg-sky-50"
@@ -1488,6 +1498,7 @@ export function Schools() {
             ))}
           </tbody>
         </table>
+        </div>
 
         {loading && (
           <div className="flex items-center gap-2 p-5 text-slate-400 text-sm">
@@ -1539,7 +1550,7 @@ export function Schools() {
           school={modal === 'add' ? null : modal}
           onClose={() => setModal(null)}
           onSaved={onSaved}
-          readonlyIdentity={isPrincipal}
+          readonlyIdentity={isPrincipal || isScopedOfficial}
         />
       )}
     </div>

@@ -66,6 +66,12 @@
   .data-table tbody tr:hover {
     @apply bg-sky-50/40;
   }
+  /* Denser padding for the Schools list table so all columns fit without a
+     horizontal scrollbar on typical laptop widths. */
+  .schools-table.data-table th,
+  .schools-table.data-table td {
+    @apply px-2.5 py-2.5;
+  }
 
   /* ── Badge ────────────────────────────────────────────── */
   .badge-real    { @apply text-[10px] uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 rounded px-1.5 py-0.5 font-semibold; }

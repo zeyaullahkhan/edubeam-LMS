@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { useAuth } from '../auth';
 import { stateFor } from '../config/states';
 import { api } from '../api';
+import { ConfirmDialog } from './ConfirmDialog';
 
 const ROLE_LABELS: Record<string, string> = {
   ADMIN: 'Administrator',
@@ -76,6 +77,92 @@ const itemClass = ({ isActive }: { isActive: boolean }) =>
       : 'text-white/70 hover:text-white hover:bg-white/10 border-l-[3px] border-transparent pl-[9px]'
   }`;
 
+// ── Profile + change-password modal (all roles) ──────────────────────────────
+function ProfileModal({ user, onClose }: { user: any; onClose: () => void }) {
+  const [form, setForm] = useState({ current: '', next: '', confirm: '' });
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const set = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
+
+  const submit = async () => {
+    setMsg(null);
+    if (!form.current || !form.next) { setMsg({ ok: false, text: 'Enter your current and new password.' }); return; }
+    if (form.next.length < 6) { setMsg({ ok: false, text: 'New password must be at least 6 characters.' }); return; }
+    if (form.next !== form.confirm) { setMsg({ ok: false, text: 'New password and confirmation do not match.' }); return; }
+    setSaving(true);
+    try {
+      await api.changePassword(form.current, form.next);
+      setMsg({ ok: true, text: 'Password changed successfully.' });
+      setForm({ current: '', next: '', confirm: '' });
+    } catch (e: any) {
+      setMsg({ ok: false, text: e.message ?? 'Could not change password.' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inp = 'w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-100';
+  const rows: [string, string | null | undefined][] = [
+    ['Email', user?.email],
+    ['Role', ROLE_LABELS[user?.role ?? ''] ?? user?.role],
+  ];
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-start justify-center bg-black/40 p-4 overflow-y-auto" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full my-8 overflow-hidden" onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className="px-6 py-5 bg-gradient-to-r from-navy-700 to-sky-700 flex items-center gap-4">
+          <div className="w-12 h-12 rounded-full bg-sky-300 text-navy-800 flex items-center justify-center font-bold shrink-0">
+            {(user?.name ?? '?').slice(0, 2).toUpperCase()}
+          </div>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-white font-heading font-bold text-lg leading-tight truncate">{user?.name}</h2>
+            <p className="text-sky-200 text-xs truncate">{user?.email}</p>
+          </div>
+          <button onClick={onClose} className="text-white/70 hover:text-white shrink-0"><i className="fas fa-times text-lg" /></button>
+        </div>
+
+        {/* Profile details */}
+        <div className="px-6 py-4 border-b border-slate-100">
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Profile</p>
+          <div className="space-y-1.5">
+            {rows.map(([label, val]) => (
+              <div key={label} className="flex items-center justify-between text-sm">
+                <span className="text-slate-400">{label}</span>
+                <span className="text-slate-700 font-medium truncate max-w-[220px]">{val ?? '—'}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Change password */}
+        <div className="px-6 py-5 space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+            <i className="fas fa-key text-slate-300" />Change Password
+          </p>
+          <input type="password" value={form.current} onChange={e => set('current', e.target.value)} placeholder="Current password" className={inp} autoComplete="current-password" />
+          <input type="password" value={form.next} onChange={e => set('next', e.target.value)} placeholder="New password (min 6 chars)" className={inp} autoComplete="new-password" />
+          <input type="password" value={form.confirm} onChange={e => set('confirm', e.target.value)} placeholder="Confirm new password" className={inp} autoComplete="new-password" />
+
+          {msg && (
+            <div className={`flex items-center gap-2 text-sm rounded-xl px-3 py-2 ${msg.ok ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
+              <i className={`fas ${msg.ok ? 'fa-circle-check' : 'fa-circle-exclamation'} shrink-0`} />{msg.text}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 pt-1">
+            <button onClick={onClose} className="px-4 py-2 rounded-xl border border-slate-200 text-sm text-slate-600 hover:bg-slate-50">Close</button>
+            <button onClick={submit} disabled={saving}
+              className="px-5 py-2 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 text-white text-sm font-semibold hover:from-sky-700 hover:to-indigo-700 disabled:opacity-50 transition-all">
+              {saving ? <><i className="fas fa-circle-notch fa-spin mr-1.5" />Saving…</> : 'Update Password'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function Layout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -83,6 +170,9 @@ export function Layout({ children }: { children: ReactNode }) {
   const [allNotices, setAllNotices] = useState<any[]>([]);
   const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
   const [showNoticePopup, setShowNoticePopup] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [logoutConfirm, setLogoutConfirm] = useState(false);
   const groups = navGroupsFor(user?.role);
   const state = user ? stateFor(user) : null;
   const closeMobile = () => setMobileOpen(false);
@@ -159,17 +249,39 @@ export function Layout({ children }: { children: ReactNode }) {
       </nav>
 
       {/* User + sign out (pinned bottom) */}
-      <div className="shrink-0 border-t border-white/10 p-3">
+      <div className="shrink-0 border-t border-white/10 p-3 relative">
+        {/* Themed popover — Change Password only, opens upward above the trigger */}
+        {userMenuOpen && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setUserMenuOpen(false)} />
+            <div className="absolute left-3 right-3 bottom-full mb-2 z-50 bg-navy-700 rounded-xl shadow-2xl border border-white/10 overflow-hidden">
+              <button
+                onClick={() => { setUserMenuOpen(false); setProfileOpen(true); closeMobile(); }}
+                className="w-full flex items-center gap-2.5 px-4 py-3 text-sm font-medium text-white hover:bg-white/10 transition-colors text-left"
+              >
+                <i className="fas fa-key text-sky-300 w-4 text-center" />
+                Change Password
+              </button>
+            </div>
+          </>
+        )}
+
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-sky-300 text-navy-800 flex items-center justify-center font-bold text-sm shrink-0">
-            {(user?.name ?? '?').slice(0, 2).toUpperCase()}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-white text-sm font-semibold leading-tight truncate">{user?.name}</div>
-            <div className="text-sky-300 text-xs truncate">{ROLE_LABELS[user?.role ?? ''] ?? user?.role}</div>
-          </div>
           <button
-            onClick={() => { logout(); navigate('/'); }}
+            onClick={() => setUserMenuOpen(o => !o)}
+            title="Change password"
+            className="flex items-center gap-3 min-w-0 flex-1 rounded-lg -m-1 p-1 hover:bg-white/10 transition-colors text-left"
+          >
+            <div className="w-9 h-9 rounded-full bg-sky-300 text-navy-800 flex items-center justify-center font-bold text-sm shrink-0">
+              {(user?.name ?? '?').slice(0, 2).toUpperCase()}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-white text-sm font-semibold leading-tight truncate">{user?.name}</div>
+              <div className="text-sky-300 text-xs truncate">{ROLE_LABELS[user?.role ?? ''] ?? user?.role}</div>
+            </div>
+          </button>
+          <button
+            onClick={() => { closeMobile(); setLogoutConfirm(true); }}
             title="Sign out"
             className="text-white/50 hover:text-red-400 transition-colors p-1.5 shrink-0"
           >
@@ -186,6 +298,20 @@ export function Layout({ children }: { children: ReactNode }) {
       <aside className="no-print hidden lg:flex w-60 shrink-0 bg-navy-800 flex-col h-screen sticky top-0">
         {sidebar}
       </aside>
+
+      {/* ── Profile + change-password modal ─────────────────── */}
+      {profileOpen && <ProfileModal user={user} onClose={() => setProfileOpen(false)} />}
+
+      <ConfirmDialog
+        open={logoutConfirm}
+        title="Sign out?"
+        message="You'll need to log in again to access your account."
+        confirmLabel="Logout"
+        icon="fa-right-from-bracket"
+        tone="danger"
+        onCancel={() => setLogoutConfirm(false)}
+        onConfirm={() => { setLogoutConfirm(false); logout(); navigate('/'); }}
+      />
 
       {/* ── Mobile drawer + backdrop ────────────────────────── */}
       {mobileOpen && (

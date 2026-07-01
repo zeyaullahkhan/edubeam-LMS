@@ -201,6 +201,11 @@ export const api = {
       body: JSON.stringify({ email, password }),
     }),
   me: () => req<AuthUser>('/auth/me'),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    req<{ ok: boolean }>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
   snapshot: () => req<{
     overview: Overview;
     districts: DistrictSummary[];
