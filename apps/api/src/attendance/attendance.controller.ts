@@ -54,6 +54,16 @@ export class AttendanceController {
     return this.svc.getSchoolDateReport(schoolId, from, to);
   }
 
+  @Get('students/matrix')
+  getStudentMatrix(
+    @Query('schoolId') schoolId: string,
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Query('grade') grade?: string,
+  ) {
+    return this.svc.getStudentMatrix(schoolId, from, to, grade ? Number(grade) : undefined);
+  }
+
   // ── Staff attendance ────────────────────────────────────────────────────
 
   @Post('staff/mark')
@@ -69,6 +79,15 @@ export class AttendanceController {
   @Get('staff/monthly')
   getStaffMonthly(@Query('schoolId') schoolId: string, @Query('month') month: string) {
     return this.svc.getStaffMonthlyReport(schoolId, month);
+  }
+
+  @Get('staff/matrix')
+  getStaffMatrix(
+    @Query('schoolId') schoolId: string,
+    @Query('from') from: string,
+    @Query('to') to: string,
+  ) {
+    return this.svc.getStaffMatrix(schoolId, from, to);
   }
 
   // ── Exam results ────────────────────────────────────────────────────────

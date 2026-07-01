@@ -362,12 +362,16 @@ export const api = {
       req<any>(`/attendance/students/monthly?schoolId=${schoolId}&month=${month}${grade ? `&grade=${grade}` : ''}`),
     report: (schoolId: string, from: string, to: string) =>
       req<any>(`/attendance/students/report?schoolId=${schoolId}&from=${from}&to=${to}`),
+    studentMatrix: (schoolId: string, from: string, to: string, grade?: number) =>
+      req<any>(`/attendance/students/matrix?schoolId=${schoolId}&from=${from}&to=${to}${grade ? `&grade=${grade}` : ''}`),
     markStaff: (body: { schoolId?: string; date?: string; academicYear: string; records: { staffId: string; status: string }[] }) =>
       req<{ marked: number }>('/attendance/staff/mark', { method: 'POST', body: JSON.stringify(body) }),
     staffByDate: (schoolId: string, date: string) =>
       req<any>(`/attendance/staff/date?schoolId=${schoolId}&date=${date}`),
     staffMonthly: (schoolId: string, month: string) =>
       req<any>(`/attendance/staff/monthly?schoolId=${schoolId}&month=${month}`),
+    staffMatrix: (schoolId: string, from: string, to: string) =>
+      req<any>(`/attendance/staff/matrix?schoolId=${schoolId}&from=${from}&to=${to}`),
     saveResults: (body: any) =>
       req<{ saved: number }>('/attendance/results/save', { method: 'POST', body: JSON.stringify(body) }),
     reportCard: (studentId: string, year: string) =>

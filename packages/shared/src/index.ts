@@ -205,6 +205,29 @@ export interface Staff {
   classTeacherOf: string | null;
   active: boolean;
   academicYear: string;
+  // Extended profile
+  photoUrl: string | null;
+  bloodGroup: string | null;
+  maritalStatus: string | null;
+  nationality: string | null;
+  category: string | null;
+  religion: string | null;
+  fatherName: string | null;
+  motherName: string | null;
+  altPhone: string | null;
+  aadhaarNo: string | null;
+  panNo: string | null;
+  identificationMark: string | null;
+  disabilityDetails: string | null;
+  employeeType: string | null;
+  presentAddress: string | null;
+  permanentAddress: string | null;
+  pinCode: string | null;
+  emergencyContactName: string | null;
+  emergencyContactPhone: string | null;
+  emergencyContactRelation: string | null;
+  profileUpdatedBy: string | null;
+  profileUpdatedAt: string | null;
 }
 
 /** Student demographics summary (tender §6.2.6.10.a report). */

@@ -184,6 +184,164 @@ export class AttendanceService {
     }));
   }
 
+  // ── MATRIX REPORTS (student/staff-wise grid across a date range) ─────────
+
+  /** Every calendar date string from `from` to `to`, inclusive. */
+  private eachDate(from: string, to: string): string[] {
+    const out: string[] = [];
+    const d = new Date(from + 'T00:00:00');
+    const end = new Date(to + 'T00:00:00');
+    let guard = 0;
+    while (d <= end && guard < 400) {
+      out.push(d.toISOString().slice(0, 10));
+      d.setDate(d.getDate() + 1);
+      guard++;
+    }
+    return out;
+  }
+
+  /** Set of non-working dates (holidays applicable to the school) within a range. */
+  private async holidaySet(schoolId: string, from: string, to: string): Promise<Set<string>> {
+    const set = new Set<string>();
+    const school = await prisma.school.findUnique({
+      where: { id: schoolId },
+      include: { block: { include: { district: true } } },
+    });
+    if (!school) return set;
+
+    const holidays = await prisma.holiday.findMany({
+      where: {
+        OR: [
+          { scope: 'SCHOOL', scopeId: schoolId },
+          { scope: 'BLOCK', scopeId: school.blockId },
+          { scope: 'DISTRICT', scopeId: school.block.districtId },
+          { scope: 'TENANT', scopeId: school.block.district.tenantId },
+        ],
+        startDate: { lte: to },
+        endDate: { gte: from },
+      },
+    });
+
+    for (const h of holidays) {
+      const start = h.startDate < from ? from : h.startDate;
+      const end = h.endDate > to ? to : h.endDate;
+      for (const day of this.eachDate(start, end)) set.add(day);
+    }
+    return set;
+  }
+
+  /** Day-column metadata: date, weekday, and whether it's a non-working day. */
+  private async buildDayMeta(schoolId: string, from: string, to: string) {
+    const dates = this.eachDate(from, to);
+    const holidays = await this.holidaySet(schoolId, from, to);
+    return dates.map(date => {
+      const dow = new Date(date + 'T00:00:00').getDay(); // 0=Sun
+      const isHoliday = holidays.has(date);
+      const isSunday = dow === 0;
+      return {
+        date,
+        day: Number(date.slice(8, 10)),
+        dow,
+        weekday: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dow],
+        offDay: isHoliday || isSunday, // rendered as "–" unless a record exists
+      };
+    });
+  }
+
+  async getStudentMatrix(schoolId: string, from: string, to: string, grade?: number) {
+    const days = await this.buildDayMeta(schoolId, from, to);
+
+    const students = await prisma.student.findMany({
+      where: { schoolId, ...(grade ? { grade } : {}), active: true },
+      orderBy: [{ grade: 'asc' }, { section: 'asc' }, { name: 'asc' }],
+      select: { id: true, name: true, rollNo: true, grade: true, section: true, gender: true },
+    });
+
+    const records = await prisma.attendance.findMany({
+      where: { schoolId, date: { gte: from, lte: to }, studentId: { in: students.map(s => s.id) } },
+      select: { studentId: true, date: true, status: true },
+    });
+
+    const cellMap: Record<string, Record<string, string>> = {};
+    for (const r of records) {
+      (cellMap[r.studentId] ??= {})[r.date] = r.status;
+    }
+
+    const totals = { P: 0, A: 0, L: 0, HD: 0 };
+    const rows = students.map(s => {
+      const cells = cellMap[s.id] ?? {};
+      const c = { P: 0, A: 0, L: 0, HD: 0 };
+      for (const st of Object.values(cells)) if (st in c) (c as Record<string, number>)[st]++;
+      const marked = c.P + c.A + c.L + c.HD;
+      totals.P += c.P; totals.A += c.A; totals.L += c.L; totals.HD += c.HD;
+      const pct = (n: number) => (marked ? Math.round((n / marked) * 100) : 0);
+      return {
+        id: s.id, name: s.name, rollNo: s.rollNo, grade: s.grade, section: s.section,
+        cells, present: c.P, absent: c.A, late: c.L, halfDay: c.HD, marked,
+        pctPresent: pct(c.P), pctAbsent: pct(c.A), pctLate: pct(c.L), pctHalfDay: pct(c.HD),
+      };
+    });
+
+    const totalMarked = totals.P + totals.A + totals.L + totals.HD;
+    const pct = (n: number) => (totalMarked ? Math.round((n / totalMarked) * 100) : 0);
+    return {
+      from, to, days,
+      students: rows,
+      summary: {
+        totalStudents: students.length,
+        pctPresent: pct(totals.P), pctAbsent: pct(totals.A),
+        pctLate: pct(totals.L), pctHalfDay: pct(totals.HD),
+      },
+    };
+  }
+
+  async getStaffMatrix(schoolId: string, from: string, to: string) {
+    const days = await this.buildDayMeta(schoolId, from, to);
+
+    const staff = await prisma.staff.findMany({
+      where: { schoolId, active: true },
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true, staffType: true, designation: true },
+    });
+
+    const records = await prisma.staffAttendance.findMany({
+      where: { schoolId, date: { gte: from, lte: to }, staffId: { in: staff.map(s => s.id) } },
+      select: { staffId: true, date: true, status: true },
+    });
+
+    const cellMap: Record<string, Record<string, string>> = {};
+    for (const r of records) {
+      (cellMap[r.staffId] ??= {})[r.date] = r.status;
+    }
+
+    const totals = { P: 0, A: 0, L: 0, OD: 0 };
+    const rows = staff.map(s => {
+      const cells = cellMap[s.id] ?? {};
+      const c = { P: 0, A: 0, L: 0, OD: 0 };
+      for (const st of Object.values(cells)) if (st in c) (c as Record<string, number>)[st]++;
+      const marked = c.P + c.A + c.L + c.OD;
+      totals.P += c.P; totals.A += c.A; totals.L += c.L; totals.OD += c.OD;
+      const pct = (n: number) => (marked ? Math.round((n / marked) * 100) : 0);
+      return {
+        id: s.id, name: s.name, staffType: s.staffType, designation: s.designation,
+        cells, present: c.P, absent: c.A, late: c.L, onDuty: c.OD, marked,
+        pctPresent: pct(c.P), pctAbsent: pct(c.A), pctLate: pct(c.L), pctOnDuty: pct(c.OD),
+      };
+    });
+
+    const totalMarked = totals.P + totals.A + totals.L + totals.OD;
+    const pct = (n: number) => (totalMarked ? Math.round((n / totalMarked) * 100) : 0);
+    return {
+      from, to, days,
+      staff: rows,
+      summary: {
+        totalStaff: staff.length,
+        pctPresent: pct(totals.P), pctAbsent: pct(totals.A),
+        pctLate: pct(totals.L), pctOnDuty: pct(totals.OD),
+      },
+    };
+  }
+
   // ── STAFF ATTENDANCE ────────────────────────────────────────────────────
 
   async markStaff(user: AuthUser, dto: {

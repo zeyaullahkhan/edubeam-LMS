@@ -21,7 +21,37 @@ interface StaffInput {
   employeeId?: string | null;
   isClassTeacher?: boolean;
   classTeacherOf?: string | null;
+  active?: boolean;
+  // Extended profile
+  photoUrl?: string | null;
+  bloodGroup?: string | null;
+  maritalStatus?: string | null;
+  nationality?: string | null;
+  category?: string | null;
+  religion?: string | null;
+  fatherName?: string | null;
+  motherName?: string | null;
+  altPhone?: string | null;
+  aadhaarNo?: string | null;
+  panNo?: string | null;
+  identificationMark?: string | null;
+  disabilityDetails?: string | null;
+  employeeType?: string | null;
+  presentAddress?: string | null;
+  permanentAddress?: string | null;
+  pinCode?: string | null;
+  emergencyContactName?: string | null;
+  emergencyContactPhone?: string | null;
+  emergencyContactRelation?: string | null;
 }
+
+const EXTENDED_FIELDS = [
+  'photoUrl', 'bloodGroup', 'maritalStatus', 'nationality', 'category', 'religion',
+  'fatherName', 'motherName', 'altPhone', 'aadhaarNo', 'panNo',
+  'identificationMark', 'disabilityDetails', 'employeeType',
+  'presentAddress', 'permanentAddress', 'pinCode',
+  'emergencyContactName', 'emergencyContactPhone', 'emergencyContactRelation',
+] as const;
 
 const toDate = (v?: string | null) => (v ? new Date(v) : null);
 
@@ -81,6 +111,9 @@ export class StaffService {
     assertCanWrite(user);
     if (!dto.name?.trim()) throw new BadRequestException('Name is required');
     const schoolId = await resolveWritableSchool(user, dto.schoolId);
+    const extended = Object.fromEntries(
+      EXTENDED_FIELDS.map((k) => [k, dto[k] ?? null]),
+    );
     const s = await prisma.staff.create({
       data: {
         schoolId,
@@ -99,7 +132,11 @@ export class StaffService {
         employeeId: dto.employeeId ?? null,
         isClassTeacher: dto.isClassTeacher ?? false,
         classTeacherOf: dto.classTeacherOf ?? null,
+        active: dto.active ?? true,
         academicYear: ACADEMIC_YEAR,
+        ...extended,
+        profileUpdatedBy: user.name,
+        profileUpdatedAt: new Date(),
       },
     });
     return { id: s.id };
@@ -124,6 +161,13 @@ export class StaffService {
         department: r.department ?? null,
         salaryGroup: r.salaryGroup ?? null,
         employeeId: r.employeeId ?? null,
+        dateOfBirth: toDate(r.dateOfBirth),
+        joiningDate: toDate(r.joiningDate),
+        isClassTeacher: r.isClassTeacher ?? false,
+        classTeacherOf: r.classTeacherOf ?? null,
+        aadhaarNo: r.aadhaarNo ?? null,
+        employeeType: (r as any).contractType ?? r.employeeType ?? null,
+        presentAddress: (r as any).address ?? r.presentAddress ?? null,
         academicYear: ACADEMIC_YEAR,
       }));
     if (!data.length) throw new BadRequestException('No valid rows (each needs a name)');
@@ -142,6 +186,9 @@ export class StaffService {
   async update(user: AuthUser, id: string, dto: Partial<StaffInput>) {
     assertCanWrite(user);
     await this.findInScope(user, id);
+    const extended = Object.fromEntries(
+      EXTENDED_FIELDS.filter((k) => dto[k] !== undefined).map((k) => [k, dto[k]]),
+    );
     await prisma.staff.update({
       where: { id },
       data: {
@@ -160,6 +207,10 @@ export class StaffService {
         employeeId: dto.employeeId,
         isClassTeacher: dto.isClassTeacher,
         classTeacherOf: dto.classTeacherOf,
+        active: dto.active,
+        ...extended,
+        profileUpdatedBy: user.name,
+        profileUpdatedAt: new Date(),
       },
     });
     return { ok: true };

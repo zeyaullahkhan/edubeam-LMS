@@ -383,6 +383,45 @@ model Staff {
   academicYear   String
   createdAt      DateTime @default(now())
 
+  // ── Extended profile ─────────────────────────────────────────────────────
+  // Basic Info extras
+  photoUrl         String?
+  bloodGroup       String?  // A+ | A- | B+ | B- | AB+ | AB- | O+ | O-
+  maritalStatus    String?  // Single | Married | Widowed | Divorced
+  nationality      String?
+  category         String?  // General | OBC | SC | ST | EWS
+  religion         String?
+
+  // Family
+  fatherName       String?
+  motherName       String?
+
+  // Contact
+  altPhone         String?
+
+  // Identity documents
+  aadhaarNo        String?
+  panNo            String?
+  identificationMark String?
+  disabilityDetails  String?
+
+  // Employment
+  employeeType     String?  // Permanent | Contractual | Guest
+
+  // Address
+  presentAddress   String?
+  permanentAddress String?
+  pinCode          String?
+
+  // Emergency contact
+  emergencyContactName     String?
+  emergencyContactPhone    String?
+  emergencyContactRelation String?
+
+  // Profile tracking
+  profileUpdatedBy String?
+  profileUpdatedAt DateTime?
+
   @@index([schoolId, staffType])
 }
 
