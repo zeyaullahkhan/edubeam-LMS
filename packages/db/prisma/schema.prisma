@@ -686,7 +686,8 @@ model Quiz {
   title        String
   description  String?
   subject      String
-  grade        Int
+  grade        Int              // lowest class in range (or the single class)
+  gradeTo      Int?             // highest class in range; null = single class only
   section      String?
   academicYear String
   dueDate      String?

@@ -434,7 +434,7 @@ export const api = {
     list: (params: { schoolId?: string; grade?: number } = {}) =>
       req<any[]>(`/quiz${qstr(params)}`),
     get: (id: string) => req<any>(`/quiz/${id}`),
-    create: (body: { schoolId?: string; scope?: string; blockId?: string; districtId?: string; title: string; description?: string; subject: string; grade: number; section?: string; dueDate?: string }) =>
+    create: (body: { schoolId?: string; scope?: string; blockId?: string; districtId?: string; title: string; description?: string; subject: string; grade: number; gradeTo?: number; section?: string; dueDate?: string }) =>
       req<any>('/quiz', { method: 'POST', body: JSON.stringify(body) }),
     setQuestions: (id: string, questions: { question: string; options: string[]; correct: number; marks?: number; explanation?: string }[]) =>
       req<any>(`/quiz/${id}/questions`, { method: 'POST', body: JSON.stringify({ questions }) }),

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import type React from 'react';
 import { api } from '../api';
 import { useAuth } from '../auth';
 import { ScopeBar, type Scope } from '../components/ScopeBar';
@@ -47,6 +48,405 @@ function SummaryChip({ label, value, color }: { label: string; value: number; co
     <div className={`flex flex-col items-center px-4 py-2 rounded-lg ${color}`}>
       <span className="text-lg font-semibold">{value}</span>
       <span className="text-xs">{label}</span>
+    </div>
+  );
+}
+
+// ── STATUS BADGE HELPERS ──────────────────────────────────────────────────────
+const STATUS_CELL: Record<string, { bg: string; text: string; label: string }> = {
+  P:  { bg: 'bg-emerald-100', text: 'text-emerald-700', label: 'P'  },
+  A:  { bg: 'bg-red-100',     text: 'text-red-700',     label: 'A'  },
+  L:  { bg: 'bg-amber-100',   text: 'text-amber-700',   label: 'L'  },
+  HD: { bg: 'bg-purple-100',  text: 'text-purple-700',  label: 'HD' },
+  OD: { bg: 'bg-blue-100',    text: 'text-blue-700',    label: 'OD' },
+};
+
+function StatusCell({ status, offDay }: { status?: string; offDay: boolean }) {
+  if (status && STATUS_CELL[status]) {
+    const c = STATUS_CELL[status];
+    return (
+      <span className={`inline-flex items-center justify-center w-7 h-6 rounded text-[10px] font-bold ${c.bg} ${c.text}`}>
+        {c.label}
+      </span>
+    );
+  }
+  return (
+    <span className={`inline-flex items-center justify-center w-7 h-6 rounded text-[10px] font-medium ${
+      offDay ? 'bg-slate-50 text-slate-300' : 'text-slate-300'
+    }`}>–</span>
+  );
+}
+
+function PctBadge({ pct }: { pct: number }) {
+  const cls = pct >= 75 ? 'bg-emerald-100 text-emerald-700' : pct >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700';
+  return <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${cls}`}>{pct}%</span>;
+}
+
+function SummaryCard({ label, value, color }: { label: string; value: string | number; color: string }) {
+  return (
+    <div className={`flex flex-col items-center justify-center px-5 py-3 rounded-xl ${color} min-w-[80px]`}>
+      <span className="text-xl font-bold">{value}</span>
+      <span className="text-xs mt-0.5 text-center leading-tight">{label}</span>
+    </div>
+  );
+}
+
+// ── MATRIX GRID (shared for student + staff) ──────────────────────────────────
+interface DayMeta { date: string; day: number; weekday: string; offDay: boolean; }
+
+function MatrixGrid({
+  days, rows, nameCol, subCol, extraCols, summaryKeys,
+}: {
+  days: DayMeta[];
+  rows: any[];
+  nameCol: (r: any) => React.ReactNode;
+  subCol?: (r: any) => React.ReactNode;
+  extraCols?: { label: string; render: (r: any) => React.ReactNode }[];
+  summaryKeys: { key: string; label: string; pctKey: string; colorText: string }[];
+}) {
+  return (
+    <div className="overflow-x-auto rounded-xl border border-slate-100 text-xs">
+      <table className="border-collapse" style={{ minWidth: `${Math.max(700, 200 + days.length * 34 + summaryKeys.length * 60)}px` }}>
+        <thead>
+          {/* Month/weekday row */}
+          <tr className="bg-slate-100 text-slate-500">
+            <th className="sticky left-0 z-10 bg-slate-100 px-3 py-2 text-left min-w-[130px] border-b border-slate-200">#</th>
+            <th className="sticky left-[50px] z-10 bg-slate-100 px-3 py-2 text-left min-w-[160px] border-b border-slate-200">Name</th>
+            {subCol && <th className="px-2 py-2 text-left min-w-[70px] border-b border-slate-200">Info</th>}
+            {extraCols?.map(c => (
+              <th key={c.label} className="px-2 py-2 text-center min-w-[60px] border-b border-slate-200">{c.label}</th>
+            ))}
+            {days.map(d => (
+              <th key={d.date} className={`px-0 py-2 text-center w-8 border-b border-slate-200 ${d.offDay ? 'opacity-40' : ''}`}>
+                <div className="flex flex-col items-center gap-0.5">
+                  <span className={`text-[9px] font-medium ${d.offDay ? 'text-slate-400' : 'text-slate-400'}`}>{d.weekday}</span>
+                  <span className={`text-[11px] font-semibold ${d.offDay ? 'text-slate-300' : 'text-slate-700'}`}>{d.day}</span>
+                </div>
+              </th>
+            ))}
+            {summaryKeys.map(s => (
+              <th key={s.key} className="px-2 py-2 text-center min-w-[52px] border-b border-l border-slate-200 bg-slate-50">
+                <div className="flex flex-col items-center">
+                  <span className={`text-[10px] font-bold ${s.colorText}`}>{s.label}</span>
+                  <span className="text-[9px] text-slate-400">%</span>
+                </div>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-50">
+          {rows.map((row, i) => (
+            <tr key={row.id} className="hover:bg-sky-50/30 transition-colors">
+              <td className="sticky left-0 z-10 bg-white px-3 py-1.5 text-slate-400 border-r border-slate-50">{i + 1}</td>
+              <td className="sticky left-[50px] z-10 bg-white px-3 py-1.5 border-r border-slate-100">
+                {nameCol(row)}
+              </td>
+              {subCol && <td className="px-2 py-1.5 text-slate-500">{subCol(row)}</td>}
+              {extraCols?.map(c => (
+                <td key={c.label} className="px-2 py-1.5 text-center">{c.render(row)}</td>
+              ))}
+              {days.map(d => (
+                <td key={d.date} className="px-0.5 py-1.5 text-center">
+                  <StatusCell status={row.cells?.[d.date]} offDay={d.offDay} />
+                </td>
+              ))}
+              {summaryKeys.map(s => (
+                <td key={s.key} className="px-2 py-1.5 text-center border-l border-slate-100 bg-slate-50/50">
+                  <div className="flex flex-col items-center gap-0.5">
+                    <span className={`font-semibold ${s.colorText}`}>{row[s.key]}</span>
+                    <PctBadge pct={row[s.pctKey]} />
+                  </div>
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ── TAB: Student Detail Report (date-range / monthly matrix) ─────────────────
+function StudentDetailReport({ schoolId }: { schoolId: string }) {
+  const [viewMode, setViewMode] = useState<'range' | 'month'>('month');
+  const [month, setMonth] = useState(monthStr());
+  const [from, setFrom] = useState(() => { const d = new Date(); d.setDate(1); return d.toISOString().slice(0, 10); });
+  const [to, setTo]   = useState(todayStr());
+  const [grade, setGrade] = useState<number | ''>('');
+  const [data, setData]   = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    if (!schoolId) return;
+    setLoading(true);
+    try {
+      const [f, t] = viewMode === 'month'
+        ? (() => {
+            const [y, m] = month.split('-').map(Number);
+            const last = new Date(y, m, 0).getDate();
+            return [`${month}-01`, `${month}-${String(last).padStart(2, '0')}`];
+          })()
+        : [from, to];
+      setData(await api.attendance.studentMatrix(schoolId, f, t, grade || undefined));
+    } finally { setLoading(false); }
+  }, [schoolId, viewMode, month, from, to, grade]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const exportCsv = () => {
+    if (!data?.students?.length) return;
+    const days: DayMeta[] = data.days;
+    const header = ['#', 'Name', 'Roll', 'Class', 'Section', ...days.map((d: DayMeta) => d.date), 'Present', 'Absent', 'Late', 'Half Day', 'P%', 'A%', 'L%', 'HD%'].join(',');
+    const rows = data.students.map((s: any, i: number) => [
+      i + 1, `"${s.name}"`, s.rollNo || '', s.grade, s.section || '',
+      ...days.map((d: DayMeta) => s.cells?.[d.date] || (d.offDay ? 'OFF' : '-')),
+      s.present, s.absent, s.late, s.halfDay,
+      s.pctPresent + '%', s.pctAbsent + '%', s.pctLate + '%', s.pctHalfDay + '%',
+    ].join(','));
+    const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `student_attendance_matrix_${viewMode === 'month' ? month : `${from}_${to}`}.csv`;
+    a.click();
+  };
+
+  const sum = data?.summary;
+
+  return (
+    <div className="space-y-4">
+      {/* Controls */}
+      <div className="flex flex-wrap gap-3 items-end">
+        {/* View mode toggle */}
+        <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs font-medium">
+          {(['month', 'range'] as const).map(m => (
+            <button key={m} onClick={() => setViewMode(m)}
+              className={`px-4 py-2 transition-colors ${viewMode === m ? 'bg-sky-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`}>
+              {m === 'month' ? 'Monthly' : 'Date Range'}
+            </button>
+          ))}
+        </div>
+
+        {viewMode === 'month' ? (
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Month</label>
+            <input type="month" value={month} onChange={e => setMonth(e.target.value)}
+              className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white" />
+          </div>
+        ) : (
+          <>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">From</label>
+              <input type="date" value={from} onChange={e => setFrom(e.target.value)}
+                className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white" />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">To</label>
+              <input type="date" value={to} max={todayStr()} onChange={e => setTo(e.target.value)}
+                className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white" />
+            </div>
+          </>
+        )}
+
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">Class</label>
+          <select value={grade} onChange={e => setGrade(e.target.value ? Number(e.target.value) : '')}
+            className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white">
+            <option value="">All Classes</option>
+            {GRADES.map(g => <option key={g} value={g}>Class {g}</option>)}
+          </select>
+        </div>
+
+        <button onClick={exportCsv} disabled={!data?.students?.length}
+          className="ml-auto text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-2 rounded-lg disabled:opacity-40">
+          <i className="fas fa-download mr-1.5" />Export CSV
+        </button>
+      </div>
+
+      {/* Summary cards */}
+      {sum && (
+        <div className="flex flex-wrap gap-3">
+          <SummaryCard label="Total Students" value={sum.totalStudents} color="bg-slate-100 text-slate-700" />
+          <SummaryCard label="Avg Present %" value={`${sum.pctPresent}%`} color="bg-emerald-50 text-emerald-700" />
+          <SummaryCard label="Avg Absent %" value={`${sum.pctAbsent}%`} color="bg-red-50 text-red-700" />
+          <SummaryCard label="Avg Late %" value={`${sum.pctLate}%`} color="bg-amber-50 text-amber-700" />
+          <SummaryCard label="Avg Half Day %" value={`${sum.pctHalfDay}%`} color="bg-purple-50 text-purple-700" />
+        </div>
+      )}
+
+      {/* Legend */}
+      <div className="flex flex-wrap gap-3 text-xs text-slate-500">
+        {[['P', 'bg-emerald-100 text-emerald-700', 'Present'],
+          ['A', 'bg-red-100 text-red-700', 'Absent'],
+          ['L', 'bg-amber-100 text-amber-700', 'Late'],
+          ['HD', 'bg-purple-100 text-purple-700', 'Half Day'],
+          ['–', 'bg-slate-50 text-slate-300', 'Holiday / Sunday'],
+        ].map(([code, cls, label]) => (
+          <span key={code} className="flex items-center gap-1.5">
+            <span className={`inline-flex items-center justify-center w-6 h-5 rounded text-[10px] font-bold ${cls}`}>{code}</span>
+            <span>{label}</span>
+          </span>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="text-center py-16 text-slate-400">Loading attendance matrix…</div>
+      ) : !data?.students?.length ? (
+        <div className="text-center py-16 text-slate-400">No student data for the selected period.</div>
+      ) : (
+        <MatrixGrid
+          days={data.days}
+          rows={data.students}
+          nameCol={r => (
+            <div>
+              <div className="font-medium text-slate-800 leading-tight">{r.name}</div>
+              <div className="text-[10px] text-slate-400">Cl.{r.grade}{r.section ? ` · ${r.section}` : ''}</div>
+            </div>
+          )}
+          subCol={r => r.rollNo ? <span className="text-slate-400">{r.rollNo}</span> : <span className="text-slate-300">—</span>}
+          summaryKeys={[
+            { key: 'present',  label: 'P',  pctKey: 'pctPresent',  colorText: 'text-emerald-600' },
+            { key: 'absent',   label: 'A',  pctKey: 'pctAbsent',   colorText: 'text-red-500'     },
+            { key: 'late',     label: 'L',  pctKey: 'pctLate',     colorText: 'text-amber-600'   },
+            { key: 'halfDay',  label: 'HD', pctKey: 'pctHalfDay',  colorText: 'text-purple-600'  },
+          ]}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── TAB: Staff Detail Report (date-range / monthly matrix) ────────────────────
+function StaffDetailReport({ schoolId }: { schoolId: string }) {
+  const [viewMode, setViewMode] = useState<'range' | 'month'>('month');
+  const [month, setMonth] = useState(monthStr());
+  const [from, setFrom] = useState(() => { const d = new Date(); d.setDate(1); return d.toISOString().slice(0, 10); });
+  const [to, setTo]   = useState(todayStr());
+  const [data, setData]   = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    if (!schoolId) return;
+    setLoading(true);
+    try {
+      const [f, t] = viewMode === 'month'
+        ? (() => {
+            const [y, m] = month.split('-').map(Number);
+            const last = new Date(y, m, 0).getDate();
+            return [`${month}-01`, `${month}-${String(last).padStart(2, '0')}`];
+          })()
+        : [from, to];
+      setData(await api.attendance.staffMatrix(schoolId, f, t));
+    } finally { setLoading(false); }
+  }, [schoolId, viewMode, month, from, to]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const exportCsv = () => {
+    if (!data?.staff?.length) return;
+    const days: DayMeta[] = data.days;
+    const header = ['#', 'Name', 'Type', 'Designation', ...days.map((d: DayMeta) => d.date), 'Present', 'Absent', 'Late', 'On Duty', 'P%', 'A%', 'L%', 'OD%'].join(',');
+    const rows = data.staff.map((s: any, i: number) => [
+      i + 1, `"${s.name}"`, s.staffType || '', `"${s.designation || ''}"`,
+      ...days.map((d: DayMeta) => s.cells?.[d.date] || (d.offDay ? 'OFF' : '-')),
+      s.present, s.absent, s.late, s.onDuty,
+      s.pctPresent + '%', s.pctAbsent + '%', s.pctLate + '%', s.pctOnDuty + '%',
+    ].join(','));
+    const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `staff_attendance_matrix_${viewMode === 'month' ? month : `${from}_${to}`}.csv`;
+    a.click();
+  };
+
+  const sum = data?.summary;
+
+  return (
+    <div className="space-y-4">
+      {/* Controls */}
+      <div className="flex flex-wrap gap-3 items-end">
+        <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs font-medium">
+          {(['month', 'range'] as const).map(m => (
+            <button key={m} onClick={() => setViewMode(m)}
+              className={`px-4 py-2 transition-colors ${viewMode === m ? 'bg-sky-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`}>
+              {m === 'month' ? 'Monthly' : 'Date Range'}
+            </button>
+          ))}
+        </div>
+
+        {viewMode === 'month' ? (
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Month</label>
+            <input type="month" value={month} onChange={e => setMonth(e.target.value)}
+              className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white" />
+          </div>
+        ) : (
+          <>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">From</label>
+              <input type="date" value={from} onChange={e => setFrom(e.target.value)}
+                className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white" />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">To</label>
+              <input type="date" value={to} max={todayStr()} onChange={e => setTo(e.target.value)}
+                className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white" />
+            </div>
+          </>
+        )}
+
+        <button onClick={exportCsv} disabled={!data?.staff?.length}
+          className="ml-auto text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-2 rounded-lg disabled:opacity-40">
+          <i className="fas fa-download mr-1.5" />Export CSV
+        </button>
+      </div>
+
+      {/* Summary cards */}
+      {sum && (
+        <div className="flex flex-wrap gap-3">
+          <SummaryCard label="Total Staff" value={sum.totalStaff} color="bg-slate-100 text-slate-700" />
+          <SummaryCard label="Avg Present %" value={`${sum.pctPresent}%`} color="bg-emerald-50 text-emerald-700" />
+          <SummaryCard label="Avg Absent %" value={`${sum.pctAbsent}%`} color="bg-red-50 text-red-700" />
+          <SummaryCard label="Avg Late %" value={`${sum.pctLate}%`} color="bg-amber-50 text-amber-700" />
+          <SummaryCard label="Avg On Duty %" value={`${sum.pctOnDuty}%`} color="bg-blue-50 text-blue-700" />
+        </div>
+      )}
+
+      {/* Legend */}
+      <div className="flex flex-wrap gap-3 text-xs text-slate-500">
+        {[['P', 'bg-emerald-100 text-emerald-700', 'Present'],
+          ['A', 'bg-red-100 text-red-700', 'Absent'],
+          ['L', 'bg-amber-100 text-amber-700', 'Late'],
+          ['OD', 'bg-blue-100 text-blue-700', 'On Duty'],
+          ['–', 'bg-slate-50 text-slate-300', 'Holiday / Sunday'],
+        ].map(([code, cls, label]) => (
+          <span key={code} className="flex items-center gap-1.5">
+            <span className={`inline-flex items-center justify-center w-6 h-5 rounded text-[10px] font-bold ${cls}`}>{code}</span>
+            <span>{label}</span>
+          </span>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="text-center py-16 text-slate-400">Loading attendance matrix…</div>
+      ) : !data?.staff?.length ? (
+        <div className="text-center py-16 text-slate-400">No staff data for the selected period.</div>
+      ) : (
+        <MatrixGrid
+          days={data.days}
+          rows={data.staff}
+          nameCol={r => (
+            <div>
+              <div className="font-medium text-slate-800 leading-tight">{r.name}</div>
+              <div className="text-[10px] text-slate-400">{r.staffType || ''}</div>
+            </div>
+          )}
+          subCol={r => r.designation ? <span className="text-slate-400 text-[10px]">{r.designation}</span> : null}
+          summaryKeys={[
+            { key: 'present', label: 'P',  pctKey: 'pctPresent', colorText: 'text-emerald-600' },
+            { key: 'absent',  label: 'A',  pctKey: 'pctAbsent',  colorText: 'text-red-500'     },
+            { key: 'late',    label: 'L',  pctKey: 'pctLate',    colorText: 'text-amber-600'   },
+            { key: 'onDuty',  label: 'OD', pctKey: 'pctOnDuty',  colorText: 'text-blue-600'    },
+          ]}
+        />
+      )}
     </div>
   );
 }
@@ -839,17 +1239,19 @@ function MyLeaveTab() {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 const TABS = [
-  { id: 'mark-students',  label: 'Mark Student Attendance', icon: 'fas fa-user-check' },
-  { id: 'mark-staff',     label: 'Mark Staff Attendance',   icon: 'fas fa-chalkboard-teacher' },
-  { id: 'monthly',        label: 'Monthly Report',          icon: 'fas fa-calendar-alt' },
-  { id: 'date-report',    label: 'Date-wise Report',        icon: 'fas fa-table' },
-  { id: 'staff-monthly',  label: 'Staff Monthly Report',    icon: 'fas fa-users' },
-  { id: 'leave-requests', label: 'Leave Requests',          icon: 'fas fa-clipboard-list' },
-  { id: 'my-leave',       label: 'My Leave',                icon: 'fas fa-calendar-check' },
+  { id: 'mark-students',       label: 'Mark Student Attendance', icon: 'fas fa-user-check' },
+  { id: 'student-detail',      label: 'Student Detail Report',   icon: 'fas fa-th' },
+  { id: 'mark-staff',          label: 'Mark Staff Attendance',   icon: 'fas fa-chalkboard-teacher' },
+  { id: 'staff-detail',        label: 'Staff Detail Report',     icon: 'fas fa-th-list' },
+  { id: 'monthly',             label: 'Monthly Summary',         icon: 'fas fa-calendar-alt' },
+  { id: 'date-report',         label: 'Date-wise Summary',       icon: 'fas fa-table' },
+  { id: 'staff-monthly',       label: 'Staff Monthly Summary',   icon: 'fas fa-users' },
+  { id: 'leave-requests',      label: 'Leave Requests',          icon: 'fas fa-clipboard-list' },
+  { id: 'my-leave',            label: 'My Leave',                icon: 'fas fa-calendar-check' },
 ];
 
-const STUDENT_TAB_IDS = ['mark-students', 'monthly', 'date-report', 'leave-requests'];
-const STAFF_TAB_IDS = ['mark-staff', 'staff-monthly'];
+const STUDENT_TAB_IDS = ['mark-students', 'student-detail', 'monthly', 'date-report', 'leave-requests'];
+const STAFF_TAB_IDS   = ['mark-staff', 'staff-detail', 'staff-monthly'];
 
 export function Attendance({ mode = 'all' }: { mode?: 'student' | 'staff' | 'all' }) {
   const { user } = useAuth();
@@ -909,12 +1311,14 @@ export function Attendance({ mode = 'all' }: { mode?: 'student' | 'staff' | 'all
           </div>
 
           <div className="p-5">
-            {tab === 'mark-students'  && <MarkStudents schoolId={schoolId} />}
-            {tab === 'mark-staff'     && <MarkStaff    schoolId={schoolId} />}
-            {tab === 'monthly'        && <MonthlyReport schoolId={schoolId} />}
-            {tab === 'date-report'    && <DateReport   schoolId={schoolId} />}
+            {tab === 'mark-students'  && <MarkStudents      schoolId={schoolId} />}
+            {tab === 'student-detail' && <StudentDetailReport schoolId={schoolId} />}
+            {tab === 'mark-staff'     && <MarkStaff          schoolId={schoolId} />}
+            {tab === 'staff-detail'   && <StaffDetailReport  schoolId={schoolId} />}
+            {tab === 'monthly'        && <MonthlyReport      schoolId={schoolId} />}
+            {tab === 'date-report'    && <DateReport         schoolId={schoolId} />}
             {tab === 'staff-monthly'  && <StaffMonthlyReport schoolId={schoolId} />}
-            {tab === 'leave-requests' && <LeaveRequestsTab schoolId={schoolId} />}
+            {tab === 'leave-requests' && <LeaveRequestsTab   schoolId={schoolId} />}
             {tab === 'my-leave'       && <MyLeaveTab />}
           </div>
         </div>

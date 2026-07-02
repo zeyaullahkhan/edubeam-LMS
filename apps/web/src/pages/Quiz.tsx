@@ -281,7 +281,10 @@ function QuizCard({ quiz, onSelect, onToggle, onDelete, canManage }: {
               </span>
             )}
             <span className="text-xs text-slate-400 bg-slate-50 rounded-full px-2 py-0.5">
-              Class {quiz.grade}{quiz.section ? `-${quiz.section}` : ''}
+              {quiz.gradeTo && quiz.gradeTo !== quiz.grade
+                ? `Class ${quiz.grade}–${quiz.gradeTo}`
+                : `Class ${quiz.grade}`}
+              {quiz.section ? ` · ${quiz.section}` : ''}
             </span>
             <span className="text-xs text-slate-400">· {quiz.subject}</span>
           </div>
@@ -419,7 +422,10 @@ function CreateQuizView({ user, onCreated }: { user: any; onCreated: () => void 
   const defaultScope = availableScopes[0].value; // start at narrowest scope; user widens deliberately
 
   const [form, setForm] = useState({
-    title: '', description: '', subject: 'Mathematics', grade: 9, section: '', dueDate: '',
+    title: '', description: '', subject: 'Mathematics',
+    gradeMode: 'single' as 'single' | 'range' | 'all',
+    grade: 9, gradeTo: 9,
+    section: '', dueDate: '',
     scope: defaultScope,
     tenantId: user?.tenantId ?? '',
     districtId: user?.districtId ?? '',
@@ -530,7 +536,9 @@ function CreateQuizView({ user, onCreated }: { user: any; onCreated: () => void 
     try {
       const payload: any = {
         title: form.title, description: form.description || undefined,
-        subject: form.subject, grade: Number(form.grade),
+        subject: form.subject,
+        grade: form.gradeMode === 'all' ? GRADES[0] : Number(form.grade),
+        gradeTo: form.gradeMode === 'single' ? undefined : (form.gradeMode === 'all' ? GRADES[GRADES.length - 1] : Number(form.gradeTo)),
         section: form.section || undefined, dueDate: form.dueDate || undefined,
         scope: form.scope,
       };
@@ -636,9 +644,45 @@ function CreateQuizView({ user, onCreated }: { user: any; onCreated: () => void 
           </div>
           <div>
             <label className="block text-xs text-slate-500 mb-1.5">Class</label>
-            <select value={form.grade} onChange={e => set('grade', Number(e.target.value))} className={inp}>
-              {GRADES.map(g => <option key={g} value={g}>Class {g}</option>)}
-            </select>
+            {/* Mode toggle */}
+            <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs font-medium mb-2">
+              {([['single', 'Single'], ['range', 'Range'], ['all', 'All Classes']] as const).map(([m, label]) => (
+                <button key={m} type="button"
+                  onClick={() => {
+                    if (m === 'all') {
+                      set('gradeMode', 'all');
+                    } else if (m === 'range') {
+                      setForm(p => ({ ...p, gradeMode: 'range', gradeTo: Math.max(p.grade, p.gradeTo) }));
+                    } else {
+                      setForm(p => ({ ...p, gradeMode: 'single', gradeTo: p.grade }));
+                    }
+                  }}
+                  className={`flex-1 py-1.5 px-2 transition-colors ${form.gradeMode === m ? 'bg-sky-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            {/* Grade picker(s) */}
+            {form.gradeMode === 'all' ? (
+              <div className="flex items-center gap-2 px-3 py-2 bg-sky-50 border border-sky-200 rounded-xl text-sm text-sky-700 font-medium">
+                <i className="fas fa-layer-group text-sky-500" />
+                Class {GRADES[0]} – {GRADES[GRADES.length - 1]} (All Classes)
+              </div>
+            ) : form.gradeMode === 'range' ? (
+              <div className="flex items-center gap-2">
+                <select value={form.grade} onChange={e => setForm(p => ({ ...p, grade: Number(e.target.value), gradeTo: Math.max(Number(e.target.value), p.gradeTo) }))} className={inp + ' flex-1'}>
+                  {GRADES.map(g => <option key={g} value={g}>Class {g}</option>)}
+                </select>
+                <span className="text-slate-400 text-xs shrink-0">to</span>
+                <select value={form.gradeTo} onChange={e => setForm(p => ({ ...p, gradeTo: Number(e.target.value), grade: Math.min(p.grade, Number(e.target.value)) }))} className={inp + ' flex-1'}>
+                  {GRADES.filter(g => g >= form.grade).map(g => <option key={g} value={g}>Class {g}</option>)}
+                </select>
+              </div>
+            ) : (
+              <select value={form.grade} onChange={e => setForm(p => ({ ...p, grade: Number(e.target.value), gradeTo: Number(e.target.value) }))} className={inp}>
+                {GRADES.map(g => <option key={g} value={g}>Class {g}</option>)}
+              </select>
+            )}
           </div>
           <div>
             <label className="block text-xs text-slate-500 mb-1.5">Section (optional)</label>
@@ -726,7 +770,7 @@ function CreateQuizView({ user, onCreated }: { user: any; onCreated: () => void 
 
             <p className="text-[11px] text-slate-400">
               <i className="fas fa-circle-info mr-1" />
-              Uses subject <b>{form.subject}</b> · Class <b>{form.grade}</b> from above. AI drafts — review every question before saving.
+              Uses subject <b>{form.subject}</b> · {form.gradeMode === 'all' ? `Class ${GRADES[0]}–${GRADES[GRADES.length-1]}` : form.gradeMode === 'range' ? `Class ${form.grade}–${form.gradeTo}` : `Class ${form.grade}`} from above. AI drafts — review every question before saving.
             </p>
 
             {aiErr && (
@@ -868,7 +912,7 @@ function TakeQuizView({ quizId, onDone }: { quizId: string; onDone: () => void }
 
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
         <h2 className="font-bold text-slate-800 text-lg">{quiz.title}</h2>
-        <p className="text-sm text-slate-500 mt-1">{quiz.subject} · Class {quiz.grade}{quiz.section ? `-${quiz.section}` : ''}</p>
+        <p className="text-sm text-slate-500 mt-1">{quiz.subject} · {quiz.gradeTo && quiz.gradeTo !== quiz.grade ? `Class ${quiz.grade}–${quiz.gradeTo}` : `Class ${quiz.grade}`}{quiz.section ? ` · ${quiz.section}` : ''}</p>
         {quiz.description && <p className="text-sm text-slate-600 mt-2 bg-sky-50 rounded-xl px-4 py-2.5">{quiz.description}</p>}
       </div>
 
@@ -946,7 +990,7 @@ function ResultsView({ quizId, onBack }: { quizId: string; onBack: () => void })
         <div className="flex-1">
           <h2 className="font-bold text-slate-800 text-lg">{data.quiz.title}</h2>
           <div className="flex items-center gap-2 mt-1 flex-wrap">
-            <span className="text-sm text-slate-500">{data.quiz.subject} · Class {data.quiz.grade}</span>
+            <span className="text-sm text-slate-500">{data.quiz.subject} · {data.quiz.gradeTo && data.quiz.gradeTo !== data.quiz.grade ? `Class ${data.quiz.grade}–${data.quiz.gradeTo}` : `Class ${data.quiz.grade}`}</span>
             {sc && <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${sc.bg} ${sc.color}`}><i className={`fas ${sc.icon} mr-1 text-[9px]`}/>{sc.label}</span>}
           </div>
         </div>

@@ -35,7 +35,7 @@ export class QuizService {
   async create(user: AuthUser, dto: {
     schoolId?: string; scope?: string; blockId?: string; districtId?: string; tenantId?: string;
     title: string; description?: string;
-    subject: string; grade: number; section?: string; dueDate?: string;
+    subject: string; grade: number; gradeTo?: number; section?: string; dueDate?: string;
   }) {
     if (!canManageQuiz(user.role)) throw new ForbiddenException();
 
@@ -70,6 +70,7 @@ export class QuizService {
         description: dto.description,
         subject: dto.subject,
         grade: dto.grade,
+        gradeTo: dto.gradeTo ?? null,
         section: dto.section,
         dueDate: dto.dueDate,
         academicYear: ACADEMIC_YEAR,
@@ -186,13 +187,23 @@ export class QuizService {
     const districtId = school?.block?.districtId ?? null;
     const tenantId = school?.block?.district?.tenantId ?? null;
 
-    const gradeFilter = grade ? { grade } : {};
-    return {
+    const scopeFilter = {
       OR: [
-        { schoolId, scope: 'school', ...gradeFilter },
-        ...(blockId    ? [{ blockId,    scope: 'block',    ...gradeFilter }] : []),
-        ...(districtId ? [{ districtId, scope: 'district', ...gradeFilter }] : []),
-        ...(tenantId   ? [{ tenantId,   scope: 'all',      ...gradeFilter }] : []),
+        { schoolId, scope: 'school' },
+        ...(blockId    ? [{ blockId,    scope: 'block'    }] : []),
+        ...(districtId ? [{ districtId, scope: 'district' }] : []),
+        ...(tenantId   ? [{ tenantId,   scope: 'all'      }] : []),
+      ],
+    };
+
+    if (!grade) return scopeFilter;
+
+    // Quiz covers grade G when: quiz.grade <= G AND (quiz.gradeTo IS NULL ? quiz.grade = G : quiz.gradeTo >= G)
+    return {
+      AND: [
+        scopeFilter,
+        { grade: { lte: grade } },
+        { OR: [{ gradeTo: null }, { gradeTo: { gte: grade } }] },
       ],
     };
   }
