@@ -1,13 +1,16 @@
 import React, { useEffect, useState } from 'react';
+import { useAcademicYear } from '../contexts/AcademicYearContext';
 import { EVENTS } from '../data/schedule';
 import {
   Bar,
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
   Legend,
   Pie,
   PieChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -72,6 +75,7 @@ function StatCard({ label, value, sub, icon, accent, onClick, active }: StatCard
 
 export function Dashboard() {
   const { user } = useAuth();
+  const { academicYear } = useAcademicYear();
   const state = user ? stateFor(user) : null;
   const [overview, setOverview] = useState<Overview | null>(null);
   const [districts, setDistricts] = useState<DistrictSummary[]>([]);
@@ -203,7 +207,7 @@ export function Dashboard() {
               ? (mySchool?.name ?? user?.name?.replace(/^(Principal|Teacher)\s*[—-]\s*/i, '') ?? 'School Dashboard')
               : (state ? state.govLabel : 'All States — Platform Dashboard')}
           </h1>
-          <p className="text-slate-500 text-sm mt-1">2025–26 Academic Year · Real-time data</p>
+          <p className="text-slate-500 text-sm mt-1">{academicYear} Academic Year · Real-time data</p>
         </div>
         <button onClick={printPdf} className="btn-outline no-print">
           <i className="fas fa-file-pdf" />
@@ -540,6 +544,11 @@ export function Dashboard() {
 
       {/* ── Student gender ratio (from 500 Virtual2526 enrolment) ── */}
       {enrollment && <GenderPanel data={enrollment} />}
+
+      {/* ── Student–Teacher Ratio by District ────────────────── */}
+      {teacherStats && teacherStats.byDistrict.length > 0 && (
+        <TeacherStudentRatioChart stats={teacherStats} />
+      )}
 
       {/* ── District performance table ────────────────────────── */}
       <div className="panel overflow-hidden">
@@ -891,6 +900,154 @@ function DrillPanel({
           </>
         );
       })()}
+    </div>
+  );
+}
+
+// ── Student–Teacher Ratio chart ───────────────────────────────────────────────
+const PTR_TARGET = 30;
+
+function TeacherStudentRatioChart({ stats }: { stats: TeacherStats }) {
+  const data = stats.byDistrict
+    .filter((d) => d.teachers > 0)
+    .map((d) => {
+      const ptr = Math.round((d.students / d.teachers) * 10) / 10;
+      return {
+        name: d.district.length > 15 ? d.district.slice(0, 14) + '…' : d.district,
+        fullName: d.district,
+        ptr,
+        // two-tone: green segment (safe zone) + excess segment (over target)
+        safe: Math.min(ptr, PTR_TARGET),
+        excess: Math.max(0, ptr - PTR_TARGET),
+        teachers: d.teachers,
+        students: d.students,
+      };
+    })
+    .sort((a, b) => a.ptr - b.ptr);
+
+  if (data.length === 0) return null;
+
+  const excessColor = (ptr: number) => (ptr <= 40 ? '#f59e0b' : '#dc2626');
+
+  return (
+    <div className="panel p-5">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="font-heading font-semibold text-navy-700">Student–Teacher Ratio by District</h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Students per teacher (ICT deployment data) · sorted best → worst · green = within 30:1 target
+          </p>
+        </div>
+        <button
+          onClick={() =>
+            exportCsv(
+              'str-by-district',
+              data.map((d) => ({
+                District: d.fullName,
+                Teachers: d.teachers,
+                Students: d.students,
+                'STR (students/teacher)': d.ptr,
+              })),
+            )
+          }
+          className="btn-outline no-print text-xs"
+        >
+          <i className="fas fa-download" />
+          Export CSV
+        </button>
+      </div>
+
+      <ResponsiveContainer width="100%" height={Math.max(220, data.length * 38)}>
+        <BarChart layout="vertical" data={data} margin={{ top: 4, right: 80, bottom: 4, left: 8 }} stackOffset="none">
+          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+          <XAxis
+            type="number"
+            domain={[0, (dataMax: number) => Math.ceil(dataMax / 10) * 10 + 5]}
+            tick={{ fontSize: 11 }}
+            tickLine={false}
+            axisLine={false}
+          />
+          <YAxis
+            type="category"
+            dataKey="name"
+            width={120}
+            tick={{ fontSize: 11 }}
+            tickLine={false}
+            axisLine={false}
+          />
+          <Tooltip
+            formatter={(_v, name, props) => {
+              const d = props.payload;
+              if (name === 'excess') {
+                if (d.excess === 0) return null as any;
+                return [`+${d.excess} over 30:1 target`, 'Excess'];
+              }
+              return [`${d.ptr} students / teacher`, d.fullName];
+            }}
+            contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', boxShadow: '0 4px 16px rgba(0,48,135,0.10)', fontSize: 12 }}
+          />
+          <ReferenceLine
+            x={PTR_TARGET}
+            stroke="#64748b"
+            strokeDasharray="5 3"
+            label={{ value: 'Target 30:1', position: 'right', fontSize: 11, fill: '#64748b' }}
+          />
+          {/* Green segment — safe zone */}
+          <Bar dataKey="safe" stackId="str" fill="#16a34a" radius={[0, 0, 0, 0]} isAnimationActive={false} maxBarSize={26} name="safe">
+            <LabelList
+              dataKey="ptr"
+              position="right"
+              style={{ fontSize: 11, fontWeight: 600, fill: '#334155' }}
+              formatter={(v: number) => `${v}`}
+              content={(props: any) => {
+                const { x, y, width, height, value, index } = props;
+                const d = data[index];
+                if (d.excess > 0) return null; // label rendered by excess bar instead
+                return (
+                  <text x={x + width + 6} y={y + height / 2 + 4} fontSize={11} fontWeight={600} fill="#16a34a">
+                    {value}
+                  </text>
+                );
+              }}
+            />
+          </Bar>
+          {/* Excess segment — over target, colour by severity */}
+          <Bar dataKey="excess" stackId="str" radius={[0, 4, 4, 0]} isAnimationActive={false} maxBarSize={26} name="excess">
+            {data.map((d, i) => (
+              <Cell key={i} fill={d.excess > 0 ? excessColor(d.ptr) : 'transparent'} />
+            ))}
+            <LabelList
+              dataKey="ptr"
+              position="right"
+              content={(props: any) => {
+                const { x, y, width, height, value, index } = props;
+                const d = data[index];
+                if (d.excess === 0) return null;
+                return (
+                  <text x={x + width + 6} y={y + height / 2 + 4} fontSize={11} fontWeight={600} fill={excessColor(d.ptr)}>
+                    {value}
+                  </text>
+                );
+              }}
+            />
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+
+      <div className="flex gap-5 justify-end mt-3 text-[11px] text-slate-500">
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: '#16a34a' }} />
+          ≤ 30 — Good
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: '#f59e0b' }} />
+          31–40 — Fair
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: '#dc2626' }} />
+          &gt; 40 — High
+        </span>
+      </div>
     </div>
   );
 }

@@ -3,6 +3,7 @@ import type React from 'react';
 import { api } from '../api';
 import { useAuth } from '../auth';
 import { ScopeBar, type Scope } from '../components/ScopeBar';
+import { useAcademicYear } from '../contexts/AcademicYearContext';
 
 const LEAVE_REASONS: Record<string, string> = {
   SICK: 'Sickness / Illness',
@@ -19,7 +20,6 @@ const LEAVE_STATUS_CFG: Record<string, { label: string; bg: string; text: string
 };
 
 const GRADES = [6, 7, 8, 9, 10, 11, 12];
-const ACADEMIC_YEAR = '2025-26';
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; ring: string }> = {
   P:  { label: 'Present',  bg: 'bg-emerald-100', text: 'text-emerald-700', ring: 'ring-emerald-400' },
@@ -453,6 +453,7 @@ function StaffDetailReport({ schoolId }: { schoolId: string }) {
 
 // ── TAB: Mark Student Attendance ─────────────────────────────────────────────
 function MarkStudents({ schoolId }: { schoolId: string }) {
+  const { academicYear } = useAcademicYear();
   const [date, setDate] = useState(todayStr());
   const [grade, setGrade] = useState<number>(6);
   const [data, setData] = useState<any>(null);
@@ -489,7 +490,7 @@ function MarkStudents({ schoolId }: { schoolId: string }) {
     setSaved(false);
     try {
       const records = Object.entries(statuses).map(([studentId, status]) => ({ studentId, status }));
-      await api.attendance.markStudents({ schoolId, date, academicYear: ACADEMIC_YEAR, records });
+      await api.attendance.markStudents({ schoolId, date, academicYear: academicYear, records });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
       load();
@@ -628,6 +629,7 @@ function MarkStudents({ schoolId }: { schoolId: string }) {
 
 // ── TAB: Mark Staff Attendance ────────────────────────────────────────────────
 function MarkStaff({ schoolId }: { schoolId: string }) {
+  const { academicYear } = useAcademicYear();
   const [date, setDate] = useState(todayStr());
   const [data, setData] = useState<any>(null);
   const [statuses, setStatuses] = useState<Record<string, string>>({});
@@ -655,7 +657,7 @@ function MarkStaff({ schoolId }: { schoolId: string }) {
     setSaving(true);
     try {
       const records = Object.entries(statuses).map(([staffId, status]) => ({ staffId, status }));
-      await api.attendance.markStaff({ schoolId, date, academicYear: ACADEMIC_YEAR, records });
+      await api.attendance.markStaff({ schoolId, date, academicYear: academicYear, records });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
       load();

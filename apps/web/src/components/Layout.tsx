@@ -5,6 +5,7 @@ import { useAuth } from '../auth';
 import { stateFor } from '../config/states';
 import { api } from '../api';
 import { ConfirmDialog } from './ConfirmDialog';
+import { useAcademicYear, YEAR_OPTIONS } from '../contexts/AcademicYearContext';
 
 const ROLE_LABELS: Record<string, string> = {
   ADMIN: 'Administrator',
@@ -32,9 +33,15 @@ const ADMIN_GROUPS: NavGroup[] = [
     { to: '/people',  label: 'People',  icon: 'fas fa-users' },
   ]},
   { heading: 'Academics', items: [
-    { to: '/academic-years', label: 'Academic Years', icon: 'fas fa-calendar-alt' },
-    { to: '/classes',        label: 'Classes',        icon: 'fas fa-chalkboard-teacher' },
-    { to: '/subjects',       label: 'Subjects',       icon: 'fas fa-book-open' },
+    { to: '/academic-years',     label: 'Academic Years',    icon: 'fas fa-calendar-alt' },
+    { to: '/classes',            label: 'Classes',           icon: 'fas fa-chalkboard-teacher' },
+    { to: '/subjects',           label: 'Subjects',          icon: 'fas fa-book-open' },
+    { to: '/teacher-allocation', label: 'Teacher Allocation',icon: 'fas fa-user-tie' },
+    { to: '/homework',           label: 'Homework',          icon: 'fas fa-pen-to-square' },
+    { to: '/academic-progress',  label: 'Academic Progress', icon: 'fas fa-tasks' },
+  ]},
+  { heading: 'Library', items: [
+    { to: '/library', label: 'Library', icon: 'fas fa-book' },
   ]},
   { heading: 'Engagement', items: [
     { to: '/notices', label: 'Notice Board', icon: 'fas fa-bullhorn' },
@@ -46,9 +53,10 @@ const ADMIN_GROUPS: NavGroup[] = [
 
 const STUDENT_GROUPS: NavGroup[] = [
   { heading: 'Menu', items: [
-    { to: '/',        label: 'My Portal', icon: 'fas fa-id-card' },
-    { to: '/quiz',    label: 'Quiz',      icon: 'fas fa-question-circle' },
-    { to: '/content', label: 'Content',   icon: 'fas fa-play-circle' },
+    { to: '/',         label: 'My Portal', icon: 'fas fa-id-card' },
+    { to: '/homework', label: 'Homework',  icon: 'fas fa-pen-to-square' },
+    { to: '/quiz',     label: 'Quiz',      icon: 'fas fa-question-circle' },
+    { to: '/content',  label: 'Content',   icon: 'fas fa-play-circle' },
   ]},
 ];
 
@@ -166,6 +174,7 @@ function ProfileModal({ user, onClose }: { user: any; onClose: () => void }) {
 export function Layout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { academicYear, setAcademicYear } = useAcademicYear();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [allNotices, setAllNotices] = useState<any[]>([]);
   const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
@@ -420,6 +429,18 @@ export function Layout({ children }: { children: ReactNode }) {
               </div>
             )}
 
+            {/* Global academic year picker */}
+            <select
+              value={academicYear}
+              onChange={e => setAcademicYear(e.target.value)}
+              className="text-xs bg-sky-700 border border-sky-500 text-white rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-sky-300 cursor-pointer"
+              title="Academic Year"
+            >
+              {YEAR_OPTIONS.map(y => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+
             {state ? (
               <div className="flex items-center gap-2">
                 <span className="text-slate-200 text-xs font-medium hidden sm:inline">{state.govLabel}</span>
@@ -446,10 +467,10 @@ export function Layout({ children }: { children: ReactNode }) {
             {state ? (
               <div className="flex items-center gap-2">
                 <img src={state.logo} alt={state.name} className="h-6 w-auto opacity-50" />
-                <span className="text-xs text-slate-400">{state.govLabel} · 2025–26</span>
+                <span className="text-xs text-slate-400">{state.govLabel} · {academicYear}</span>
               </div>
             ) : (
-              <span className="text-xs text-slate-400">Edubeam LMS · All States · 2025–26</span>
+              <span className="text-xs text-slate-400">Edubeam LMS · All States · {academicYear}</span>
             )}
           </div>
         </footer>

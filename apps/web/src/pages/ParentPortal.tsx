@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
+import { useAcademicYear } from '../contexts/AcademicYearContext';
 
 const GRADE_LABEL = (g: number) => `Class ${g}`;
 const CAT_COLORS: Record<string, string> = {
@@ -58,6 +59,7 @@ function ChildCard({ child, onSelect }: { child: any; onSelect: () => void }) {
 }
 
 function ChildDetail({ child, onBack }: { child: any; onBack: () => void }) {
+  const { academicYear } = useAcademicYear();
   const [view, setView] = useState<ChildView>('attendance');
   const [calData, setCalData] = useState<any>(null);
   const [reportCard, setReportCard] = useState<any>(null);
@@ -69,7 +71,7 @@ function ChildDetail({ child, onBack }: { child: any; onBack: () => void }) {
 
   useEffect(() => {
     if (view !== 'report') return;
-    api.attendance.reportCard(child.id, '2025-26').then(setReportCard).catch(() => setReportCard(null));
+    api.attendance.reportCard(child.id, academicYear).then(setReportCard).catch(() => setReportCard(null));
   }, [view, child.id]);
 
   return (
@@ -181,7 +183,7 @@ function ChildDetail({ child, onBack }: { child: any; onBack: () => void }) {
       {/* Report Card view */}
       {view === 'report' && (
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6 space-y-4">
-          <h3 className="font-semibold text-slate-700">Report Card — 2025-26</h3>
+          <h3 className="font-semibold text-slate-700">Report Card — {academicYear}</h3>
           {reportCard ? (
             <>
               <div className="flex items-center gap-4 p-4 bg-sky-50 rounded-xl border border-sky-100">
@@ -240,6 +242,7 @@ function ChildDetail({ child, onBack }: { child: any; onBack: () => void }) {
 }
 
 export function ParentPortal() {
+  const { academicYear } = useAcademicYear();
   const [children, setChildren] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<any | null>(null);

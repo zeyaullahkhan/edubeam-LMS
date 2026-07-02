@@ -2,10 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { useAuth } from '../auth';
 import { ScopeBar, type Scope } from '../components/ScopeBar';
+import { useAcademicYear } from '../contexts/AcademicYearContext';
 
 const GRADES = [6, 7, 8, 9, 10, 11, 12];
 const EXAM_TYPES = ['UNIT TEST', 'HALF YEARLY', 'YEARLY'];
-const ACADEMIC_YEAR = '2025-26';
 
 const SUBJECTS_BY_GRADE: Record<number, string[]> = {
   6:  ['Hindi', 'English', 'Mathematics', 'Science', 'Social Science', 'Sanskrit'],
@@ -31,6 +31,7 @@ function gradeBadge(letter: string) {
 
 // ── TAB: Enter marks ──────────────────────────────────────────────────────────
 function EnterMarks({ schoolId }: { schoolId: string }) {
+  const { academicYear } = useAcademicYear();
   const [grade, setGrade] = useState(6);
   const [examType, setExamType] = useState('UNIT TEST');
   const [students, setStudents] = useState<any[]>([]);
@@ -76,7 +77,7 @@ function EnterMarks({ schoolId }: { schoolId: string }) {
         }
       }
       if (!results.length) return;
-      await api.attendance.saveResults({ schoolId, grade, examType, academicYear: ACADEMIC_YEAR, results });
+      await api.attendance.saveResults({ schoolId, grade, examType, academicYear: academicYear, results });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } finally {
@@ -170,6 +171,7 @@ function EnterMarks({ schoolId }: { schoolId: string }) {
 
 // ── TAB: View Class Results ───────────────────────────────────────────────────
 function ClassResults({ schoolId }: { schoolId: string }) {
+  const { academicYear } = useAcademicYear();
   const [grade, setGrade] = useState(10);
   const [examType, setExamType] = useState('UNIT TEST');
   const [data, setData] = useState<any>(null);
@@ -179,7 +181,7 @@ function ClassResults({ schoolId }: { schoolId: string }) {
     if (!schoolId) return;
     setLoading(true);
     try {
-      setData(await api.attendance.classResults(schoolId, grade, examType, ACADEMIC_YEAR));
+      setData(await api.attendance.classResults(schoolId, grade, examType, academicYear));
     } finally {
       setLoading(false);
     }
@@ -259,6 +261,7 @@ function ClassResults({ schoolId }: { schoolId: string }) {
 
 // ── TAB: Individual Report Card ───────────────────────────────────────────────
 function IndividualCard({ schoolId }: { schoolId: string }) {
+  const { academicYear } = useAcademicYear();
   const [grade, setGrade] = useState(10);
   const [students, setStudents] = useState<any[]>([]);
   const [selectedId, setSelectedId] = useState('');
@@ -279,7 +282,7 @@ function IndividualCard({ schoolId }: { schoolId: string }) {
     if (!studentId) return;
     setLoading(true);
     try {
-      setData(await api.attendance.reportCard(studentId, ACADEMIC_YEAR));
+      setData(await api.attendance.reportCard(studentId, academicYear));
     } finally {
       setLoading(false);
     }
@@ -398,6 +401,7 @@ const TABS = [
 
 export function ReportCard() {
   const { user } = useAuth();
+  const { academicYear } = useAcademicYear();
   const [tab, setTab] = useState('enter');
   const [scope, setScope] = useState<Scope>({});
 

@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { api } from '../api';
 import { useAuth } from '../auth';
 import { SCHEDULE, SUBJECT_COLOR } from '../data/schedule';
+import { useAcademicYear } from '../contexts/AcademicYearContext';
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
@@ -51,6 +52,7 @@ type Tab = 'profile' | 'attendance' | 'leave' | 'report' | 'notices';
 
 export function StudentPortal() {
   const { user } = useAuth();
+  const { academicYear } = useAcademicYear();
   const [tab, setTab] = useState<Tab>('profile');
   const [profile, setProfile] = useState<any>(null);
   const [calData, setCalData] = useState<any>(null);
@@ -99,7 +101,7 @@ export function StudentPortal() {
 
   useEffect(() => {
     if (tab !== 'report' || !user?.studentId) return;
-    api.attendance.reportCard(user.studentId, '2025-26').then(setReportCard).catch(() => setReportCard(null));
+    api.attendance.reportCard(user.studentId, academicYear).then(setReportCard).catch(() => setReportCard(null));
   }, [tab, user?.studentId]);
 
   if (loading) return <div className="text-center py-16 text-slate-400">Loading your profile…</div>;
@@ -528,7 +530,7 @@ export function StudentPortal() {
       {tab === 'report' && (
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-slate-800">Report Card — 2025-26</h2>
+            <h2 className="font-semibold text-slate-800">Report Card — {academicYear}</h2>
             {reportCard && (
               <button onClick={() => window.print()}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium transition-colors">

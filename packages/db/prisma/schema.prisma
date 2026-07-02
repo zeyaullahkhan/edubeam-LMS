@@ -192,6 +192,8 @@ model School {
   quizzes             Quiz[]
   notices             Notice[]
   classSections       ClassSection[]
+  homeworks           Homework[]
+  books               Book[]
 }
 
 // ── Operational / analytics data (seeded from Excel) ────────────────────────
@@ -765,4 +767,151 @@ model ContentChannel {
   studioName  String @unique
   channelName String
   channelUrl  String
+}
+
+// ── Academic Module ───────────────────────────────────────────────────────────
+
+// Homework assigned by a teacher to a class/grade range.
+model Homework {
+  id            String               @id @default(cuid())
+  schoolId      String
+  school        School               @relation(fields: [schoolId], references: [id])
+  grade         Int
+  gradeTo       Int?                 // null = single class; set = top of range
+  subject       String
+  title         String
+  description   String?
+  dueDate       String               // YYYY-MM-DD
+  attachmentUrl String?              // optional file uploaded by teacher (S3)
+  academicYear  String
+  createdBy     String               // userId of creator
+  createdByName String
+  createdAt     DateTime             @default(now())
+  submissions   HomeworkSubmission[]
+
+  @@index([schoolId, grade, academicYear])
+}
+
+// One student's submission for a homework assignment.
+model HomeworkSubmission {
+  id          String   @id @default(cuid())
+  homeworkId  String
+  homework    Homework @relation(fields: [homeworkId], references: [id], onDelete: Cascade)
+  studentId   String
+  studentName String
+  note        String?
+  fileUrl     String?              // optional file upload (S3)
+  submittedAt DateTime             @default(now())
+  markedDone  Boolean              @default(false)
+
+  @@unique([homeworkId, studentId])
+  @@index([homeworkId])
+  @@index([studentId])
+}
+
+// A chapter within a subject-grade syllabus at a school.
+model SyllabusChapter {
+  id           String            @id @default(cuid())
+  schoolId     String
+  subject      String
+  grade        Int
+  academicYear String
+  chapterNo    Int
+  title        String
+  totalTopics  Int               @default(1)
+  progress     ChapterProgress[]
+
+  @@unique([schoolId, subject, grade, academicYear, chapterNo])
+  @@index([schoolId, grade, subject])
+}
+
+// Progress state for a single SyllabusChapter (one row per chapter).
+model ChapterProgress {
+  id              String          @id @default(cuid())
+  chapterId       String          @unique
+  chapter         SyllabusChapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  completedTopics Int             @default(0)
+  status          String          @default("NOT_STARTED") // NOT_STARTED | IN_PROGRESS | COMPLETED
+  updatedAt       DateTime        @updatedAt
+  updatedBy       String?         // userId who last updated
+}
+
+// ── Library Management ────────────────────────────────────────────────────────
+
+// A physical book in a school's library.
+model Book {
+  id              String            @id @default(cuid())
+  schoolId        String
+  school          School            @relation(fields: [schoolId], references: [id])
+  title           String
+  author          String?
+  isbn            String?
+  publisher       String?
+  edition         String?
+  subject         String?
+  grade           Int?
+  totalCopies     Int               @default(1)
+  availableCopies Int               @default(1)
+  coverUrl        String?           // S3 image
+  addedBy         String
+  addedAt         DateTime          @default(now())
+  reservations    BookReservation[]
+  lostRecords     LostBookRecord[]
+
+  @@index([schoolId])
+}
+
+// Book issue/return record.
+model BookReservation {
+  id          String   @id @default(cuid())
+  bookId      String
+  book        Book     @relation(fields: [bookId], references: [id])
+  studentId   String?
+  studentName String
+  issueDate   String   // YYYY-MM-DD
+  dueDate     String
+  returnDate  String?
+  status      String   @default("ISSUED") // ISSUED | RETURNED | OVERDUE | LOST
+  issuedBy    String
+  schoolId    String
+
+  @@index([schoolId, status])
+  @@index([bookId])
+}
+
+// Record of a book reported lost by a student.
+model LostBookRecord {
+  id           String   @id @default(cuid())
+  bookId       String
+  book         Book     @relation(fields: [bookId], references: [id])
+  studentId    String?
+  studentName  String
+  reportedDate String   // YYYY-MM-DD
+  fineAmount   Float    @default(0)
+  fineStatus   String   @default("PENDING") // PENDING | PAID
+  schoolId     String
+  recordedBy   String
+
+  @@index([schoolId])
+}
+
+// Digital resource: uploaded e-book (S3) or external link or staff recommendation.
+model DigitalResource {
+  id          String   @id @default(cuid())
+  schoolId    String?  // null = tenant-wide
+  tenantId    String?
+  title       String
+  type        String   // EBOOK | LINK | RECOMMENDATION
+  subject     String?
+  grade       Int?
+  gradeTo     Int?
+  fileUrl     String?  // S3 key/URL (for EBOOK type)
+  externalUrl String?  // external URL (for LINK / RECOMMENDATION)
+  description String?
+  addedBy     String
+  addedByName String
+  addedAt     DateTime @default(now())
+
+  @@index([schoolId])
+  @@index([tenantId])
 }

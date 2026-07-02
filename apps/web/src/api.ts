@@ -516,6 +516,82 @@ export const api = {
       return publicUrl;
     },
   },
+
+  academic: {
+    allocations: {
+      list: (schoolId?: string, academicYear?: string) =>
+        req<any[]>(`/academic/allocations${qstr({ schoolId, academicYear })}`),
+      create: (dto: any) =>
+        req<any>('/academic/allocations', { method: 'POST', body: JSON.stringify(dto) }),
+      remove: (id: string) =>
+        req<any>(`/academic/allocations/${id}`, { method: 'DELETE' }),
+    },
+    homework: {
+      list: (params: { schoolId?: string; grade?: number; academicYear?: string }) =>
+        req<any[]>(`/academic/homework${qstr(params)}`),
+      create: (dto: any) =>
+        req<any>('/academic/homework', { method: 'POST', body: JSON.stringify(dto) }),
+      update: (id: string, dto: any) =>
+        req<any>(`/academic/homework/${id}`, { method: 'PATCH', body: JSON.stringify(dto) }),
+      remove: (id: string) =>
+        req<any>(`/academic/homework/${id}`, { method: 'DELETE' }),
+      submissions: (id: string) =>
+        req<any[]>(`/academic/homework/${id}/submissions`),
+      submit: (id: string, dto: any) =>
+        req<any>(`/academic/homework/${id}/submit`, { method: 'POST', body: JSON.stringify(dto) }),
+      markReviewed: (id: string, sid: string) =>
+        req<any>(`/academic/homework/${id}/submissions/${sid}/mark`, { method: 'PATCH' }),
+    },
+    syllabus: {
+      list: (params: { schoolId?: string; grade: number; subject: string; academicYear: string }) =>
+        req<any[]>(`/academic/syllabus${qstr(params)}`),
+      addChapter: (dto: any) =>
+        req<any>('/academic/syllabus/chapter', { method: 'POST', body: JSON.stringify(dto) }),
+      updateProgress: (id: string, dto: { completedTopics: number; status: string }) =>
+        req<any>(`/academic/syllabus/chapter/${id}/progress`, { method: 'PATCH', body: JSON.stringify(dto) }),
+      removeChapter: (id: string) =>
+        req<any>(`/academic/syllabus/chapter/${id}`, { method: 'DELETE' }),
+    },
+  },
+
+  library: {
+    books: {
+      list: (params: { schoolId?: string; q?: string; subject?: string; grade?: number }) =>
+        req<any[]>(`/library/books${qstr(params)}`),
+      create: (dto: any) =>
+        req<any>('/library/books', { method: 'POST', body: JSON.stringify(dto) }),
+      update: (id: string, dto: any) =>
+        req<any>(`/library/books/${id}`, { method: 'PATCH', body: JSON.stringify(dto) }),
+      remove: (id: string) =>
+        req<any>(`/library/books/${id}`, { method: 'DELETE' }),
+    },
+    reservations: {
+      list: (params: { schoolId?: string; status?: string }) =>
+        req<any[]>(`/library/reservations${qstr(params)}`),
+      issue: (dto: any) =>
+        req<any>('/library/reservations', { method: 'POST', body: JSON.stringify(dto) }),
+      returnBook: (id: string) =>
+        req<any>(`/library/reservations/${id}/return`, { method: 'PATCH' }),
+    },
+    lost: {
+      list: (params: { schoolId?: string }) =>
+        req<any[]>(`/library/lost${qstr(params)}`),
+      record: (dto: any) =>
+        req<any>('/library/lost', { method: 'POST', body: JSON.stringify(dto) }),
+      markPaid: (id: string) =>
+        req<any>(`/library/lost/${id}/paid`, { method: 'PATCH' }),
+    },
+    digital: {
+      list: (params: { schoolId?: string; type?: string; grade?: number }) =>
+        req<any[]>(`/library/digital${qstr(params)}`),
+      add: (dto: any) =>
+        req<any>('/library/digital', { method: 'POST', body: JSON.stringify(dto) }),
+      update: (id: string, dto: any) =>
+        req<any>(`/library/digital/${id}`, { method: 'PATCH', body: JSON.stringify(dto) }),
+      remove: (id: string) =>
+        req<any>(`/library/digital/${id}`, { method: 'DELETE' }),
+    },
+  },
 };
 
 interface PeopleFilter {

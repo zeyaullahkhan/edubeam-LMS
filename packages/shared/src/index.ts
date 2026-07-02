@@ -12,7 +12,7 @@ export const ROLES = [
 ] as const;
 export type Role = (typeof ROLES)[number];
 
-export const ACADEMIC_YEAR = '2025-26';
+export const ACADEMIC_YEAR = '2026-27';
 
 export interface AuthUser {
   id: string;
