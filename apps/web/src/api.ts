@@ -554,6 +554,10 @@ export const api = {
     },
   },
 
+  liveStatus: () => req<LiveStatus>('/live-status'),
+  liveStatusDetails: (category: LiveDetailCategory) =>
+    req<LiveStatusDetails>(`/live-status/details?category=${category}`),
+
   library: {
     books: {
       list: (params: { schoolId?: string; q?: string; subject?: string; grade?: number }) =>
@@ -607,6 +611,34 @@ function qstr(params: object): string {
     .map(([k, v]) => [k, String(v)] as [string, string]);
   const qs = new URLSearchParams(entries).toString();
   return qs ? `?${qs}` : '';
+}
+
+export interface LiveStatus {
+  available: boolean;
+  total?: number;
+  connected?: number;
+  notConnected?: number;
+  notLogin?: number;
+  fetchedAt?: string;
+  error?: string;
+}
+
+export type LiveDetailCategory = 'connected' | 'notConnected' | 'notLogin';
+
+export interface LiveSiteDetail {
+  userId: string;
+  siteName: string;
+  address: string;
+  lastLogin: string;
+  lastLogout: string;
+}
+
+export interface LiveStatusDetails {
+  available: boolean;
+  count?: number;
+  sites?: LiveSiteDetail[];
+  fetchedAt?: string;
+  error?: string;
 }
 
 export interface ManagedUser {

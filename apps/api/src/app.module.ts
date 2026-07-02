@@ -15,6 +15,7 @@ import { StorageModule } from './storage/storage.module';
 import { PlannerModule } from './planner/planner.module';
 import { AcademicModule } from './academic/academic.module';
 import { LibraryModule } from './library/library.module';
+import { LiveStatusModule } from './livestatus/livestatus.module';
 import { JWT_SECRET } from './auth/constants';
 
 // In production the built React SPA (apps/web/dist) is served from this same
@@ -48,6 +49,7 @@ function serveStatic(): DynamicModule[] {
     PlannerModule,
     AcademicModule,
     LibraryModule,
+    LiveStatusModule,
   ],
 })
 export class AppModule {}

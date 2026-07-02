@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useAcademicYear } from '../contexts/AcademicYearContext';
 import { EVENTS } from '../data/schedule';
 import {
@@ -17,7 +17,7 @@ import {
   YAxis,
 } from 'recharts';
 import type { DistrictSummary, EnrollmentDemographics, TeacherStats } from '@edubeam/shared';
-import { api, type BlockSummary, type Overview, type SchoolRow } from '../api';
+import { api, type BlockSummary, type LiveDetailCategory, type LiveStatus, type LiveStatusDetails, type Overview, type SchoolRow } from '../api';
 import { exportCsv, printPdf } from '../export';
 import { useAuth } from '../auth';
 import { stateFor } from '../config/states';
@@ -509,6 +509,9 @@ export function Dashboard() {
           accent="linear-gradient(135deg,#b45309,#f59e0b)"
         />
       </div>
+
+      {/* ── Live School Connectivity ──────────────────────────── */}
+      <LiveConnectivityPanel />
 
       {/* ── Drill-down panel (districts / blocks / students / teachers) ── */}
       {drilldown && <DrillPanel
@@ -1051,6 +1054,273 @@ function TeacherStudentRatioChart({ stats }: { stats: TeacherStats }) {
     </div>
   );
 }
+
+// ── Live School Connectivity Panel ───────────────────────────────────────────
+
+// Replicates the map's radar-ring + neon glow marker animation
+function SignalDot({ size = 20 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" overflow="visible">
+      <style>{`
+        @keyframes lscRadar  { 0% { r:7px; opacity:.8 } 70% { opacity:0 } 100% { r:22px; opacity:0 } }
+        @keyframes lscRadar2 { 0% { r:7px; opacity:.5 } 70% { opacity:0 } 100% { r:17px; opacity:0 } }
+        @keyframes lscGlow   { 0%,100% { filter:drop-shadow(0 0 2px #39FF14) drop-shadow(0 0 5px #39FF14) }
+                               50%     { filter:drop-shadow(0 0 6px #39FF14) drop-shadow(0 0 12px #39FF14) } }
+        .lsc-radar  { animation: lscRadar  2.4s ease-out infinite; }
+        .lsc-radar2 { animation: lscRadar2 2.4s ease-out infinite .5s; }
+        .lsc-pin    { animation: lscGlow   1.8s ease-in-out infinite; }
+      `}</style>
+      <defs>
+        <radialGradient id="lsc-grad" cx="38%" cy="32%" r="75%">
+          <stop offset="0%"   stopColor="#ffffff" stopOpacity="0.95" />
+          <stop offset="30%"  stopColor="#9dff6b" />
+          <stop offset="100%" stopColor="#39FF14" />
+        </radialGradient>
+      </defs>
+      <circle cx="12" cy="12" r="7" fill="none" stroke="#39FF14" strokeWidth="2.5" className="lsc-radar" />
+      <circle cx="12" cy="12" r="7" fill="none" stroke="#9dff6b" strokeWidth="1.5" className="lsc-radar2" />
+      <circle cx="12" cy="12" r="7" fill="url(#lsc-grad)" stroke="#ffffff" strokeWidth="1.5" className="lsc-pin" />
+    </svg>
+  );
+}
+
+function LiveConnectivityPanel() {
+  const [status, setStatus] = useState<LiveStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const [detailCat, setDetailCat] = useState<LiveDetailCategory | null>(null);
+  const [details, setDetails] = useState<LiveStatusDetails | null>(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [siteFilter, setSiteFilter] = useState('');
+
+  const fetchStatus = () => {
+    api.liveStatus()
+      .then(s => { setStatus(s); setLoading(false); })
+      .catch(() => { setStatus({ available: false, error: 'Network error' }); setLoading(false); });
+  };
+
+  const openDetails = (cat: LiveDetailCategory) => {
+    if (detailCat === cat) { setDetailCat(null); setDetails(null); return; }
+    setDetailCat(cat);
+    setDetails(null);
+    setSiteFilter('');
+    setDetailsLoading(true);
+    api.liveStatusDetails(cat)
+      .then(d => { setDetails(d); setDetailsLoading(false); })
+      .catch(() => { setDetails({ available: false, error: 'Network error' }); setDetailsLoading(false); });
+  };
+
+  useEffect(() => {
+    fetchStatus();
+    timerRef.current = setInterval(fetchStatus, 60_000);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, []);
+
+  const { total = 0, connected = 0, notConnected = 0, notLogin = 0, fetchedAt } = status ?? {};
+  const connectedPct   = total ? (connected / total) * 100 : 0;
+  const notConnPct     = total ? (notConnected / total) * 100 : 0;
+  const notLoginPct    = total ? (notLogin / total) * 100 : 0;
+  const updatedTime    = fetchedAt
+    ? new Date(fetchedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+    : null;
+
+  return (
+    <div className="panel p-5">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="font-heading font-semibold text-navy-700">Live School Connectivity</h2>
+            {loading ? (
+              <span className="text-[10px] font-bold text-slate-400 bg-slate-100 rounded-full px-2 py-0.5">
+                <i className="fas fa-circle-notch fa-spin mr-1" />Connecting…
+              </span>
+            ) : status?.available ? (
+              <span className="flex items-center gap-1.5 text-[10px] font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-300 rounded-full px-2.5 py-0.5 shadow-[0_0_8px_rgba(57,255,20,0.35)]">
+                <SignalDot size={14} />
+                LIVE
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 text-[10px] font-extrabold text-red-500 bg-red-50 border border-red-200 rounded-full px-2 py-0.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />
+                OFFLINE
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Real-time system login status · auto-refreshes every 60s
+            {updatedTime && <span className="ml-2 text-slate-400">· updated {updatedTime}</span>}
+          </p>
+        </div>
+      </div>
+
+      {/* Offline state */}
+      {!loading && !status?.available && (
+        <div className="flex items-start gap-3 bg-red-50 border border-red-100 rounded-xl p-4 mb-4">
+          <i className="fas fa-exclamation-circle text-red-400 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-red-700">Intranet source unreachable</p>
+            <p className="text-xs text-red-500 mt-0.5">
+              Cannot connect to <code className="font-mono bg-red-100 px-1 rounded">livestatus.aspx</code> from the API server.
+              {status?.error && (
+                <span className="block mt-1 font-mono text-[10px] break-all">{status.error}</span>
+              )}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* 4 stat tiles */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+        {/* Total Sites */}
+        <div className={`rounded-xl border p-4 text-center ${status?.available ? 'bg-slate-50 border-slate-200' : 'bg-slate-50 border-slate-100 opacity-40'}`}>
+          <i className="fas fa-server text-navy-700 text-xl mb-2" />
+          <div className="font-heading font-black text-navy-700 text-3xl leading-none">{status?.available ? total : '—'}</div>
+          <div className="text-[11px] font-extrabold uppercase tracking-wider text-navy-600 mt-1.5">Total Sites</div>
+          <div className="text-[11px] font-semibold text-slate-500 mt-0.5">all monitored schools</div>
+        </div>
+        {/* Connected — radar signal dot */}
+        <button
+          type="button"
+          onClick={() => status?.available && openDetails('connected')}
+          disabled={!status?.available}
+          className={`rounded-xl border p-4 text-center transition-shadow duration-500 ${status?.available ? 'bg-emerald-50 border-emerald-300 cursor-pointer hover:bg-emerald-100' : 'bg-slate-50 border-slate-100 opacity-40'} ${detailCat === 'connected' ? 'ring-2 ring-emerald-400' : ''}`}
+          style={status?.available ? { boxShadow: '0 0 18px rgba(57,255,20,0.3), 0 0 6px rgba(57,255,20,0.15)' } : undefined}
+        >
+          <div className="flex justify-center mb-2">
+            {status?.available ? <SignalDot size={32} /> : <i className="fas fa-wifi text-slate-400 text-xl" />}
+          </div>
+          <div className={`font-heading font-black text-3xl leading-none ${status?.available ? 'text-emerald-700' : 'text-slate-400'}`}>{status?.available ? connected : '—'}</div>
+          <div className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-700 mt-1.5">Connected</div>
+          <div className="text-[11px] font-semibold text-slate-500 mt-0.5">currently online · click for list</div>
+        </button>
+        {/* Not Connected */}
+        <button
+          type="button"
+          onClick={() => status?.available && openDetails('notConnected')}
+          disabled={!status?.available}
+          className={`rounded-xl border p-4 text-center ${status?.available ? 'bg-red-50 border-red-200 cursor-pointer hover:bg-red-100' : 'bg-slate-50 border-slate-100 opacity-40'} ${detailCat === 'notConnected' ? 'ring-2 ring-red-400' : ''}`}
+        >
+          <i className={`fas fa-wifi text-xl mb-2 opacity-60 ${status?.available ? 'text-red-500' : 'text-slate-400'}`} />
+          <div className={`font-heading font-black text-3xl leading-none ${status?.available ? 'text-red-600' : 'text-slate-400'}`}>{status?.available ? notConnected : '—'}</div>
+          <div className="text-[11px] font-extrabold uppercase tracking-wider text-red-600 mt-1.5">Not Connected</div>
+          <div className="text-[11px] font-semibold text-slate-500 mt-0.5">logged out today · click for list</div>
+        </button>
+        {/* Not Login */}
+        <button
+          type="button"
+          onClick={() => status?.available && openDetails('notLogin')}
+          disabled={!status?.available}
+          className={`rounded-xl border p-4 text-center ${status?.available ? 'bg-amber-50 border-amber-200 cursor-pointer hover:bg-amber-100' : 'bg-slate-50 border-slate-100 opacity-40'} ${detailCat === 'notLogin' ? 'ring-2 ring-amber-400' : ''}`}
+        >
+          <i className={`fas fa-sign-in-alt text-xl mb-2 opacity-70 ${status?.available ? 'text-amber-500' : 'text-slate-400'}`} />
+          <div className={`font-heading font-black text-3xl leading-none ${status?.available ? 'text-amber-600' : 'text-slate-400'}`}>{status?.available ? notLogin : '—'}</div>
+          <div className="text-[11px] font-extrabold uppercase tracking-wider text-amber-600 mt-1.5">Not Login</div>
+          <div className="text-[11px] font-semibold text-slate-500 mt-0.5">not logged in today · click for list</div>
+        </button>
+      </div>
+
+      {/* Stacked progress bar — only when data available */}
+      {status?.available && total > 0 && (
+        <div>
+          <div className="flex rounded-full overflow-hidden h-3 w-full bg-slate-100">
+            <div style={{ width: `${connectedPct}%` }} className="bg-emerald-500 transition-all duration-500" title={`Connected: ${connected}`} />
+            <div style={{ width: `${notConnPct}%` }} className="bg-red-400 transition-all duration-500" title={`Not Connected: ${notConnected}`} />
+            <div style={{ width: `${notLoginPct}%` }} className="bg-amber-400 transition-all duration-500" title={`Not Login: ${notLogin}`} />
+          </div>
+          <div className="flex justify-between mt-2 text-[11px] font-semibold text-slate-600 flex-wrap gap-2">
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block" /> Connected {connectedPct.toFixed(1)}%</span>
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-red-400 inline-block" /> Not Connected {notConnPct.toFixed(1)}%</span>
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-amber-400 inline-block" /> Not Login {notLoginPct.toFixed(1)}%</span>
+          </div>
+        </div>
+      )}
+
+      {/* Site detail drill-down */}
+      {detailCat && (
+        <div className="mt-4 border border-slate-200 rounded-xl overflow-hidden">
+          <div className={`flex items-center justify-between px-4 py-2.5 ${DETAIL_META[detailCat].headerBg}`}>
+            <div className="flex items-center gap-2">
+              <span className={`w-2.5 h-2.5 rounded-full ${DETAIL_META[detailCat].dot}`} />
+              <span className="text-sm font-extrabold text-slate-700">
+                {DETAIL_META[detailCat].label}
+                {details?.count != null && <span className="ml-1.5 text-slate-500 font-bold">({details.count} sites)</span>}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={siteFilter}
+                onChange={e => setSiteFilter(e.target.value)}
+                placeholder="Search site / district…"
+                className="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 w-44 focus:outline-none focus:ring-1 focus:ring-sky-300 bg-white"
+              />
+              <button
+                type="button"
+                onClick={() => { setDetailCat(null); setDetails(null); }}
+                className="text-slate-400 hover:text-slate-600 px-1.5"
+                title="Close"
+              >
+                <i className="fas fa-times" />
+              </button>
+            </div>
+          </div>
+
+          {detailsLoading ? (
+            <div className="text-center py-8 text-slate-400 text-sm">
+              <i className="fas fa-circle-notch fa-spin mr-2" />
+              Fetching site list from intranet… this can take up to 30s
+            </div>
+          ) : !details?.available ? (
+            <div className="text-center py-6 text-red-500 text-sm font-semibold">
+              <i className="fas fa-exclamation-circle mr-1.5" />
+              Could not load the site list. {details?.error}
+            </div>
+          ) : (
+            <div className="max-h-96 overflow-y-auto">
+              <table className="w-full text-xs">
+                <thead className="sticky top-0 bg-slate-100 text-slate-600">
+                  <tr>
+                    <th className="text-left font-extrabold px-3 py-2 w-10">#</th>
+                    <th className="text-left font-extrabold px-3 py-2 w-20">User ID</th>
+                    <th className="text-left font-extrabold px-3 py-2">Site Name</th>
+                    <th className="text-left font-extrabold px-3 py-2">Address</th>
+                    <th className="text-left font-extrabold px-3 py-2 w-32">Last Login</th>
+                    <th className="text-left font-extrabold px-3 py-2 w-32">Last Logout</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(details.sites ?? [])
+                    .filter(s => !siteFilter || `${s.siteName} ${s.address} ${s.userId}`.toLowerCase().includes(siteFilter.toLowerCase()))
+                    .map((s, i) => (
+                      <tr key={`${s.userId}-${i}`} className={i % 2 ? 'bg-slate-50' : 'bg-white'}>
+                        <td className="px-3 py-2 text-slate-400 font-semibold">{i + 1}</td>
+                        <td className="px-3 py-2 font-bold text-slate-600">{s.userId}</td>
+                        <td className="px-3 py-2 font-bold text-slate-700">{s.siteName}</td>
+                        <td className="px-3 py-2 text-slate-500">{s.address}</td>
+                        <td className="px-3 py-2 text-slate-600 whitespace-nowrap">{s.lastLogin || '—'}</td>
+                        <td className="px-3 py-2 text-slate-600 whitespace-nowrap">{s.lastLogout || '—'}</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+              {details.sites?.length === 0 && (
+                <div className="text-center py-6 text-slate-400 text-sm">No sites in this category right now.</div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const DETAIL_META: Record<LiveDetailCategory, { label: string; dot: string; headerBg: string }> = {
+  connected:    { label: 'Connected Sites',     dot: 'bg-emerald-500', headerBg: 'bg-emerald-50' },
+  notConnected: { label: 'Not Connected Sites', dot: 'bg-red-400',     headerBg: 'bg-red-50' },
+  notLogin:     { label: 'Not Login Sites',     dot: 'bg-amber-400',   headerBg: 'bg-amber-50' },
+};
 
 function GenderPanel({ data }: { data: EnrollmentDemographics }) {
   const { boys, girls, total } = data;
