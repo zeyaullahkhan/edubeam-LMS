@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import type { DistrictSummary } from '@edubeam/shared';
+import { useAcademicYear } from '../contexts/AcademicYearContext';
 
 interface Props {
   districts: DistrictSummary[];
@@ -59,6 +60,7 @@ function normKey(s: string) {
 interface TipState { key: string; x: number; y: number }
 
 export function UttarakhandMap({ districts, onDistrictClick }: Props) {
+  const { academicYear } = useAcademicYear();
   const wrapRef = useRef<HTMLDivElement>(null);
   const [tip, setTip] = useState<TipState | null>(null);
 
@@ -315,7 +317,7 @@ export function UttarakhandMap({ districts, onDistrictClick }: Props) {
         {[
           { icon: 'fas fa-school',         bg: '#eff6ff', color: '#1d4ed8', value: totalSchools.toLocaleString(),  label: 'Active Schools',    sub: 'Across Uttarakhand' },
           { icon: 'fas fa-map-marker-alt', bg: '#f0fdf4', color: '#15803d', value: String(mappedDistricts.length), label: 'Districts',         sub: 'All covered' },
-          { icon: 'fas fa-user-graduate',  bg: '#fffbeb', color: '#d97706', value: totalStudents.toLocaleString(), label: 'Students Enrolled', sub: '2025–26 session' },
+          { icon: 'fas fa-user-graduate',  bg: '#fffbeb', color: '#d97706', value: totalStudents.toLocaleString(), label: 'Students Enrolled', sub: `${academicYear} session` },
           { icon: 'fas fa-clock',          bg: '#faf5ff', color: '#7c3aed',
             value: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
             label: 'Last Refreshed',

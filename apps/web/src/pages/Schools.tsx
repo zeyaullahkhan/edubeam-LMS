@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useAcademicYear } from '../contexts/AcademicYearContext';
 import {
   Bar, BarChart, CartesianGrid, Cell, Legend, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
@@ -842,6 +843,7 @@ function SchoolModal({ school, onClose, onSaved, readonlyIdentity }: SchoolModal
 
 export function Schools() {
   const { user } = useAuth();
+  const { academicYear } = useAcademicYear();
   const isAdmin = user?.role === 'ADMIN';
   const isPrincipal = user?.role === 'PRINCIPAL';
   const isScopedOfficial = ['STATE_OFFICIAL', 'DISTRICT_OFFICIAL', 'BLOCK_OFFICIAL'].includes(user?.role ?? '');
@@ -914,7 +916,7 @@ export function Schools() {
           </div>
           <h1 className="font-heading font-bold text-navy-700 text-2xl">Schools</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Virtual Classroom &amp; ICT Lab schools · {state ? `${state.name} 2025–26` : 'All States 2025–26'}
+            Virtual Classroom &amp; ICT Lab schools · {state ? `${state.name} ${academicYear}` : `All States ${academicYear}`}
           </p>
         </div>
         <div className="flex gap-2">

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useAcademicYear } from '../contexts/AcademicYearContext';
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import {
   CATEGORIES, GENDERS, GENDER_LABELS,
@@ -239,6 +240,7 @@ function AddressTab({ form, upd, inputCls }: {
 
 export function Students() {
   const { user } = useAuth();
+  const { academicYear } = useAcademicYear();
   const canWrite = WRITE_ROLES.includes(user?.role ?? '');
   const needsSchool = user?.role === 'ADMIN' || user?.role === 'STATE_OFFICIAL' || user?.role === 'DISTRICT_OFFICIAL';
 
@@ -492,7 +494,7 @@ export function Students() {
         <div>
           <div className="section-tag mb-2"><i className="fas fa-user-graduate" />Student Registry</div>
           <h1 className="font-heading font-bold text-navy-700 text-2xl">Students</h1>
-          <p className="text-sm text-slate-500 mt-1">Enrolment, demographics, RTE &amp; dropout tracking · 2025–26</p>
+          <p className="text-sm text-slate-500 mt-1">Enrolment, demographics, RTE &amp; dropout tracking · {academicYear}</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           {canWrite && (

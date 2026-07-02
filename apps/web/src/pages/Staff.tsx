@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useAcademicYear } from '../contexts/AcademicYearContext';
 import type React from 'react';
 import {
   Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -47,6 +48,7 @@ const emptyStaff: Partial<StaffMember> = {
 
 export function Staff() {
   const { user } = useAuth();
+  const { academicYear } = useAcademicYear();
   const canWrite = WRITE_ROLES.includes(user?.role ?? '');
   const [subPage, setSubPage] = useState<SubPage>('list');
   const needsSchool = user?.role === 'ADMIN' || user?.role === 'STATE_OFFICIAL' || user?.role === 'DISTRICT_OFFICIAL';
@@ -212,7 +214,7 @@ export function Staff() {
         <div>
           <div className="section-tag mb-2"><i className="fas fa-chalkboard-teacher" />Staff Registry</div>
           <h1 className="font-heading font-bold text-navy-700 text-2xl">Staff</h1>
-          <p className="text-sm text-slate-500 mt-1">Teachers, faculty, lab assistants &amp; role assignment · 2025–26</p>
+          <p className="text-sm text-slate-500 mt-1">Teachers, faculty, lab assistants &amp; role assignment · {academicYear}</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           {canWrite && (
